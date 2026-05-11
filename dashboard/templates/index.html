@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MarketMind Pro — Live Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#0a0e1a;color:#e2e8f0;min-height:100vh}
+:root{--accent:#6366f1;--green:#10b981;--red:#ef4444;--yellow:#f59e0b;--card:#111827;--border:#1f2937}
+.header{background:linear-gradient(135deg,#0f172a,#1e1b4b);padding:20px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.logo{font-size:22px;font-weight:700;background:linear-gradient(135deg,#6366f1,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+.status-bar{display:flex;gap:16px;font-size:13px}
+.badge{padding:4px 12px;border-radius:20px;font-weight:600;font-size:12px}
+.badge.green{background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3)}
+.badge.red{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+.badge.yellow{background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
+.badge.purple{background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:24px 32px}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px}
+.card h3{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:12px}
+.big-num{font-size:36px;font-weight:700;line-height:1}
+.sub{font-size:12px;color:#64748b;margin-top:6px}
+.section{padding:0 32px 24px}
+.section-title{font-size:14px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:#475569;padding:10px 14px;border-bottom:1px solid var(--border)}
+td{padding:12px 14px;border-bottom:1px solid rgba(31,41,55,.5);font-size:13px}
+tr:hover td{background:rgba(99,102,241,.05)}
+.sym{font-weight:700;color:#818cf8;font-size:14px}
+.price{font-weight:600;color:#e2e8f0}
+.up{color:#10b981;font-weight:600}
+.down{color:#ef4444;font-weight:600}
+.pending{color:#f59e0b}.tp_hit{color:#10b981}.sl_hit{color:#ef4444}
+.sector-tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.25)}
+.refresh-bar{text-align:right;padding:8px 32px;font-size:11px;color:#475569}
+.ai-box{background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.08));border:1px solid rgba(99,102,241,.25);border-radius:12px;padding:16px;font-size:13px;line-height:1.7;color:#c7d2fe;margin-bottom:24px}
+.ai-box .ai-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#818cf8;margin-bottom:10px}
+.sector-pills{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.pill{padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.25)}
+.progress{height:6px;background:#1f2937;border-radius:3px;overflow:hidden;margin-top:8px}
+.progress-bar{height:100%;border-radius:3px;background:linear-gradient(90deg,#6366f1,#8b5cf6);transition:width .5s ease}
+.mini-stat{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(31,41,55,.5)}
+.mini-stat:last-child{border-bottom:none}
+.rsi-chip{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
+.rsi-bull{background:rgba(16,185,129,.15);color:#10b981}
+.rsi-bear{background:rgba(239,68,68,.15);color:#ef4444}
+.rsi-neutral{background:rgba(245,158,11,.15);color:#f59e0b}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">📊 MarketMind Pro</div>
+  <div class="status-bar">
+    <span id="mkt-badge" class="badge yellow">Loading...</span>
+    <span id="bot-badge" class="badge purple">BOT</span>
+    <span id="ai-badge" class="badge purple">AI Brain</span>
+    <span style="font-size:12px;color:#475569;align-self:center" id="clock"></span>
+  </div>
+</div>
+
+<div class="refresh-bar">Auto-refresh every 30s | Last: <span id="last-refresh">—</span></div>
+
+<!-- KPI Cards -->
+<div class="grid" id="kpi-grid">
+  <div class="card"><h3>Universe</h3><div class="big-num" id="k-universe">—</div><div class="sub">Active NSE symbols</div></div>
+  <div class="card"><h3>Accuracy (30d)</h3><div class="big-num" id="k-accuracy" style="color:#10b981">—%</div><div class="sub" id="k-acc-sub">TP/SL</div></div>
+  <div class="card"><h3>Today's Picks</h3><div class="big-num" id="k-picks">—</div><div class="sub" id="k-picks-sub">Latest picks</div></div>
+  <div class="card"><h3>AI Brain Calls</h3><div class="big-num" id="k-brain">—</div><div class="sub" id="k-brain-sub">Model active</div></div>
+</div>
+
+<!-- Sector Trend -->
+<div class="section">
+  <div class="section-title"><span class="dot"></span> Trending Sectors</div>
+  <div class="sector-pills" id="sector-pills"><span style="color:#475569;font-size:13px">Loading sectors…</span></div>
+</div>
+
+<div class="section">
+  <div class="section-title"><span class="dot"></span> Grok Dashboard Brain</div>
+  <div class="card">
+    <div class="ai-box" style="margin-bottom:14px">
+      <div class="ai-title">Brain Briefing</div>
+      <div id="grok-summary">Loading Grok dashboard state...</div>
+    </div>
+    <div class="grid grid-3" style="padding:0;gap:12px">
+      <div>
+        <h3>Next Session Picks</h3>
+        <div id="grok-picks" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>Top Intraday Stocks</h3>
+        <div id="grok-winners" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>Risk / Actions</h3>
+        <div id="grok-actions" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title"><span class="dot"></span> Ollama NSE Intraday Agent</div>
+  <div class="card">
+    <div class="grid grid-3" style="padding:0;gap:12px">
+      <div>
+        <h3>Study Summary</h3>
+        <div id="ollama-summary" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>Highest Return Candidates</h3>
+        <div id="ollama-candidates" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>Forced Scanner Rules</h3>
+        <div id="ollama-rules" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title"><span class="dot"></span> Pro Terminal Scanner</div>
+  <div class="card">
+    <div class="grid grid-3" style="padding:0;gap:12px">
+      <div>
+        <h3>Terminal Top Picks</h3>
+        <div id="terminal-picks" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>Watchlist Pressure</h3>
+        <div id="terminal-watchlist" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>AI/Pattern Edge</h3>
+        <div id="terminal-edge" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Today's Picks Table -->
+<div class="section">
+  <div class="section-title"><span class="dot"></span> Today's Picks</div>
+  <div class="card">
+    <table>
+      <thead><tr>
+        <th>#</th><th>Symbol</th><th>Entry ₹</th><th>SL ₹</th><th>Target ₹</th>
+        <th>Upside</th><th>RSI</th><th>ADX</th><th>Vol</th><th>Trend</th><th>Status</th>
+      </tr></thead>
+      <tbody id="picks-tbody"><tr><td colspan="11" style="color:#475569;text-align:center;padding:40px">Loading picks…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- History + Accuracy -->
+<div class="grid grid-3" style="padding:0 32px 24px">
+  <div class="card" style="grid-column:span 2">
+    <h3>Recent Pick History</h3>
+    <table>
+      <thead><tr><th>Date</th><th>Symbol</th><th>Entry</th><th>Result</th><th>Return</th></tr></thead>
+      <tbody id="history-tbody"><tr><td colspan="5" style="color:#475569">Loading…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h3>System Stats</h3>
+    <div id="sys-stats" style="font-size:13px;color:#94a3b8">Loading…</div>
+  </div>
+</div>
+
+<script>
+// ── Clock ──
+function tick(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-IN')}
+setInterval(tick,1000);tick();
+
+// ── Fetch helpers ──
+async function get(url){
+  try{const r=await fetch(url);return await r.json();}catch(e){return {};}
+}
+
+function badge(el,text,cls){el.textContent=text;el.className='badge '+cls;}
+
+// ── KPIs ──
+async function loadHealth(){
+  const d=await get('/api/health');
+  document.getElementById('k-universe').textContent=(d.universe_count||0).toLocaleString();
+  const acc=d.accuracy||0;
+  const accEl=document.getElementById('k-accuracy');
+  accEl.textContent=acc+'%';
+  accEl.style.color=acc>=60?'#10b981':acc>=40?'#f59e0b':'#ef4444';
+  document.getElementById('k-acc-sub').textContent=`TP: ${d.total_tp||0} | SL: ${d.total_sl||0}`;
+  badge(document.getElementById('mkt-badge'),d.market_status||'Unknown',
+        (d.market_status||'').includes('Open')?'green':(d.market_status||'').includes('Weekend')?'yellow':'red');
+  badge(document.getElementById('bot-badge'),d.bot_status||'Unknown',
+        (d.bot_status||'').includes('HEALTHY')?'green':'red');
+  // Brain
+  const br=d.brain||{};
+  const brEl=document.getElementById('k-brain');
+  brEl.textContent=(br.daily_calls||0)+' / '+(br.max_daily_calls||200);
+  document.getElementById('k-brain-sub').textContent=
+    (br.grok_configured?'Grok ✅ ':'Grok ❌ ')+(br.gpt_configured?'GPT ✅':'GPT ❌');
+  badge(document.getElementById('ai-badge'),br.last_model_used?'AI Active':'AI Idle',
+        br.last_model_used?'green':'yellow');
+}
+
+// ── Sectors ──
+async function loadSectors(){
+  const d=await get('/api/sectors');
+  const el=document.getElementById('sector-pills');
+  const sectors=d.top_sectors||[];
+  if(!sectors.length){el.innerHTML='<span style="color:#475569">No sector data yet</span>';return;}
+  el.innerHTML=sectors.map((s,i)=>`<span class="pill">${i===0?'🥇':i===1?'🥈':'🥉'} ${s}</span>`).join('');
+}
+
+async function loadGrokDashboard(){
+  const d=await get('/api/grok-dashboard');
+  const ai=d.ai||{};
+  const summary=[
+    ai.market_note||'Grok dashboard state is building from local market data.',
+    ai.dashboard_summary||'',
+    ai.pick_view||'',
+    ai.sector_view||''
+  ].filter(Boolean).join('<br>');
+  document.getElementById('grok-summary').innerHTML=
+    `${summary}<div class="sub">Updated: ${d.updated_at||'--'} | AI: ${ai.ok?'Grok reviewed':(ai.reason||'local snapshot')}</div>`;
+
+  const picks=(d.next_session_picks||[]).slice(0,5);
+  document.getElementById('grok-picks').innerHTML=picks.length?picks.map(p=>{
+    const entry=Number(p.entry_price||0).toFixed(2);
+    const sl=Number(p.sl_price||0).toFixed(2);
+    const tp=Number(p.target_price||0).toFixed(2);
+    return `<div class="mini-stat"><span class="sym">${p.symbol}</span><span>Entry ${entry} | SL ${sl} | TP ${tp}</span></div>`;
+  }).join(''):'<div class="mini-stat"><span>No stored picks yet</span></div>';
+
+  const winners=(d.top_intraday_stocks||[]).slice(0,6);
+  document.getElementById('grok-winners').innerHTML=winners.length?winners.map(w=>{
+    const ret=Number(w.return_pct||w.open_to_high_pct||0).toFixed(2);
+    return `<div class="mini-stat"><span class="sym">${w.symbol}</span><span class="up">+${ret}%</span></div>`;
+  }).join(''):'<div class="mini-stat"><span>No intraday winners stored yet</span></div>';
+
+  const risks=(ai.risk_flags||[]).slice(0,4);
+  const actions=(ai.action_items||[]).slice(0,4);
+  document.getElementById('grok-actions').innerHTML=[
+    ...risks.map(x=>`<div class="mini-stat"><span>Risk</span><span class="down">${x}</span></div>`),
+    ...actions.map(x=>`<div class="mini-stat"><span>Action</span><span>${x}</span></div>`)
+  ].join('') || '<div class="mini-stat"><span>No risk flags</span></div>';
+}
+
+async function loadOllamaAgent(){
+  const d=await get('/api/ollama-agent');
+  const scan=d.scan||{};
+  const study=d.study||{};
+  document.getElementById('ollama-summary').innerHTML=
+    `<div>${study.summary||study.winner_profile||'Ollama study is building from NSE scan data.'}</div>
+     <div class="sub">Updated: ${d.updated_at||'--'} | Scanned: ${scan.symbols_scanned||0} | Winners: ${scan.winner_count||0}</div>`;
+
+  const candidates=(scan.top_candidates||[]).slice(0,6);
+  document.getElementById('ollama-candidates').innerHTML=candidates.length?candidates.map(c=>{
+    const ret=Number(c.open_to_high_pct||c.return_pct||0).toFixed(2);
+    const vol=Number(c.volume_ratio||0).toFixed(2);
+    return `<div class="mini-stat"><span class="sym">${c.symbol}</span><span class="up">+${ret}% | Vol ${vol}x</span></div>`;
+  }).join(''):'<div class="mini-stat"><span>No candidates yet</span></div>';
+
+  const rules=(study.force_filters||[]).slice(0,5);
+  document.getElementById('ollama-rules').innerHTML=rules.length?rules.map(r=>
+    `<div class="mini-stat"><span>Force</span><span>${r}</span></div>`
+  ).join(''):'<div class="mini-stat"><span>No forced rules yet</span></div>';
+}
+
+async function loadTerminal(){
+  const d=await get('/api/terminal');
+  const picks=(d.today_picks||[]).slice(0,5);
+  document.getElementById('terminal-picks').innerHTML=picks.length?picks.map(p=>{
+    const sc=Number(p.terminal_score||p.score||0).toFixed(0);
+    const rr=p.risk_reward||'--';
+    return `<div class="mini-stat"><span class="sym">${p.symbol}</span><span>Score ${sc} | RR ${rr}</span></div>`;
+  }).join(''):'<div class="mini-stat"><span>No terminal picks yet</span></div>';
+
+  const watch=(d.intraday_watchlist||[]).slice(0,6);
+  document.getElementById('terminal-watchlist').innerHTML=watch.length?watch.map(w=>{
+    const sc=Number(w.confidence_score||w.score||0).toFixed(0);
+    return `<div class="mini-stat"><span class="sym">${w.symbol}</span><span>Conf ${sc}</span></div>`;
+  }).join(''):'<div class="mini-stat"><span>Waiting for market scan</span></div>';
+
+  const edge=[
+    ...(d.hot_sectors||[]).slice(0,4).map(s=>`Hot sector: ${s}`),
+    ...(d.ollama_top_symbols||[]).slice(0,4).map(s=>`Ollama: ${s}`)
+  ];
+  document.getElementById('terminal-edge').innerHTML=edge.length?edge.map(x=>
+    `<div class="mini-stat"><span>${x}</span></div>`
+  ).join(''):'<div class="mini-stat"><span>No edge data yet</span></div>';
+}
+
+// ── Picks ──
+function rsiChip(v){
+  if(v===null||v===undefined||v==='')return '—';
+  const n=parseFloat(v);
+  const cls=n>=55&&n<=70?'rsi-bull':n>70?'rsi-bear':'rsi-neutral';
+  return `<span class="rsi-chip ${cls}">${n.toFixed(1)}</span>`;
+}
+
+async function loadPicks(){
+  const d=await get('/api/picks');
+  const picks=d.picks||[];
+  document.getElementById('k-picks').textContent=picks.length;
+  document.getElementById('k-picks-sub').textContent=d.date||'Today';
+  const tbody=document.getElementById('picks-tbody');
+  if(!picks.length){
+    tbody.innerHTML='<tr><td colspan="11" style="color:#475569;text-align:center;padding:40px">No picks today yet — bot will generate at 08:55 IST</td></tr>';
+    return;
+  }
+  tbody.innerHTML=picks.map(p=>{
+    const up=(p.upside_pct||0).toFixed(1);
+    const st=p.status||'pending';
+    const reasons=(p.signal_reasons||'').substring(0,30);
+    return `<tr>
+      <td style="color:#475569">${p.rank}</td>
+      <td><span class="sym">${p.symbol}</span></td>
+      <td class="price">₹${(p.entry_price||0).toFixed(2)}</td>
+      <td class="down">₹${(p.sl_price||0).toFixed(2)}</td>
+      <td class="up">₹${(p.target_price||0).toFixed(2)}</td>
+      <td class="up">+${up}%</td>
+      <td>${rsiChip(p.rsi)}</td>
+      <td style="color:#94a3b8">${p.adx?parseFloat(p.adx).toFixed(1):'—'}</td>
+      <td style="color:#94a3b8">${p.vol_ratio?parseFloat(p.vol_ratio).toFixed(2)+'x':'—'}</td>
+      <td><span style="font-size:11px;color:#818cf8">${(p.ema_alignment||'N/A').replace('EMA_','')}</span></td>
+      <td><span class="${st}">${st.replace('_',' ').toUpperCase()}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── History ──
+async function loadHistory(){
+  const d=await get('/api/history');
+  const picks=(d.picks||[]).slice(0,15);
+  document.getElementById('history-tbody').innerHTML=picks.length?picks.map(p=>{
+    const ret=parseFloat(p.result_return||0);
+    const retStr=ret?`<span class="${ret>0?'up':'down'}">${ret>0?'+':''}${ret.toFixed(2)}%</span>`:'—';
+    return `<tr>
+      <td style="color:#475569;font-size:12px">${p.date}</td>
+      <td><span class="sym" style="font-size:13px">${p.symbol}</span></td>
+      <td style="font-size:12px">₹${(p.entry_price||0).toFixed(0)}</td>
+      <td><span class="${p.status||''}">${(p.status||'pending').replace('_',' ')}</span></td>
+      <td>${retStr}</td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="5" style="color:#475569">No history yet</td></tr>';
+
+  // Sys stats
+  document.getElementById('sys-stats').innerHTML=`
+    <div class="mini-stat"><span>Total Closed</span><span style="color:#e2e8f0">${d.total_closed||0}</span></div>
+    <div class="mini-stat"><span>TP Hits</span><span class="up">${d.overall_tp||0}</span></div>
+    <div class="mini-stat"><span>SL Hits</span><span class="down">${d.overall_sl||0}</span></div>
+    <div class="mini-stat"><span>Accuracy</span><span style="color:#6366f1;font-weight:700">${d.overall_accuracy||0}%</span></div>
+    <div class="progress"><div class="progress-bar" style="width:${d.overall_accuracy||0}%"></div></div>
+  `;
+}
+
+// ── Master refresh ──
+async function refresh(){
+  await Promise.all([loadHealth(),loadSectors(),loadPicks(),loadHistory(),loadGrokDashboard(),loadOllamaAgent(),loadTerminal()]);
+  document.getElementById('last-refresh').textContent=new Date().toLocaleTimeString('en-IN');
+}
+
+refresh();
+setInterval(refresh,30000);
+</script>
+</body>
+</html>

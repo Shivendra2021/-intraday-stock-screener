@@ -1,0 +1,19 @@
+# Upper-bound constraints for reproducible installs.
+# Install with:
+#   python -m pip install -r requirements.txt -c constraints.txt
+# Refresh intentionally after testing the bot/dashboard end-to-end.
+yfinance<0.3
+nsepython<3
+newspaper4k<1
+flask<4
+apscheduler<4
+python-dotenv<2
+requests<3
+pandas<3
+numpy<3
+lxml<6
+feedparser<7
+jugaad-data<1
+curl_cffi<1
+newsapi-python<1
+waitress<4

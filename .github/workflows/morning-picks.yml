@@ -1,0 +1,52 @@
+name: Morning Picks
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 09:05 and 09:25 Asia/Kolkata, expressed in UTC for GitHub Actions.
+    - cron: "35 3 * * 1-5"
+    - cron: "55 3 * * 1-5"
+
+concurrency:
+  group: morning-picks
+  cancel-in-progress: false
+
+jobs:
+  morning-picks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TZ: Asia/Kolkata
+      PYTHONIOENCODING: utf-8
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+      OPENROUTER_GROK_KEY: ${{ secrets.OPENROUTER_GROK_KEY }}
+      OPENROUTER_GPT_KEY: ${{ secrets.OPENROUTER_GPT_KEY }}
+      OPENROUTER_BASE_URL: https://openrouter.ai/api/v1/chat/completions
+      GROK_MODEL: x-ai/grok-3-mini
+      GPT_MODEL: openai/gpt-oss-120b:free
+      THENEWSAPI_KEY: ${{ secrets.THENEWSAPI_KEY }}
+      NEWSAPI_KEY: ""
+      ZERODHA_API_KEY: ""
+      ZERODHA_ACCESS_TOKEN: ""
+      BSE_UNIVERSE_ENABLED: "False"
+      GROK_DASHBOARD_AGENT_ENABLED: "False"
+      INTRADAY_PATTERN_AGENT_ENABLED: "False"
+      OLLAMA_AGENT_ENABLED: "False"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run morning picks
+        run: python tools/run_cloud_morning.py
