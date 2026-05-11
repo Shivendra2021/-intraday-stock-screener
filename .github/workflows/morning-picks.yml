@@ -48,5 +48,19 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
+      - name: Check required secrets
+        shell: bash
+        run: |
+          missing=0
+          for name in TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID OPENROUTER_GROK_KEY OPENROUTER_GPT_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is missing. Check the repository secret mapped to this env variable."
+              missing=1
+            else
+              echo "$name is configured"
+            fi
+          done
+          exit "$missing"
+
       - name: Run morning picks
         run: python tools/run_cloud_morning.py
