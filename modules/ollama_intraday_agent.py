@@ -15,20 +15,23 @@ from typing import Any
 import pandas as pd
 import requests
 
+from modules.time_utils import now_ist, today_ist_str
+
 logger = logging.getLogger(__name__)
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 
 STATE_FILE = "data/ollama_intraday_agent_state.json"
+DAILY_LEARNING_FILE = "data/daily_winner_learning.json"
 _agent_thread: threading.Thread | None = None
 _agent_running = False
 
 
 def _now() -> str:
-    return dt.datetime.now().isoformat(timespec="seconds")
+    return now_ist().isoformat(timespec="seconds")
 
 
 def _today() -> str:
-    return dt.date.today().isoformat()
+    return today_ist_str()
 
 
 def _connect() -> sqlite3.Connection:
@@ -190,7 +193,7 @@ def scan_full_universe() -> dict[str, Any]:
     import yfinance as yf
 
     symbols = _universe()
-    scan_time = dt.datetime.now().strftime("%H:%M:%S")
+    scan_time = now_ist().strftime("%H:%M:%S")
     candidates: list[dict[str, Any]] = []
     failed_batches = 0
     logger.info("Ollama intraday agent scanning %s NSE symbols", len(symbols))
@@ -315,6 +318,69 @@ def _call_ollama(payload: dict[str, Any]) -> dict[str, Any]:
         return {"ok": False, "error": str(exc)[:300]}
 
 
+def _call_openrouter_learning(payload: dict[str, Any]) -> dict[str, Any]:
+    """Use GPT as primary after-market learner, with Grok fallback."""
+    try:
+        from modules.dual_brain import _call_openrouter
+        from config import (
+            OPENROUTER_BASE_URL,
+            OPENROUTER_GPT_KEY,
+            OPENROUTER_GROK_KEY,
+            GPT_MODEL,
+            GROK_MODEL,
+        )
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)[:300]}
+
+    system_prompt = (
+        "You are the primary GPT learning brain for an Indian NSE intraday research system. "
+        "Study only the supplied full-universe winner data. Find repeated pre-move behavior "
+        "before 7%+ open-to-high or green close moves, sector heat, market-condition context, "
+        "upper-circuit style behavior, avoid conditions, and tomorrow scoring rules. "
+        "Return compact JSON only with keys: summary, common_pre_move_behaviors, sector_patterns, "
+        "market_condition_lessons, upper_circuit_clues, next_day_filters, avoid_filters, top_symbols, confidence."
+    )
+    user_prompt = json.dumps(payload, ensure_ascii=True, default=str)[:16000]
+    messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
+
+    if OPENROUTER_GPT_KEY:
+        result = _call_openrouter(messages, OPENROUTER_GPT_KEY, GPT_MODEL, 900, OPENROUTER_BASE_URL)
+        if result.get("ok"):
+            parsed = _parse_json(result.get("content", ""))
+            parsed["ok"] = True
+            parsed["model"] = GPT_MODEL
+            parsed["brain_role"] = "gpt_primary"
+            return parsed
+        logger.warning("GPT daily learning failed, trying Grok fallback: %s", result.get("error"))
+
+    if OPENROUTER_GROK_KEY:
+        result = _call_openrouter(messages, OPENROUTER_GROK_KEY, GROK_MODEL, 900, OPENROUTER_BASE_URL)
+        if result.get("ok"):
+            parsed = _parse_json(result.get("content", ""))
+            parsed["ok"] = True
+            parsed["model"] = GROK_MODEL
+            parsed["brain_role"] = "grok_fallback"
+            return parsed
+        return {"ok": False, "error": result.get("error", "Grok fallback failed")}
+
+    return {"ok": False, "error": "No OpenRouter GPT/Grok key configured"}
+
+
+def _parse_json(text: str) -> dict[str, Any]:
+    try:
+        return json.loads(text)
+    except Exception:
+        pass
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        try:
+            return json.loads(text[start:end + 1])
+        except Exception:
+            pass
+    return {"summary": str(text or "")[:1200]}
+
+
 def study_scan(scan: dict[str, Any]) -> dict[str, Any]:
     if not _ollama_available():
         study = {
@@ -338,6 +404,171 @@ def study_scan(scan: dict[str, Any]) -> dict[str, Any]:
         )
     _store_study(scan, study)
     return study
+
+
+def _sector_summary(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    sectors: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        sectors.setdefault(str(row.get("sector") or "UNKNOWN"), []).append(row)
+    summary = []
+    for sector, items in sectors.items():
+        summary.append({
+            "sector": sector,
+            "winner_count": len(items),
+            "avg_open_to_high_pct": round(sum(float(x.get("open_to_high_pct") or 0) for x in items) / max(1, len(items)), 3),
+            "avg_open_to_close_pct": round(sum(float(x.get("open_to_close_pct") or 0) for x in items) / max(1, len(items)), 3),
+            "avg_volume_ratio": round(sum(float(x.get("volume_ratio") or 0) for x in items) / max(1, len(items)), 3),
+            "top_symbols": [x.get("symbol") for x in sorted(items, key=lambda x: x.get("open_to_high_pct", 0), reverse=True)[:8]],
+        })
+    return sorted(summary, key=lambda x: (x["winner_count"], x["avg_open_to_high_pct"]), reverse=True)
+
+
+def _numeric_learning(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    if not rows:
+        return {}
+
+    def avg(key: str) -> float:
+        vals = [float(row.get(key) or 0) for row in rows]
+        return round(sum(vals) / max(1, len(vals)), 3)
+
+    green = [r for r in rows if float(r.get("open_to_close_pct") or 0) > 0]
+    strong_gap = [r for r in rows if float(r.get("gap_pct") or 0) >= 1]
+    strong_first_15 = [r for r in rows if float(r.get("first_15m_return_pct") or 0) >= 1]
+    volume_surge = [r for r in rows if float(r.get("first_15m_volume_ratio") or 0) >= 2 or float(r.get("volume_ratio") or 0) >= 2]
+    prior_week = [r for r in rows if float(r.get("weekly_change_pct") or 0) >= 3]
+    return {
+        "winner_count": len(rows),
+        "green_close_count": len(green),
+        "strong_gap_count": len(strong_gap),
+        "strong_first_15m_count": len(strong_first_15),
+        "volume_surge_count": len(volume_surge),
+        "prior_week_momentum_count": len(prior_week),
+        "avg_open_to_high_pct": avg("open_to_high_pct"),
+        "avg_open_to_close_pct": avg("open_to_close_pct"),
+        "avg_gap_pct": avg("gap_pct"),
+        "avg_first_15m_return_pct": avg("first_15m_return_pct"),
+        "avg_first_15m_volume_ratio": avg("first_15m_volume_ratio"),
+        "avg_volume_ratio": avg("volume_ratio"),
+    }
+
+
+def _load_winners_for_date(date: str, min_return_pct: float) -> list[dict[str, Any]]:
+    rows: list[dict[str, Any]] = []
+    with _connect() as conn:
+        fetched = conn.execute(
+            """SELECT symbol, return_pct, open_to_high_pct, open_to_close_pct, gap_pct,
+                      first_15m_return_pct, first_15m_volume_ratio, volume_ratio,
+                      prev_day_change_pct, weekly_change_pct, sector, score, features_json
+               FROM ollama_intraday_candidates
+               WHERE date=? AND open_to_high_pct>=?
+               ORDER BY open_to_high_pct DESC""",
+            (date, min_return_pct),
+        ).fetchall()
+    seen = set()
+    for row in fetched:
+        symbol = str(row["symbol"] or "").upper()
+        if not symbol or symbol in seen:
+            continue
+        seen.add(symbol)
+        try:
+            payload = json.loads(row["features_json"] or "{}")
+        except Exception:
+            payload = {}
+        item = {**dict(row), **payload}
+        item.pop("features_json", None)
+        rows.append(item)
+    return rows
+
+
+def daily_winner_learning(min_return_pct: float | None = None, force: bool = False, send_telegram: bool = True) -> dict[str, Any]:
+    """Run one GPT-primary daily learning pass over all stored 7%+ NSE movers."""
+    from config import OLLAMA_AGENT_MIN_RETURN_PCT
+
+    min_return_pct = float(min_return_pct or OLLAMA_AGENT_MIN_RETURN_PCT)
+    date = _today()
+
+    if not force and os.path.exists(DAILY_LEARNING_FILE):
+        try:
+            with open(DAILY_LEARNING_FILE, "r", encoding="utf-8") as fp:
+                previous = json.load(fp)
+            if previous.get("date") == date and previous.get("winner_count", 0) > 0:
+                return {**previous, "skipped": True, "reason": "already_learned_today"}
+        except Exception:
+            pass
+
+    winners = _load_winners_for_date(date, min_return_pct)
+    if not winners:
+        scan = scan_full_universe()
+        winners = scan.get("winners", [])
+    winners = sorted(winners, key=lambda row: row.get("open_to_high_pct", 0), reverse=True)
+
+    sector_summary = _sector_summary(winners)
+    numeric = _numeric_learning(winners)
+    payload = {
+        "date": date,
+        "task": "daily_full_universe_7pct_winner_learning",
+        "winner_count": len(winners),
+        "top_winners": winners[:30],
+        "sector_summary": sector_summary[:25],
+        "numeric_common_behavior": numeric,
+        "instruction": (
+            "Learn what these winners looked like before and during the move. "
+            "Extract reusable filters for future morning scoring across red, flat, and bull markets."
+        ),
+    }
+    ai = _call_openrouter_learning(payload) if winners else {"ok": False, "error": "No winners found"}
+
+    result = {
+        "date": date,
+        "updated_at": _now(),
+        "winner_count": len(winners),
+        "top_symbols": [row.get("symbol") for row in winners[:15]],
+        "sector_summary": sector_summary,
+        "numeric_common_behavior": numeric,
+        "ai": ai,
+    }
+    os.makedirs(os.path.dirname(DAILY_LEARNING_FILE), exist_ok=True)
+    with open(DAILY_LEARNING_FILE, "w", encoding="utf-8") as fp:
+        json.dump(result, fp, indent=2, ensure_ascii=False, default=str)
+
+    study = {
+        "ok": ai.get("ok", False),
+        "model": ai.get("model"),
+        "summary": ai.get("summary", ""),
+        "winner_profile": "; ".join(ai.get("common_pre_move_behaviors", [])[:5]) if isinstance(ai.get("common_pre_move_behaviors"), list) else "",
+        "force_filters": ai.get("next_day_filters", []),
+        "avoid_filters": ai.get("avoid_filters", []),
+        "top_symbols": result["top_symbols"],
+        "daily_learning": result,
+    }
+    _store_study({"date": date, "scan_time": "AFTER_CLOSE", "top_candidates": winners[:40]}, study)
+
+    if send_telegram:
+        _notify_daily_learning(result)
+    return result
+
+
+def _notify_daily_learning(result: dict[str, Any]) -> None:
+    try:
+        from modules.alerts import send_raw_alert
+
+        ai = result.get("ai") or {}
+        sectors = ", ".join(row.get("sector", "") for row in result.get("sector_summary", [])[:5]) or "None"
+        top = ", ".join(result.get("top_symbols", [])[:8]) or "None"
+        summary = str(ai.get("summary") or "Daily winner learning stored.")[:700]
+        send_raw_alert(
+            "<b>GPT PRIMARY DAILY WINNER LEARNING</b>\n"
+            f"Date: {result.get('date')}\n"
+            f"7%+ winners studied: {result.get('winner_count', 0)}\n"
+            f"Hot sectors: {sectors}\n"
+            f"Top movers: {top}\n"
+            f"Brain: {ai.get('model', 'numeric-only')}\n\n"
+            f"{summary}\n\n"
+            "<i>Research only. Lessons feed future scoring.</i>",
+            review_with_grok=False,
+        )
+    except Exception as exc:
+        logger.debug("Daily winner learning Telegram notify failed: %s", exc)
 
 
 def _store_study(scan: dict[str, Any], study: dict[str, Any]) -> None:
@@ -388,24 +619,29 @@ def _notify(scan: dict[str, Any], study: dict[str, Any]) -> None:
         logger.debug("Ollama agent Telegram notify failed: %s", exc)
 
 
-def run_ollama_cycle(send_telegram: bool = True) -> dict[str, Any]:
+def run_ollama_cycle(send_telegram: bool = False, study: bool = False) -> dict[str, Any]:
     scan = scan_full_universe()
-    study = study_scan(scan)
+    study_result = study_scan(scan) if study else {
+        "ok": True,
+        "model": "numeric_scan_only",
+        "summary": "Intraday scan stored. GPT-primary learning runs once after market close.",
+        "top_symbols": [row.get("symbol") for row in scan.get("top_candidates", [])[:10]],
+    }
     state = {
         "updated_at": _now(),
         "scan": scan,
-        "study": study,
-        "status": "ok" if study.get("ok") else "partial",
+        "study": study_result,
+        "status": "ok" if study_result.get("ok") else "partial",
     }
     _save_state(state)
     if send_telegram:
-        _notify(scan, study)
+        _notify(scan, study_result)
     logger.info(
         "Ollama intraday agent cycle complete: scanned=%s candidates=%s winners=%s study=%s",
         scan.get("symbols_scanned"),
         scan.get("candidates_found"),
         scan.get("winner_count"),
-        "ok" if study.get("ok") else study.get("error", "partial"),
+        "ok" if study_result.get("ok") else study_result.get("error", "partial"),
     )
     return state
 
@@ -420,7 +656,7 @@ def get_ollama_agent_state(max_age_seconds: int = 1800) -> dict[str, Any]:
                 return state
         except Exception:
             pass
-    return run_ollama_cycle(send_telegram=False)
+    return run_ollama_cycle(send_telegram=False, study=False)
 
 
 def ollama_intraday_boost(row: dict[str, Any]) -> int:
@@ -465,7 +701,7 @@ def start_ollama_intraday_agent(interval_minutes: int | None = None) -> dict[str
     def _loop() -> None:
         while _agent_running:
             try:
-                run_ollama_cycle(send_telegram=True)
+                run_ollama_cycle(send_telegram=False, study=False)
             except Exception as exc:
                 logger.error("Ollama intraday agent cycle failed: %s", exc)
             time.sleep(max(300, interval_minutes * 60))

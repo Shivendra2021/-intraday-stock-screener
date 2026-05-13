@@ -424,12 +424,15 @@ def job_after_market_learning():
         from config import INTRADAY_MIN_RETURN_PCT
         from modules.after_market_learning import run_after_market_learning
         from modules.alerts import send_raw_alert
+        from modules.ollama_intraday_agent import daily_winner_learning
 
         result = run_after_market_learning(min_return_pct=INTRADAY_MIN_RETURN_PCT)
+        daily = daily_winner_learning(min_return_pct=INTRADAY_MIN_RETURN_PCT, force=True, send_telegram=True)
         lines = [
             "🧠 <b>AFTER-MARKET LEARNING COMPLETE</b>",
             f"Winners ≥{INTRADAY_MIN_RETURN_PCT:.1f}%: {result.get('winner_count', 0)}",
             f"Patterns learned: {result.get('pattern_count', 0)}",
+            f"GPT daily winners studied: {daily.get('winner_count', 0)}",
         ]
         for p in result.get("patterns", [])[:5]:
             lines.append(f"• {p.get('pattern_key')}: conf {p.get('confidence', 0):.0%}, avg {p.get('avg_return_pct', 0):.1f}%")

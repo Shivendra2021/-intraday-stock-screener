@@ -1,0 +1,64 @@
+name: After Market Learning
+
+on:
+  workflow_dispatch:
+  schedule:
+    # 16:05 Asia/Kolkata, expressed in UTC for GitHub Actions.
+    - cron: "35 10 * * 1-5"
+
+concurrency:
+  group: after-market-learning
+  cancel-in-progress: false
+
+jobs:
+  after-market-learning:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      TZ: Asia/Kolkata
+      PYTHONIOENCODING: utf-8
+      TELEGRAM_BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.CHAT_ID }}
+      OPENROUTER_GROK_KEY: ${{ secrets.GROK_KEY }}
+      OPENROUTER_GPT_KEY: ${{ secrets.GPT_KEY }}
+      OPENROUTER_BASE_URL: https://openrouter.ai/api/v1/chat/completions
+      GROK_MODEL: x-ai/grok-3-mini
+      GPT_MODEL: openai/gpt-oss-120b:free
+      NEWSAPI_KEY: ""
+      ZERODHA_API_KEY: ""
+      ZERODHA_ACCESS_TOKEN: ""
+      BSE_UNIVERSE_ENABLED: "False"
+      GROK_DASHBOARD_AGENT_ENABLED: "False"
+      INTRADAY_PATTERN_AGENT_ENABLED: "False"
+      OLLAMA_AGENT_ENABLED: "False"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Check required secrets
+        shell: bash
+        run: |
+          missing=0
+          for name in TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID OPENROUTER_GPT_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::$name is missing. Check repository secrets."
+              missing=1
+            else
+              echo "$name is configured"
+            fi
+          done
+          exit "$missing"
+
+      - name: Run after-market learning
+        run: python tools/run_cloud_after_market.py
