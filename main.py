@@ -166,6 +166,61 @@ def _load_todays_picks() -> list[dict]:
         return []
 
 
+def _fallback_intraday_candidates(limit: int = 20) -> list[dict]:
+    """Use the intraday agent's full-universe scan when the morning scanner returns zero."""
+    try:
+        from modules.ollama_intraday_agent import scan_full_universe
+
+        result = scan_full_universe()
+    except Exception as exc:
+        logger.warning("Fallback intraday scan failed: %s", exc)
+        return []
+
+    raw_candidates = result.get("top_candidates", []) or []
+    if not raw_candidates:
+        logger.warning("Fallback intraday scan returned zero candidates: %s", result)
+        return []
+
+    candidates: list[dict] = []
+    for row in raw_candidates[:limit]:
+        price = row.get("close_price") or row.get("open_price") or 0
+        try:
+            price = float(price)
+        except Exception:
+            price = 0.0
+        if price <= 0:
+            continue
+
+        volume_ratio = row.get("volume_ratio", row.get("first_15m_volume_ratio", 1.0))
+        candidate = {
+            "symbol": str(row.get("symbol", "")).replace(".NS", "").upper(),
+            "price": price,
+            "score": row.get("score", 0),
+            "price_change_pct": row.get("return_pct", 0),
+            "daily_change": row.get("return_pct", 0),
+            "volume_ratio": volume_ratio,
+            "vol_ratio": volume_ratio,
+            "gap_up": row.get("gap_pct", 0),
+            "rsi": 50,
+            "adx": 20,
+            "sector": row.get("sector", "UNKNOWN"),
+            "fallback_source": "ollama_intraday_agent",
+            "signal_reasons": "fallback_intraday_scan",
+            "open_to_high_pct": row.get("open_to_high_pct", 0),
+            "first_15m_return_pct": row.get("first_15m_return_pct", 0),
+            "first_15m_volume_ratio": row.get("first_15m_volume_ratio", 0),
+        }
+        if candidate["symbol"]:
+            candidates.append(candidate)
+
+    logger.info(
+        "Fallback intraday scan produced %s candidates from %s scanned symbols",
+        len(candidates),
+        result.get("symbols_scanned", 0),
+    )
+    return candidates
+
+
 # ============================================================================
 # Morning Pipeline (Session 1)
 # ============================================================================
@@ -187,14 +242,25 @@ def run_morning_session():
     logger.info(f"Morning context: {context.get('insights_summary', {})}")
     
     # Stage 1: Universe scan (08:00-08:40)
-    from modules.universe_scanner import scan_universe_parallel
+    from modules.universe_scanner import get_last_scan_diagnostics, scan_universe_parallel
     candidates = scan_universe_parallel(top_n=20)
     
     if not candidates:
         logger.warning("Universe scan empty")
+        diagnostics = get_last_scan_diagnostics()
+        _append_decision_log("universe_scan_empty", {
+            "diagnostics": diagnostics,
+        })
+        candidates = _fallback_intraday_candidates(limit=20)
+
+    if not candidates:
+        logger.warning("Fallback scan empty")
         try:
             from modules.alerts import send_no_picks
-            send_no_picks("Morning universe scan returned zero candidates")
+            send_no_picks(
+                "Morning scanner and fallback intraday scanner returned zero candidates",
+                diagnostics=get_last_scan_diagnostics(),
+            )
         except Exception:
             pass
         return

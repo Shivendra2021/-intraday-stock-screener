@@ -203,14 +203,30 @@ def send_summary(stats: dict) -> bool:
     return _send(text)
 
 
-def send_no_picks(reason: str = "No stocks passed filters") -> bool:
+def send_no_picks(reason: str = "No stocks passed filters", diagnostics: dict | None = None) -> bool:
     """Send notification when no picks generated today."""
     date_str = datetime.date.today().strftime("%d %b %Y")
+    diagnostic_lines = ""
+    if diagnostics:
+        checked = diagnostics.get("symbols") or diagnostics.get("universe_size") or 0
+        candidates = diagnostics.get("candidates_found", 0)
+        no_data = diagnostics.get("no_data", 0)
+        low_price = diagnostics.get("price_below_filter", 0)
+        low_volume = diagnostics.get("volume_below_filter", 0)
+        errors = diagnostics.get("error", 0) + diagnostics.get("batch_failures", 0)
+        diagnostic_lines = (
+            "\n\n<b>Diagnostics</b>\n"
+            f"Checked: {checked} symbols\n"
+            f"Candidates: {candidates}\n"
+            f"No data: {no_data} | Low price: {low_price} | Low volume: {low_volume} | Errors: {errors}"
+        )
     text = (
-        f"📊 <b>MarketMind Pro — {date_str}</b>\n"
+        f"📊 <b>MarketMind Pro - {date_str}</b>\n"
         f"\n⚠️ <b>No Picks Generated</b>\n"
         f"Reason: {reason}\n"
-        f"\n<i>Market conditions may be unfavorable.</i>\n"
+        f"{diagnostic_lines}\n"
+        f"\n<i>Scanner returned zero qualifying candidates after fallback checks.</i>\n"
+        f"<i>This can be caused by data-source gaps, strict filters, timing, or market conditions.</i>\n"
         f"<i>Bot is running - analysis complete.</i>"
     )
     return _send(text)

@@ -278,6 +278,7 @@ def review_event(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
             "watch_items": [], "next_action": "Monitor AI output.",
         }
     parsed["ok"] = True
+    parsed["model_used"] = result.get("model")
     return parsed
 
 

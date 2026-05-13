@@ -36,9 +36,15 @@ MIN_PRICE_CHANGE_PCT = -5.0  # Allow some downside, will filter later
 MAX_PRICE_CHANGE_PCT = 15.0
 TOP_N_RESULTS = 20
 WORKER_COUNT = 16
+LAST_SCAN_DIAGNOSTICS: dict[str, Any] = {}
 
 
 def _quick_analyze_symbol(symbol: str) -> dict[str, Any] | None:
+    result, _reason = _quick_analyze_symbol_with_reason(symbol)
+    return result
+
+
+def _quick_analyze_symbol_with_reason(symbol: str) -> tuple[dict[str, Any] | None, str]:
     """
     Quick analysis of a single symbol.
     Runs in worker process - must be module-level function.
@@ -50,12 +56,12 @@ def _quick_analyze_symbol(symbol: str) -> dict[str, Any] | None:
         # Ensure .NS suffix
         nse_sym = _get_nse_symbol(symbol)
         if not nse_sym:
-            return None
+            return None, "no_nse_symbol"
         
         # Fetch 5-day data
         df = fetch_ohlcv(nse_sym, period="5d")
         if df is None or df.empty or len(df) < 2:
-            return None
+            return None, "no_data"
         
         close_prices = df["close"].astype(float)
         volume = df["volume"].astype(float)
@@ -65,11 +71,11 @@ def _quick_analyze_symbol(symbol: str) -> dict[str, Any] | None:
         
         # Quick filters
         if current_price < MIN_PRICE_FILTER:
-            return None
+            return None, "price_below_filter"
         
         avg_volume = volume.mean()
         if avg_volume < MIN_VOLUME_FILTER:
-            return None
+            return None, "volume_below_filter"
         
         # Calculate metrics
         price_change_pct = ((current_price - price_5d_ago) / price_5d_ago) * 100
@@ -108,20 +114,35 @@ def _quick_analyze_symbol(symbol: str) -> dict[str, Any] | None:
             "gap_up": gap_up,
             "avg_volume": avg_volume,
             "score": score,
-        }
+        }, "passed"
         
-    except Exception as e:
-        return None
+    except Exception:
+        return None, "error"
 
 
-def _batch_analyze(symbols: list[str]) -> list[dict[str, Any]]:
+def _batch_analyze(symbols: list[str]) -> dict[str, Any]:
     """Analyze a batch of symbols."""
     results = []
+    stats: dict[str, int] = {
+        "symbols": len(symbols),
+        "passed": 0,
+        "no_nse_symbol": 0,
+        "no_data": 0,
+        "price_below_filter": 0,
+        "volume_below_filter": 0,
+        "error": 0,
+    }
     for sym in symbols:
-        result = _quick_analyze_symbol(sym)
+        result, reason = _quick_analyze_symbol_with_reason(sym)
+        stats[reason] = stats.get(reason, 0) + 1
         if result:
             results.append(result)
-    return results
+    return {"results": results, "stats": stats}
+
+
+def get_last_scan_diagnostics() -> dict[str, Any]:
+    """Return summary of the most recent universe scan in this process."""
+    return dict(LAST_SCAN_DIAGNOSTICS)
 
 
 def get_full_universe() -> list[str]:
@@ -595,6 +616,7 @@ def scan_universe_parallel(top_n: int = TOP_N_RESULTS) -> list[dict[str, Any]]:
     
     Returns top_n stocks ranked by composite score.
     """
+    global LAST_SCAN_DIAGNOSTICS
     import logging
     logger = logging.getLogger("universe_scanner")
     
@@ -621,6 +643,16 @@ def scan_universe_parallel(top_n: int = TOP_N_RESULTS) -> list[dict[str, Any]]:
     
     # Parallel execution
     all_results = []
+    scan_stats: dict[str, int] = {
+        "symbols": 0,
+        "passed": 0,
+        "no_nse_symbol": 0,
+        "no_data": 0,
+        "price_below_filter": 0,
+        "volume_below_filter": 0,
+        "error": 0,
+        "batch_failures": 0,
+    }
     start_time = time.time()
     
     with ProcessPoolExecutor(max_workers=WORKER_COUNT) as executor:
@@ -630,14 +662,26 @@ def scan_universe_parallel(top_n: int = TOP_N_RESULTS) -> list[dict[str, Any]]:
         for future in as_completed(futures):
             batch_idx = futures[future]
             try:
-                results = future.result(timeout=300)
+                batch_result = future.result(timeout=300)
+                results = batch_result.get("results", [])
+                for key, value in (batch_result.get("stats", {}) or {}).items():
+                    scan_stats[key] = scan_stats.get(key, 0) + int(value or 0)
                 all_results.extend(results)
                 logger.info(f"Batch {batch_idx+1}/{len(batches)} done: {len(results)} results")
             except Exception as e:
+                scan_stats["batch_failures"] += 1
                 logger.error(f"Batch {batch_idx} failed: {e}")
     
     elapsed = time.time() - start_time
     logger.info(f"Scanned {len(all_results)} candidates in {elapsed/60:.1f} min")
+    LAST_SCAN_DIAGNOSTICS = {
+        **scan_stats,
+        "universe_size": len(universe),
+        "batches": len(batches),
+        "candidates_found": len(all_results),
+        "elapsed_seconds": round(elapsed, 2),
+    }
+    logger.info("Universe scan diagnostics: %s", LAST_SCAN_DIAGNOSTICS)
     
     if not all_results:
         logger.warning("No results from universe scan")
