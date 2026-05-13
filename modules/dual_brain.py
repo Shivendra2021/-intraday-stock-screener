@@ -4,8 +4,8 @@
 """
 dual_brain.py — Dual-Brain Debate + Command System
 
-Brain 1 (Grok): Primary orchestrator
-Brain 2 (GPT-4o): Deep analyst, challenger
+Brain 1 (GPT): Primary analyst
+Brain 2 (Grok): Challenger / fallback reviewer
 Both can ISSUE COMMANDS - executed only when BOTH agree
 """
 
@@ -218,30 +218,39 @@ def debate_picks(draft_picks: list[dict], context: str = "", max_rounds: int = M
     
     logger.info(f"=== Dual-Brain Debate: {len(draft_picks)} picks ===")
     
-    brain1 = brain1_grok_review(draft_picks, context)
+    brain1 = brain2_gpt_review(draft_picks, context)
     if not brain1.get("ok"):
         return draft_picks, False
     
-    brain1_picks = brain1.get("picks_with_reason", [])
+    brain1_votes = _normalize_final_vote(brain1.get("final_vote", {}), draft_picks)
+    brain1_picks = []
     if not brain1_picks:
-        brain1_picks = [{"symbol": p["symbol"], "reason": "Selected", "vote": "YES"} for p in draft_picks[:5]]
+        brain1_picks = [
+            {
+                "symbol": p["symbol"],
+                "reason": "GPT primary approved" if brain1_votes.get(p["symbol"], "YES") == "YES" else "GPT primary rejected",
+                "vote": brain1_votes.get(p["symbol"], "YES"),
+            }
+            for p in draft_picks[:5]
+        ]
     
-    logger.info(f"Brain 1: {len(brain1_picks)} reviewed")
+    logger.info(f"Brain 1 GPT primary: {len(brain1_picks)} reviewed")
     
-    brain2 = brain2_gpt_review(draft_picks, context)
+    brain2 = brain1_grok_review(draft_picks, context)
     if not brain2.get("ok"):
-        return draft_picks, False
+        brain2 = {"ok": True, "verdict": "grok_unavailable", "picks_with_reason": [], "commands": []}
     
-    brain2_votes = _normalize_final_vote(brain2.get("final_vote", {}), draft_picks)
-    logger.info(f"Brain 2: verdict={brain2.get('verdict')}")
+    brain2_picks = brain2.get("picks_with_reason", [])
+    brain2_votes = {str(p.get("symbol", "")).upper(): str(p.get("vote", "YES")).upper() for p in brain2_picks}
+    logger.info(f"Brain 2 Grok challenger: verdict={brain2.get('verdict')}")
     
     # Process commands from Brain 1
     for cmd in brain1.get("commands", []):
-        _execute_command(cmd.get("command", ""), cmd.get("params", {}), cmd.get("reason", ""), "grok")
+        _execute_command(cmd.get("command", ""), cmd.get("params", {}), cmd.get("reason", ""), "gpt")
     
     # Process commands from Brain 2
     for cmd in brain2.get("commands", []):
-        _execute_command(cmd.get("command", ""), cmd.get("params", {}), cmd.get("reason", ""), "gpt")
+        _execute_command(cmd.get("command", ""), cmd.get("params", {}), cmd.get("reason", ""), "grok")
     
     # Build approved picks
     approved = []

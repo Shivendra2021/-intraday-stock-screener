@@ -184,7 +184,7 @@ def _call_openrouter(
 
 
 def _call_brain(messages: list[dict], max_tokens: int = 600) -> dict[str, Any]:
-    """Try Grok first, then GPT as fallback. Updates state."""
+    """Try GPT first, then Grok as fallback. Updates state."""
     cfg = _config()
     state = _load_state()
     _increment_daily_call(state)
@@ -192,29 +192,29 @@ def _call_brain(messages: list[dict], max_tokens: int = 600) -> dict[str, Any]:
     state["last_review_time"] = datetime.datetime.now().isoformat(timespec="seconds")
     _save_state(state)
 
-    # 1. Try Grok
-    if cfg["grok_key"]:
-        result = _call_openrouter(messages, cfg["grok_key"], cfg["grok_model"], cfg, max_tokens)
-        if result.get("ok"):
-            _update_state(
-                last_ok=datetime.datetime.now().isoformat(timespec="seconds"),
-                last_error="",
-                last_model_used=cfg["grok_model"],
-            )
-            logger.info("Grok Brain: used %s", cfg["grok_model"])
-            return result
-        logger.warning("Grok failed (%s), trying GPT fallback...", result.get("error", "unknown"))
-
-    # 2. Fallback to GPT
+    # 1. Try GPT as the primary brain.
     if cfg["gpt_key"]:
         result = _call_openrouter(messages, cfg["gpt_key"], cfg["gpt_model"], cfg, max_tokens)
         if result.get("ok"):
             _update_state(
                 last_ok=datetime.datetime.now().isoformat(timespec="seconds"),
                 last_error="",
-                last_model_used=cfg["gpt_model"] + " (fallback)",
+                last_model_used=cfg["gpt_model"],
             )
-            logger.info("Grok Brain: fallback used %s", cfg["gpt_model"])
+            logger.info("AI Brain: GPT primary used %s", cfg["gpt_model"])
+            return result
+        logger.warning("GPT primary failed (%s), trying Grok fallback...", result.get("error", "unknown"))
+
+    # 2. Fallback to Grok.
+    if cfg["grok_key"]:
+        result = _call_openrouter(messages, cfg["grok_key"], cfg["grok_model"], cfg, max_tokens)
+        if result.get("ok"):
+            _update_state(
+                last_ok=datetime.datetime.now().isoformat(timespec="seconds"),
+                last_error="",
+                last_model_used=cfg["grok_model"] + " (fallback)",
+            )
+            logger.info("AI Brain: Grok fallback used %s", cfg["grok_model"])
             return result
         _update_state(last_error=f"Both models failed: {result.get('error','')[:200]}")
 
