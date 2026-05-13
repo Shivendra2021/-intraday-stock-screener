@@ -38,6 +38,54 @@ def _ollama_symbols() -> set[str]:
     return symbols
 
 
+def _daily_learning() -> dict[str, Any]:
+    return _load_json(os.path.join("data", "daily_winner_learning.json"))
+
+
+def _daily_learning_symbols() -> set[str]:
+    data = _daily_learning()
+    return {str(sym).upper() for sym in data.get("top_symbols", []) if sym}
+
+
+def _daily_learning_sectors() -> set[str]:
+    data = _daily_learning()
+    return {
+        str(row.get("sector", "")).upper()
+        for row in data.get("sector_summary", [])[:8]
+        if row.get("sector")
+    }
+
+
+def _regime() -> dict[str, Any]:
+    try:
+        from modules.market_regime import classify_regime
+
+        return classify_regime()
+    except Exception:
+        return {"regime": "UNKNOWN", "tracker_bias": "find_stock_specific_strength"}
+
+
+def _confidence_label(score: float) -> str:
+    if score >= 82:
+        return "A"
+    if score >= 68:
+        return "B"
+    if score >= 52:
+        return "C"
+    return "WATCH_ONLY"
+
+
+def _pattern_edge(pattern_key: str) -> dict[str, Any]:
+    if not pattern_key:
+        return {}
+    try:
+        from modules.pattern_backtester import get_pattern_edge
+
+        return get_pattern_edge(pattern_key)
+    except Exception:
+        return {}
+
+
 def _hot_sectors() -> set[str]:
     state = _load_json(os.path.join("data", "grok_dashboard_state.json"))
     sectors = state.get("trending_sectors") or []
@@ -59,9 +107,15 @@ def score_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
     change = _safe_float(candidate.get("price_change_pct") or candidate.get("daily_change") or candidate.get("change_pct"))
     gap = _safe_float(candidate.get("gap_up") or candidate.get("gap_up_pct") or candidate.get("gap_pct"))
     rr = _safe_float(candidate.get("risk_reward"), 0.0)
+    pattern_key = str(candidate.get("pattern_key", "") or "")
+    open_to_high = _safe_float(candidate.get("open_to_high_pct"))
+    open_to_close = _safe_float(candidate.get("open_to_close_pct"))
+    first_15m_return = _safe_float(candidate.get("first_15m_return_pct"))
+    first_15m_volume = _safe_float(candidate.get("first_15m_volume_ratio"))
 
     terminal_score = score
     reasons: list[str] = []
+    regime = _regime()
 
     if vol >= 2.0:
         terminal_score += 12
@@ -103,9 +157,50 @@ def score_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
         terminal_score += 14
         reasons.append("Ollama winner-pattern match")
 
+    if symbol in _daily_learning_symbols():
+        terminal_score += 10
+        reasons.append("daily GPT winner-learning match")
+
     if sector and sector in _hot_sectors():
         terminal_score += 8
         reasons.append("hot sector")
+
+    if sector and sector in _daily_learning_sectors():
+        terminal_score += 7
+        reasons.append("sector matched daily 7pct winners")
+
+    if open_to_high >= 7:
+        terminal_score += 10
+        reasons.append("7pct intraday tracker behavior")
+
+    if open_to_close > 0:
+        terminal_score += 5
+        reasons.append("green close relative strength")
+
+    if first_15m_return >= 1.0:
+        terminal_score += 6
+        reasons.append("early strength")
+
+    if first_15m_volume >= 2.0:
+        terminal_score += 6
+        reasons.append("first-15m volume expansion")
+
+    if regime.get("regime") in {"RED_MARKET", "DIP_MARKET"}:
+        if open_to_close > 0 or change > 0:
+            terminal_score += 10
+            reasons.append("red-market relative strength")
+        elif change < -2:
+            terminal_score -= 8
+            reasons.append("weak in red market")
+
+    edge = _pattern_edge(pattern_key)
+    if edge:
+        if edge.get("proven_edge"):
+            terminal_score += 8
+            reasons.append(f"backtested edge {float(edge.get('hit_rate', 0)):.0%}")
+        elif int(edge.get("total_trades", 0) or 0) >= 3:
+            terminal_score -= 4
+            reasons.append("pattern edge unproven")
 
     if _safe_float(candidate.get("price") or candidate.get("entry_price")) < 50:
         terminal_score -= 20
@@ -114,6 +209,11 @@ def score_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
     enriched = {**candidate}
     enriched["terminal_score"] = round(max(0, min(100, terminal_score)), 2)
     enriched["terminal_reasons"] = reasons[:6]
+    enriched["confidence_grade"] = _confidence_label(enriched["terminal_score"])
+    enriched["market_regime"] = regime.get("regime")
+    enriched["tracker_bias"] = regime.get("tracker_bias")
+    if edge:
+        enriched["pattern_edge"] = edge
     if reasons and not enriched.get("signal_reasons"):
         enriched["signal_reasons"] = "; ".join(reasons[:4])
     return enriched
@@ -121,7 +221,16 @@ def score_candidate(candidate: dict[str, Any]) -> dict[str, Any]:
 
 def rank_candidates(candidates: list[dict[str, Any]], limit: int | None = None) -> list[dict[str, Any]]:
     """Rank candidates by terminal score, falling back to normal score."""
-    ranked = [score_candidate(row) for row in candidates]
+    best_by_symbol: dict[str, dict[str, Any]] = {}
+    for row in candidates:
+        enriched = score_candidate(row)
+        symbol = str(enriched.get("symbol", "")).replace(".NS", "").upper()
+        if not symbol:
+            continue
+        current = best_by_symbol.get(symbol)
+        if current is None or _safe_float(enriched.get("terminal_score")) > _safe_float(current.get("terminal_score")):
+            best_by_symbol[symbol] = enriched
+    ranked = list(best_by_symbol.values())
     ranked.sort(key=lambda row: (_safe_float(row.get("terminal_score")), _safe_float(row.get("score"))), reverse=True)
     for idx, row in enumerate(ranked, start=1):
         row["terminal_rank"] = idx

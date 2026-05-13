@@ -478,6 +478,8 @@ def send_morning_final_picks(picks: list, accuracy: dict = None, review_with_gro
         sector     = p.get("sector", "")
         rr         = p.get("risk_reward", "N/A")
         reasons    = str(p.get("signal_reasons") or p.get("recommendation") or "momentum")
+        grade      = p.get("confidence_grade", "")
+        regime     = p.get("market_regime", "")
 
         # Risk classification based on score
         if score >= 70:
@@ -496,7 +498,15 @@ def send_morning_final_picks(picks: list, accuracy: dict = None, review_with_gro
         dist_str = f"{dist_52w:.1f}% from 52wH" if dist_52w is not None else ""
         pat_str  = ", ".join(patterns[:2]) if patterns else "momentum"
 
-        lines.append(f"{rank}. <b>{symbol}</b>" + (f" [{sector}]" if sector else "") + f" | Score: {score:.0f} | {risk_tag}")
+        meta = []
+        if sector:
+            meta.append(str(sector))
+        if grade:
+            meta.append(f"Grade {grade}")
+        if regime:
+            meta.append(str(regime))
+        suffix = f" [{' | '.join(meta)}]" if meta else ""
+        lines.append(f"{rank}. <b>{symbol}</b>{suffix} | Score: {score:.0f} | {risk_tag}")
         lines.append(f"   💰 Entry: ₹{price:.2f} | SL: ₹{sl_price:.2f} (-{sl_pct:.1f}%) | TP: ₹{target:.2f} (+{upside_pct:.1f}%) | RR: {rr}")
         lines.append(f"   📊 RSI: {rsi_str} | ADX: {adx_str} | Vol: {vol_str} | Gap: +{gap:.2f}%")
         lines.append(f"   📈 Trend: {ema} | Day Chg: +{daily_chg:.2f}%" + (f" | {dist_str}" if dist_str else ""))

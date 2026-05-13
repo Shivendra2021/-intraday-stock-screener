@@ -266,9 +266,11 @@ def run_morning_session():
         except Exception:
             pass
         return
+    ranked_candidates = list(candidates)
     try:
         from modules.market_terminal import rank_candidates
         candidates = rank_candidates(candidates, limit=20)
+        ranked_candidates = list(candidates)
     except Exception as exc:
         logger.debug("Terminal ranking skipped for candidates: %s", exc)
     
@@ -305,6 +307,9 @@ def run_morning_session():
     elif len(final) < 5:
         existing = {p.get("symbol") for p in final}
         final.extend([p for p in draft if p.get("symbol") not in existing][: 5 - len(final)])
+    if len(final) < 5:
+        existing = {p.get("symbol") for p in final}
+        final.extend([p for p in ranked_candidates if p.get("symbol") not in existing][: 5 - len(final)])
     try:
         from modules.market_terminal import rank_candidates
         final = rank_candidates(final, limit=5)
@@ -315,12 +320,20 @@ def run_morning_session():
         logger.debug("Terminal ranking skipped for final picks: %s", exc)
     
     _daily_picks = final
+    try:
+        from modules.rejection_audit import write_rejection_audit
+
+        reject_audit = write_rejection_audit(ranked_candidates, final)
+    except Exception as exc:
+        reject_audit = {"error": str(exc)}
+        logger.debug("Rejection audit skipped: %s", exc)
     
     logger.info(f"Dual-brain debate: {len(final)} picks, both_agreed={agreed}")
     _append_decision_log("final_picks", {
         "final_count": len(final),
         "both_agreed": agreed,
         "final_picks": final,
+        "reject_audit": reject_audit,
     })
 
     try:
