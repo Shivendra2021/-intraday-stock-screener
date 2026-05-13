@@ -18,6 +18,8 @@ from typing import Any
 
 import requests
 
+from modules.time_utils import now_ist, today_ist_str
+
 logger = logging.getLogger(__name__)
 
 DEBATE_LOG_FILE = "data/dual_brain_debates.json"
@@ -97,6 +99,33 @@ def _parse_json(text: str) -> dict:
         except Exception:
             pass
     return {}
+
+
+def _normalize_final_vote(raw_vote: Any, picks: list[dict]) -> dict[str, str]:
+    """Coerce model vote output into {SYMBOL: YES/NO} without failing the pipeline."""
+    symbols = [str(p.get("symbol", "")).upper() for p in picks if p.get("symbol")]
+    if isinstance(raw_vote, dict):
+        normalized: dict[str, str] = {}
+        for key, value in raw_vote.items():
+            symbol = str(key or "").upper()
+            vote = str(value or "YES").upper()
+            normalized[symbol] = "NO" if vote in {"NO", "REJECT", "REMOVE", "SELL"} else "YES"
+        return normalized
+
+    if isinstance(raw_vote, list):
+        normalized = {}
+        for item in raw_vote:
+            if not isinstance(item, dict):
+                continue
+            symbol = str(item.get("symbol", "")).upper()
+            vote = str(item.get("vote", item.get("final_vote", "YES"))).upper()
+            if symbol:
+                normalized[symbol] = "NO" if vote in {"NO", "REJECT", "REMOVE", "SELL"} else "YES"
+        return normalized
+
+    if raw_vote:
+        logger.warning("Brain 2 returned unstructured final_vote=%r; defaulting votes to YES", raw_vote)
+    return {symbol: "YES" for symbol in symbols}
 
 
 def brain1_grok_review(picks: list[dict], context: str = "") -> dict[str, Any]:
@@ -203,7 +232,7 @@ def debate_picks(draft_picks: list[dict], context: str = "", max_rounds: int = M
     if not brain2.get("ok"):
         return draft_picks, False
     
-    brain2_votes = brain2.get("final_vote", {})
+    brain2_votes = _normalize_final_vote(brain2.get("final_vote", {}), draft_picks)
     logger.info(f"Brain 2: verdict={brain2.get('verdict')}")
     
     # Process commands from Brain 1
@@ -241,11 +270,11 @@ def debate_picks(draft_picks: list[dict], context: str = "", max_rounds: int = M
     
     # Log
     debate_log = _load_debate_log()
-    today = datetime.date.today().isoformat()
+    today = today_ist_str()
     if today not in debate_log:
         debate_log[today] = []
     debate_log[today].append({
-        "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+        "timestamp": now_ist().isoformat(timespec="seconds"),
         "approved": [p["symbol"] for p in approved],
         "rejected": rejected,
         "both_agreed": both_agreed,

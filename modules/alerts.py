@@ -14,6 +14,8 @@ import json
 import os
 import requests
 
+from modules.time_utils import now_ist, today_ist_str
+
 logger = logging.getLogger(__name__)
 
 
@@ -32,8 +34,8 @@ def _safe_error_text(value: object) -> str:
 def _audit_send(event_type: str, ok: bool, details: str = "") -> None:
     os.makedirs("data", exist_ok=True)
     record = {
-        "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
-        "date": datetime.date.today().isoformat(),
+        "timestamp": now_ist().isoformat(timespec="seconds"),
+        "date": today_ist_str(),
         "event_type": event_type,
         "ok": bool(ok),
         "details": _safe_error_text(details)[:500],
@@ -118,7 +120,7 @@ def send_raw_alert(text: str, review_with_grok: bool = True) -> bool:
 
 def send_picks(picks: list, sentiment: float = 0.0) -> bool:
     """Send morning top-5 picks message."""
-    date_str = datetime.date.today().strftime("%d %b %Y")
+    date_str = now_ist().strftime("%d %b %Y")
 
     if sentiment >= 0.3:
         sentiment_label = "🟢 Bullish"
@@ -169,7 +171,7 @@ def send_sl_hit(symbol: str, ret: float) -> bool:
 
 def send_preclose(movers: list) -> bool:
     """Send pre-close momentum movers (3 PM scan)."""
-    date_str = datetime.date.today().strftime("%d %b %Y")
+    date_str = now_ist().strftime("%d %b %Y")
     lines = [f"📈 <b>Pre-Close Movers {date_str}</b>", "Stocks up 4–7% with volume spike\n"]
     for i, m in enumerate(movers[:10], start=1):
         lines.append(
@@ -188,7 +190,7 @@ def send_preclose_alert(movers: list) -> bool:
 
 def send_summary(stats: dict) -> bool:
     """Send end-of-day daily summary."""
-    date_str = datetime.date.today().strftime("%d %b %Y")
+    date_str = now_ist().strftime("%d %b %Y")
     acc = stats.get("accuracy", 0)
     avg_ret = stats.get("avg_return", 0)
     ret_sign = "+" if avg_ret >= 0 else ""
@@ -205,7 +207,7 @@ def send_summary(stats: dict) -> bool:
 
 def send_no_picks(reason: str = "No stocks passed filters", diagnostics: dict | None = None) -> bool:
     """Send notification when no picks generated today."""
-    date_str = datetime.date.today().strftime("%d %b %Y")
+    date_str = now_ist().strftime("%d %b %Y")
     diagnostic_lines = ""
     if diagnostics:
         checked = diagnostics.get("symbols") or diagnostics.get("universe_size") or 0
@@ -234,7 +236,7 @@ def send_no_picks(reason: str = "No stocks passed filters", diagnostics: dict | 
 
 def send_heartbeat(universe_count: int, market_status: str, dry_run: bool, last_analysis: str = "N/A") -> bool:
     """Daily heartbeat - confirms bot is alive."""
-    date_str = datetime.datetime.now().strftime("%d %b %Y %H:%M")
+    date_str = now_ist().strftime("%d %b %Y %H:%M")
     dry_status = "🔴 ACTIVE (ALERTS ENABLED)" if not dry_run else "🟡 DRY_RUN (TEST MODE)"
     text = (
         f"✅ <b>MarketMind Pro — Heartbeat</b>\n"
@@ -263,7 +265,7 @@ def send_intraday_alert(movers: list) -> bool:
     """Send intraday momentum alert (stocks up 3%+ with vol spike)."""
     if not movers:
         return True
-    date_str = datetime.datetime.now().strftime("%H:%M")
+    date_str = now_ist().strftime("%H:%M")
     lines = [f"⚡ <b>Intraday Movers @ {date_str}</b>"]
     for m in movers[:5]:
         lines.append(
@@ -276,7 +278,7 @@ def send_top_gainers(gainers: list) -> bool:
     """Send hourly top gainers alert."""
     if not gainers:
         return True
-    date_str = datetime.datetime.now().strftime("%H:%M")
+    date_str = now_ist().strftime("%H:%M")
     lines = [f"📈 <b>Top Gainers @ {date_str}</b>\n"]
     lines.append("Today's biggest movers:\n")
     for i, g in enumerate(gainers[:10], start=1):
@@ -295,7 +297,7 @@ def send_end_of_day_report(performers: dict) -> bool:
     gainers = performers.get("gainers", [])
     losers = performers.get("losers", [])
 
-    date_str = datetime.date.today().strftime("%d %b %Y")
+    date_str = now_ist().strftime("%d %b %Y")
 
     lines = [f"📊 <b>MARKET WRAP - {date_str}</b>\n"]
     lines.append("="*30 + "\n")
@@ -442,7 +444,7 @@ def send_morning_final_picks(picks: list, accuracy: dict = None, review_with_gro
         return True
 
     lines = [
-        "📊 <b>FINAL MORNING PICKS - " + datetime.datetime.now().strftime("%d %b %Y") + "</b>",
+        "📊 <b>FINAL MORNING PICKS - " + now_ist().strftime("%d %b %Y") + "</b>",
         "=" * 50,
         "",
     ]
@@ -455,7 +457,7 @@ def send_morning_final_picks(picks: list, accuracy: dict = None, review_with_gro
         lines.append(f"🎯 Bot Accuracy (30d): {acc}% | Total: {total} | ✅TP: {tp} | 🛑SL: {sl}")
         lines.append("")
 
-    lines.append(f"📅 Date: {datetime.date.today().strftime('%Y-%m-%d')}")
+    lines.append(f"📅 Date: {today_ist_str()}")
     lines.append("")
 
     for p in picks:
@@ -504,7 +506,7 @@ def send_morning_final_picks(picks: list, accuracy: dict = None, review_with_gro
         lines.append("")
 
     lines.append("=" * 50)
-    lines.append(f"🕐 Generated: {datetime.datetime.now().strftime('%H:%M:%S')}")
+    lines.append(f"🕐 Generated: {now_ist().strftime('%H:%M:%S')}")
     lines.append("\n⚠️ <i>Research only. Not a trade recommendation.</i>")
 
     ok = _send("\n".join(lines), review_with_grok=review_with_grok)
@@ -529,7 +531,7 @@ def send_research_picks(result: dict, accuracy: dict = None) -> bool:
     # Header message with sectors + AI analysis
     header_lines = [
         "🔬 <b>MARKETMIND RESEARCH REPORT</b>",
-        f"📅 {datetime.datetime.now().strftime('%d %b %Y, %H:%M IST')}",
+        f"📅 {now_ist().strftime('%d %b %Y, %H:%M IST')}",
         "",
         f"🏆 <b>Top Trending Sectors:</b> {' | '.join(top_sectors)}",
         "",

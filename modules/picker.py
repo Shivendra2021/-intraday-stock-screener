@@ -12,6 +12,8 @@ import logging
 import datetime
 import json
 
+from modules.time_utils import now_ist, today_ist_str
+
 logger = logging.getLogger(__name__)
 
 
@@ -64,8 +66,8 @@ def _write_picks_to_db(picks: list):
     from modules.db_migrations import ensure_research_tables
 
     ensure_research_tables()
-    today = datetime.date.today().isoformat()
-    now   = datetime.datetime.now().isoformat()
+    today = today_ist_str()
+    now   = now_ist().isoformat()
 
     with sqlite3.connect(DB_PATH) as conn:
         # Clear today's pending picks first (avoid duplicates on re-run)
@@ -175,14 +177,14 @@ def _grok_review_evidence_pack(candidates: list[dict], rejected: list[dict]) -> 
                     brief_review, next_action, created_at)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    datetime.date.today().isoformat(),
+                    today_ist_str(),
                     "top20_candidate_evidence_before_final_picks",
                     len(candidates),
                     str(review.get("verdict", ""))[:80],
                     str(review.get("risk_level", ""))[:40],
                     str(review.get("brief_review", ""))[:500],
                     str(review.get("next_action", ""))[:300],
-                    datetime.datetime.now().isoformat(timespec="seconds"),
+                    now_ist().isoformat(timespec="seconds"),
                 ),
             )
             conn.commit()
@@ -273,7 +275,7 @@ def run_picker(analyzed: list = None) -> list:
 def get_todays_picks() -> list:
     """Fetch today's picks from DB."""
     from config import DB_PATH
-    today = datetime.date.today().isoformat()
+    today = today_ist_str()
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(

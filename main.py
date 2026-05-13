@@ -27,6 +27,8 @@ import sys
 
 from dotenv import load_dotenv
 
+from modules.time_utils import now_ist, today_ist, today_ist_str
+
 load_dotenv()
 
 for stream in (sys.stdout, sys.stderr):
@@ -53,10 +55,10 @@ _runtime_lock = None
 def _is_trading_day() -> bool:
     try:
         from modules.scanner import is_market_holiday, is_weekend
-        today = datetime.date.today()
+        today = today_ist()
         return not (is_weekend(today) or is_market_holiday(today))
     except Exception:
-        return datetime.date.today().weekday() < 5
+        return today_ist().weekday() < 5
 
 
 def _append_decision_log(stage: str, payload: dict) -> None:
@@ -65,7 +67,7 @@ def _append_decision_log(stage: str, payload: dict) -> None:
 
     os.makedirs("data", exist_ok=True)
     record = {
-        "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+        "timestamp": now_ist().isoformat(timespec="seconds"),
         "stage": stage,
         **payload,
     }
@@ -84,7 +86,7 @@ def _today_pick_count() -> int:
         from modules.db_migrations import ensure_research_tables
 
         ensure_research_tables()
-        today = datetime.date.today().isoformat()
+        today = today_ist_str()
         conn = sqlite3.connect(DB_PATH)
         try:
             row = conn.execute("SELECT COUNT(*) FROM picks WHERE date=?", (today,)).fetchone()
@@ -100,7 +102,7 @@ def _morning_decision_logged_today() -> bool:
     """Return True if today's morning pipeline already logged final picks."""
     import json
 
-    today = datetime.date.today().isoformat()
+    today = today_ist_str()
     path = os.path.join("data", "morning_decisions.jsonl")
     if not os.path.exists(path):
         return False
@@ -132,7 +134,7 @@ def _morning_already_done_today() -> bool:
 
 
 def _telegram_event_success_today(event_type: str) -> bool:
-    today = datetime.date.today().isoformat()
+    today = today_ist_str()
     path = os.path.join("data", "telegram_delivery.jsonl")
     if not os.path.exists(path):
         return False
@@ -353,7 +355,7 @@ def _send_telegram(picks: list[dict], agreed: bool) -> bool:
         
         header = (
             f"📈 <b>MARKETMIND PRO v2.0 — FINAL PICKS</b>\n"
-            f"📅 {datetime.datetime.now().strftime('%d %b %Y, %H:%M IST')}\n\n"
+            f"📅 {now_ist().strftime('%d %b %Y, %H:%M IST')}\n\n"
             f"🤖 <b>Dual-Brain:</b> {'✅ Both Agreed' if agreed else '⚠️ Modified'}\n"
             f"🧠 Model: {brain_status.get('grok_model', 'N/A')}"
         )
@@ -565,7 +567,7 @@ def job_heartbeat():
         
         send_raw_alert(
             f"💓 <b>MarketMind Pro v2.0</b>\n"
-            f"⏰ {datetime.datetime.now().strftime('%d %b %Y, %H:%M IST')}\n"
+            f"⏰ {now_ist().strftime('%d %b %Y, %H:%M IST')}\n"
             f"✅ System Active"
         )
     except Exception as e:

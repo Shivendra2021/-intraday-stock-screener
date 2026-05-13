@@ -32,6 +32,7 @@ for path in ("data", "logs", "output"):
     Path(path).mkdir(exist_ok=True)
 
 import main  # noqa: E402
+from modules.time_utils import today_ist_str  # noqa: E402
 
 
 def _fail(message: str, code: int = 1) -> None:
@@ -40,7 +41,7 @@ def _fail(message: str, code: int = 1) -> None:
 
 
 def run() -> None:
-    today = _dt.date.today().isoformat()
+    today = today_ist_str()
     print(f"CLOUD_MORNING_START: date={today} cwd={ROOT}")
 
     if not main._is_trading_day():
