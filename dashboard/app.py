@@ -79,8 +79,13 @@ def _health_info() -> dict:
 
     n_universe  = _scalar("SELECT COUNT(*) FROM stock_universe WHERE is_active=1", default=0)
     last_picks  = _scalar("SELECT date FROM picks ORDER BY id DESC LIMIT 1", default="Never")
-    total_tp    = _scalar("SELECT SUM(tp_count) FROM daily_accuracy", default=0) or 0
-    total_sl    = _scalar("SELECT SUM(sl_count) FROM daily_accuracy", default=0) or 0
+    total_tp    = _scalar("SELECT COUNT(*) FROM picks WHERE status='tp_hit'", default=0) or 0
+    total_sl    = _scalar("SELECT COUNT(*) FROM picks WHERE status='sl_hit'", default=0) or 0
+    total_tracked = _scalar("SELECT COUNT(*) FROM picks", default=0) or 0
+    avg_return = _scalar(
+        "SELECT AVG(result_return) FROM picks WHERE result_return IS NOT NULL",
+        default=0,
+    ) or 0
     total_closed = total_tp + total_sl
     accuracy = round(total_tp / total_closed * 100, 1) if total_closed > 0 else 0.0
 
@@ -98,6 +103,8 @@ def _health_info() -> dict:
         "last_picks_date": last_picks or "Never",
         "total_tp":        total_tp,
         "total_sl":        total_sl,
+        "total_tracked":   total_tracked,
+        "avg_return":      round(float(avg_return), 2),
         "accuracy":        accuracy,
         "bot_status":      "HEALTHY ✅" if n_universe > 0 else "ERROR ❌",
         "check_time":      datetime.datetime.now().strftime("%H:%M:%S"),

@@ -17,6 +17,7 @@ import datetime
 import json
 import logging
 import os
+import sqlite3
 from typing import Optional
 
 logger = logging.getLogger(__name__)
@@ -43,6 +44,116 @@ def _save(data: dict) -> None:
     os.makedirs("data", exist_ok=True)
     with open(TRACKING_FILE, "w") as f:
         json.dump(data, f, indent=2, default=str)
+
+
+def _today_str() -> str:
+    try:
+        from modules.time_utils import today_ist_str
+        return today_ist_str()
+    except Exception:
+        return datetime.date.today().isoformat()
+
+
+def _now_str() -> str:
+    try:
+        from modules.time_utils import now_ist
+        return now_ist().strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _refresh_daily_accuracy(date_s: str) -> dict:
+    """Rebuild daily TP/SL accuracy from stored picks for one date."""
+    try:
+        from config import DB_PATH
+        conn = sqlite3.connect(DB_PATH)
+        try:
+            row = conn.execute(
+                """
+                SELECT
+                    SUM(CASE WHEN status='tp_hit' THEN 1 ELSE 0 END),
+                    SUM(CASE WHEN status='sl_hit' THEN 1 ELSE 0 END),
+                    COUNT(*),
+                    AVG(CASE WHEN result_return IS NOT NULL THEN result_return END)
+                FROM picks
+                WHERE date=?
+                """,
+                (date_s,),
+            ).fetchone()
+            tp_count = int(row[0] or 0)
+            sl_count = int(row[1] or 0)
+            total = int(row[2] or 0)
+            avg_return = round(float(row[3] or 0.0), 2)
+            closed = tp_count + sl_count
+            accuracy = round(tp_count / closed * 100, 2) if closed else 0.0
+            conn.execute(
+                """
+                INSERT INTO daily_accuracy(date, tp_count, sl_count, total, accuracy, avg_return)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(date) DO UPDATE SET
+                    tp_count=excluded.tp_count,
+                    sl_count=excluded.sl_count,
+                    total=excluded.total,
+                    accuracy=excluded.accuracy,
+                    avg_return=excluded.avg_return
+                """,
+                (date_s, tp_count, sl_count, total, accuracy, avg_return),
+            )
+            conn.commit()
+            return {
+                "date": date_s,
+                "tp_count": tp_count,
+                "sl_count": sl_count,
+                "total": total,
+                "accuracy": accuracy,
+                "avg_return": avg_return,
+            }
+        finally:
+            conn.close()
+    except Exception as exc:
+        logger.error("Daily accuracy refresh failed for %s: %s", date_s, exc)
+        return {}
+
+
+def _persist_pick_outcome(data: dict, status: str) -> None:
+    """Persist one tracked pick outcome into the dashboard DB."""
+    symbol = data.get("symbol")
+    if not symbol:
+        return
+
+    date_s = data.get("date") or _today_str()
+    pnl = data.get("pnl_pct")
+    try:
+        pnl_value = round(float(pnl), 2) if pnl is not None else None
+    except Exception:
+        pnl_value = None
+
+    try:
+        from config import DB_PATH
+        conn = sqlite3.connect(DB_PATH)
+        try:
+            conn.execute(
+                """
+                UPDATE picks
+                SET status=?, result_return=?
+                WHERE date=? AND symbol=?
+                """,
+                (status, pnl_value, date_s, symbol),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+        stats = _refresh_daily_accuracy(date_s)
+        line = (
+            f"[TRACKER] {status.upper()} {symbol} "
+            f"pnl={pnl_value if pnl_value is not None else 0:.2f}% "
+            f"accuracy={stats.get('accuracy', 0):.1f}% "
+            f"TP={stats.get('tp_count', 0)} SL={stats.get('sl_count', 0)}"
+        )
+        logger.info(line)
+        print(line, flush=True)
+    except Exception as exc:
+        logger.error("Pick outcome persist failed for %s: %s", symbol, exc)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -86,7 +197,7 @@ def init_tracking(picks: list[dict]) -> None:
     Called once after morning picks are selected.
     Overwrites any existing tracking for today.
     """
-    today = datetime.date.today().isoformat()
+    today = _today_str()
     tracking: dict[str, dict] = {}
 
     for pick in picks:
@@ -118,11 +229,12 @@ def init_tracking(picks: list[dict]) -> None:
             "hit_tp":       None,
             "exit_price":   None,
             "exit_time":    None,
-            "init_time":    datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "init_time":    _now_str(),
             "price_history": [],
         }
 
     _save(tracking)
+    _refresh_daily_accuracy(today)
     logger.info("Tracking initialized: %s", list(tracking.keys()))
 
 
@@ -161,7 +273,7 @@ def update_tracking() -> dict:
             "price": round(price, 2),
         })
 
-        now_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now_str = _now_str()
 
         if price <= sl and not data.get("hit_sl"):
             data["hit_sl"]     = now_str
@@ -170,6 +282,7 @@ def update_tracking() -> dict:
             data["exit_time"]  = now_str
             logger.warning("SL HIT: %s at %.2f (entry %.2f, loss %.2f%%)", sym, price, entry, pnl)
             _alert_sl_hit(data)
+            _persist_pick_outcome(data, "sl_hit")
 
         elif price >= tp and not data.get("hit_tp"):
             data["hit_tp"]     = now_str
@@ -178,6 +291,7 @@ def update_tracking() -> dict:
             data["exit_time"]  = now_str
             logger.info("TP HIT: %s at %.2f (entry %.2f, gain %.2f%%)", sym, price, entry, pnl)
             _alert_tp_hit(data)
+            _persist_pick_outcome(data, "tp_hit")
 
     _save(tracking)
     return tracking
@@ -260,14 +374,21 @@ def close_and_report_eod() -> dict:
                 entry = data.get("entry_price", price)
                 pnl   = round((price - entry) / entry * 100, 2)
                 data["exit_price"] = round(price, 2)
-                data["exit_time"]  = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                data["exit_time"]  = _now_str()
                 data["status"]     = "EOD_CLOSED"
                 data["pnl_pct"]    = pnl
                 data["current_price"] = round(price, 2)
+                _persist_pick_outcome(data, "eod_closed")
             else:
                 data["status"] = "EOD_CLOSED"
+                _persist_pick_outcome(data, "eod_closed")
+        elif data.get("status") == "TP_HIT":
+            _persist_pick_outcome(data, "tp_hit")
+        elif data.get("status") == "SL_HIT":
+            _persist_pick_outcome(data, "sl_hit")
 
     _save(tracking)
+    _refresh_daily_accuracy(_today_str())
     _send_eod_report(tracking)
     return tracking
 

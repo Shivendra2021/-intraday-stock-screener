@@ -68,7 +68,7 @@ tr:hover td{background:rgba(99,102,241,.05)}
 <!-- KPI Cards -->
 <div class="grid" id="kpi-grid">
   <div class="card"><h3>Universe</h3><div class="big-num" id="k-universe">—</div><div class="sub">Active NSE symbols</div></div>
-  <div class="card"><h3>Accuracy (30d)</h3><div class="big-num" id="k-accuracy" style="color:#10b981">—%</div><div class="sub" id="k-acc-sub">TP/SL</div></div>
+  <div class="card"><h3>System Accuracy</h3><div class="big-num" id="k-accuracy" style="color:#10b981">—%</div><div class="sub" id="k-acc-sub">Tracked TP/SL</div></div>
   <div class="card"><h3>Today's Picks</h3><div class="big-num" id="k-picks">—</div><div class="sub" id="k-picks-sub">Latest picks</div></div>
   <div class="card"><h3>AI Brain Calls</h3><div class="big-num" id="k-brain">—</div><div class="sub" id="k-brain-sub">Model active</div></div>
 </div>
@@ -192,7 +192,7 @@ async function loadHealth(){
   const accEl=document.getElementById('k-accuracy');
   accEl.textContent=acc+'%';
   accEl.style.color=acc>=60?'#10b981':acc>=40?'#f59e0b':'#ef4444';
-  document.getElementById('k-acc-sub').textContent=`TP: ${d.total_tp||0} | SL: ${d.total_sl||0}`;
+  document.getElementById('k-acc-sub').textContent=`TP: ${d.total_tp||0} | SL: ${d.total_sl||0} | Avg: ${Number(d.avg_return||0).toFixed(2)}%`;
   badge(document.getElementById('mkt-badge'),d.market_status||'Unknown',
         (d.market_status||'').includes('Open')?'green':(d.market_status||'').includes('Weekend')?'yellow':'red');
   badge(document.getElementById('bot-badge'),d.bot_status||'Unknown',

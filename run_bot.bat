@@ -20,7 +20,7 @@ if not exist "%PYTHON_EXE%" (
 )
 
 echo [%DATE% %TIME%] Running: "%PYTHON_EXE%" main.py>> "%SCHEDULER_LOG%"
-"%PYTHON_EXE%" main.py >> "%SCHEDULER_LOG%" 2>&1
+powershell -NoProfile -ExecutionPolicy Bypass -Command "& '%PYTHON_EXE%' main.py 2>&1 | Tee-Object -FilePath '%SCHEDULER_LOG%' -Append"
 set "EXIT_CODE=%ERRORLEVEL%"
 
 echo [%DATE% %TIME%] Bot process exited with code %EXIT_CODE%.>> "%SCHEDULER_LOG%"
