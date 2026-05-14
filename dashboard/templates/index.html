@@ -71,9 +71,15 @@ tr:hover td{background:rgba(212,175,55,.055)}
 .paper-metric::after{content:"";position:absolute;left:-80%;top:0;width:45%;height:100%;background:linear-gradient(90deg,transparent,rgba(250,204,21,.14),transparent);animation:scan 4.4s infinite}
 .paper-metric .label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#64748b;margin-bottom:8px}
 .paper-metric .value{font-size:22px;font-weight:700}
-.chart-shell{height:210px;margin-top:16px;border:1px solid rgba(212,175,55,.22);border-radius:10px;background:linear-gradient(180deg,rgba(5,8,10,.68),rgba(2,6,8,.38));padding:12px;box-shadow:inset 0 0 30px rgba(212,175,55,.035)}
+.chart-shell{height:240px;margin-top:16px;border:1px solid rgba(212,175,55,.28);border-radius:10px;background:linear-gradient(180deg,rgba(5,8,10,.72),rgba(2,6,8,.42));padding:12px;box-shadow:inset 0 0 34px rgba(212,175,55,.045),0 18px 50px rgba(0,0,0,.16);position:relative;overflow:hidden}
+.chart-shell::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(250,204,21,.10),transparent);transform:translateX(-100%);animation:chartSweep 5.4s linear infinite;pointer-events:none}
+.chart-shell::after{content:"LIVE PAPER EQUITY";position:absolute;right:16px;top:12px;font-size:10px;letter-spacing:1.2px;color:rgba(250,204,21,.62)}
+.equity-pills{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.equity-pill{padding:7px 11px;border:1px solid rgba(212,175,55,.18);border-radius:8px;background:rgba(2,6,8,.32);font-size:12px;color:#94a3b8}
+.equity-pill strong{color:#e5e7eb;margin-left:6px}
 #equity-chart{width:100%;height:100%;display:block}
 @keyframes scan{0%{left:-80%}55%,100%{left:135%}}
+@keyframes chartSweep{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
 @keyframes ringSpin{to{transform:rotate(360deg)}}
 @keyframes ringGlow{0%,100%{box-shadow:0 0 22px rgba(20,184,166,.10)}50%{box-shadow:0 0 42px rgba(212,175,55,.20)}}
 @keyframes barLoad{from{width:0}to{width:var(--w)}}
@@ -116,6 +122,11 @@ tr:hover td{background:rgba(212,175,55,.055)}
       <div class="paper-metric"><div class="label">Current P&L</div><div class="value" id="p-pnl">₹—</div></div>
     </div>
     <div class="chart-shell"><canvas id="equity-chart"></canvas></div>
+    <div class="equity-pills">
+      <div class="equity-pill">Curve Mode <strong>Animated</strong></div>
+      <div class="equity-pill">Return <strong id="p-ret">—%</strong></div>
+      <div class="equity-pill">Settled Trades <strong id="p-trades">—</strong></div>
+    </div>
     <div class="grid grid-3" style="padding:16px 0 0;gap:12px">
       <div>
         <h3>Open Holdings</h3>
@@ -253,6 +264,7 @@ function drawEquityChart(d){
   const ctx=canvas.getContext('2d');
   ctx.setTransform(ratio,0,0,ratio,0,0);
   const w=rect.width,h=rect.height;
+  const now=Date.now();
   ctx.clearRect(0,0,w,h);
   const bg=ctx.createLinearGradient(0,0,0,h);
   bg.addColorStop(0,'rgba(212,175,55,.05)');
@@ -264,6 +276,13 @@ function drawEquityChart(d){
   for(let i=1;i<4;i++){const y=(h/4)*i;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
   ctx.strokeStyle='rgba(20,184,166,.06)';
   for(let i=1;i<8;i++){const gx=(w/8)*i;ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,h);ctx.stroke();}
+  const scanX=((now%2800)/2800)*w;
+  const scan=ctx.createLinearGradient(scanX-70,0,scanX+70,0);
+  scan.addColorStop(0,'rgba(212,175,55,0)');
+  scan.addColorStop(.5,'rgba(250,204,21,.18)');
+  scan.addColorStop(1,'rgba(20,184,166,0)');
+  ctx.fillStyle=scan;
+  ctx.fillRect(Math.max(0,scanX-70),0,140,h);
   const trades=(d.recent_positions||[]).slice().reverse();
   let equity=Number(d.initial_cash||50000);
   const pts=[equity];
@@ -276,29 +295,44 @@ function drawEquityChart(d){
   const y=v=>h-18-((v-min)/span)*(h-34);
   const grad=ctx.createLinearGradient(0,0,w,0);
   grad.addColorStop(0,'#d4af37');grad.addColorStop(.55,'#facc15');grad.addColorStop(1,'#14b8a6');
-  const t=(Date.now()%2400)/2400;
-  const visible=Math.max(1,Math.floor((pts.length-1)*t)+1);
+  const t=(now%2600)/2600;
+  const progress=(1-Math.cos(t*Math.PI))/2;
+  const visibleFloat=Math.max(1,(pts.length-1)*progress);
+  const visible=Math.min(pts.length-1,Math.floor(visibleFloat));
   ctx.beginPath();
   pts.slice(0,visible+1).forEach((p,i)=>{i?ctx.lineTo(x(i),y(p)):ctx.moveTo(x(i),y(p));});
+  if(visible<pts.length-1){
+    const frac=visibleFloat-visible;
+    const nx=x(visible)+(x(visible+1)-x(visible))*frac;
+    const ny=y(pts[visible])+(y(pts[visible+1])-y(pts[visible]))*frac;
+    ctx.lineTo(nx,ny);
+  }
   ctx.shadowColor='rgba(250,204,21,.55)';
   ctx.shadowBlur=14;
   ctx.strokeStyle=grad;ctx.lineWidth=3;ctx.stroke();
   ctx.shadowBlur=0;
-  ctx.lineTo(x(visible),h-18);ctx.lineTo(9,h-18);ctx.closePath();
+  const fillX=visible<pts.length-1?x(visible)+(x(visible+1)-x(visible))*(visibleFloat-visible):x(visible);
+  ctx.lineTo(fillX,h-18);ctx.lineTo(9,h-18);ctx.closePath();
   const fill=ctx.createLinearGradient(0,0,0,h);
   fill.addColorStop(0,'rgba(212,175,55,.20)');fill.addColorStop(1,'rgba(20,184,166,0)');
   ctx.fillStyle=fill;ctx.fill();
   pts.forEach((p,i)=>{ctx.beginPath();ctx.arc(x(i),y(p),3,0,Math.PI*2);ctx.fillStyle=i===pts.length-1?'#14b8a6':'#d4af37';ctx.fill();});
   const headIndex=Math.min(visible,pts.length-1);
-  const hx=x(headIndex),hy=y(pts[headIndex]);
-  const pulse=5+Math.sin(Date.now()/130)*2.5;
+  const headFrac=headIndex<pts.length-1?visibleFloat-headIndex:0;
+  const hx=headIndex<pts.length-1?x(headIndex)+(x(headIndex+1)-x(headIndex))*headFrac:x(headIndex);
+  const hy=headIndex<pts.length-1?y(pts[headIndex])+(y(pts[headIndex+1])-y(pts[headIndex]))*headFrac:y(pts[headIndex]);
+  const pulse=6+Math.sin(now/105)*3;
   ctx.beginPath();ctx.arc(hx,hy,pulse,0,Math.PI*2);ctx.fillStyle='rgba(250,204,21,.20)';ctx.fill();
   ctx.beginPath();ctx.arc(hx,hy,4,0,Math.PI*2);ctx.fillStyle='#facc15';ctx.fill();
+  ctx.beginPath();ctx.moveTo(hx,20);ctx.lineTo(hx,h-18);ctx.strokeStyle='rgba(250,204,21,.20)';ctx.lineWidth=1;ctx.stroke();
   ctx.fillStyle='rgba(245,245,244,.92)';
   ctx.font='12px Inter';
   ctx.fillText('Equity Curve',12,18);
   ctx.fillStyle='rgba(20,184,166,.98)';
   ctx.fillText(inr(d.equity||0),w-112,18);
+  const ret=Number(d.return_pct||0);
+  ctx.fillStyle=ret>=0?'rgba(20,184,166,.95)':'rgba(244,63,94,.95)';
+  ctx.fillText(`${ret>=0?'+':''}${ret.toFixed(2)}%`,12,h-10);
 }
 
 // ── KPIs ──
@@ -331,6 +365,8 @@ async function loadPaper(){
   document.getElementById('p-cash').textContent=inr(d.cash_balance);
   document.getElementById('p-open').textContent=inr(d.open_invested);
   document.getElementById('p-equity').textContent=inr(d.equity);
+  document.getElementById('p-ret').textContent=(Number(d.return_pct||0)>=0?'+':'')+Number(d.return_pct||0).toFixed(2)+'%';
+  document.getElementById('p-trades').textContent=(d.recent_positions||[]).length;
   const pnl=Number(d.realized_pnl||0);
   const pnlEl=document.getElementById('p-pnl');
   pnlEl.textContent=(pnl>=0?'+':'')+inr(pnl);
