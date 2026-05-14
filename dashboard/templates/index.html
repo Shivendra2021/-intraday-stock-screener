@@ -6,43 +6,45 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Inter',sans-serif;background:#0a0e1a;color:#e2e8f0;min-height:100vh}
-:root{--accent:#6366f1;--green:#10b981;--red:#ef4444;--yellow:#f59e0b;--card:#111827;--border:#1f2937}
-.header{background:linear-gradient(135deg,#0f172a,#1e1b4b);padding:20px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.logo{font-size:22px;font-weight:700;background:linear-gradient(135deg,#6366f1,#8b5cf6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+body{font-family:'Inter',sans-serif;background:#070b12;color:#e2e8f0;min-height:100vh;background-image:linear-gradient(rgba(148,163,184,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(148,163,184,.035) 1px,transparent 1px),linear-gradient(180deg,#07111f 0%,#070b12 42%,#0a0e1a 100%);background-size:28px 28px,28px 28px,100% 100%}
+:root{--accent:#38bdf8;--green:#10b981;--red:#ef4444;--yellow:#f59e0b;--card:rgba(15,23,42,.82);--border:rgba(51,65,85,.78);--muted:#64748b}
+.header{position:sticky;top:0;z-index:10;background:rgba(7,11,18,.88);backdrop-filter:blur(18px);padding:18px 32px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;box-shadow:0 14px 40px rgba(0,0,0,.24)}
+.logo{font-size:22px;font-weight:700;color:#e2e8f0}
+.logo::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--green);box-shadow:0 0 18px rgba(16,185,129,.95);margin-right:10px;animation:pulse 1.7s infinite}
 .status-bar{display:flex;gap:16px;font-size:13px}
 .badge{padding:4px 12px;border-radius:20px;font-weight:600;font-size:12px}
 .badge.green{background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3)}
 .badge.red{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
 .badge.yellow{background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
-.badge.purple{background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.3)}
+.badge.purple{background:rgba(56,189,248,.12);color:#7dd3fc;border:1px solid rgba(56,189,248,.28)}
 .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:24px 32px}
 .grid-3{grid-template-columns:repeat(3,1fr)}
-.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:20px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;box-shadow:0 20px 55px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.03)}
+.card:hover{border-color:rgba(56,189,248,.28)}
 .card h3{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:12px}
 .big-num{font-size:36px;font-weight:700;line-height:1}
 .sub{font-size:12px;color:#64748b;margin-top:6px}
 .section{padding:0 32px 24px}
 .section-title{font-size:14px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
-.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:pulse 2s infinite}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 16px rgba(56,189,248,.8);animation:pulse 2s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
 table{width:100%;border-collapse:collapse}
 th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:#475569;padding:10px 14px;border-bottom:1px solid var(--border)}
 td{padding:12px 14px;border-bottom:1px solid rgba(31,41,55,.5);font-size:13px}
-tr:hover td{background:rgba(99,102,241,.05)}
-.sym{font-weight:700;color:#818cf8;font-size:14px}
+tr:hover td{background:rgba(56,189,248,.05)}
+.sym{font-weight:700;color:#7dd3fc;font-size:14px}
 .price{font-weight:600;color:#e2e8f0}
 .up{color:#10b981;font-weight:600}
 .down{color:#ef4444;font-weight:600}
 .pending{color:#f59e0b}.tp_hit{color:#10b981}.sl_hit{color:#ef4444}
-.sector-tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(99,102,241,.15);color:#818cf8;border:1px solid rgba(99,102,241,.25)}
+.sector-tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(56,189,248,.12);color:#7dd3fc;border:1px solid rgba(56,189,248,.25)}
 .refresh-bar{text-align:right;padding:8px 32px;font-size:11px;color:#475569}
-.ai-box{background:linear-gradient(135deg,rgba(99,102,241,.08),rgba(139,92,246,.08));border:1px solid rgba(99,102,241,.25);border-radius:12px;padding:16px;font-size:13px;line-height:1.7;color:#c7d2fe;margin-bottom:24px}
-.ai-box .ai-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#818cf8;margin-bottom:10px}
+.ai-box{background:linear-gradient(135deg,rgba(56,189,248,.08),rgba(16,185,129,.06));border:1px solid rgba(56,189,248,.25);border-radius:12px;padding:16px;font-size:13px;line-height:1.7;color:#c7d2fe;margin-bottom:24px}
+.ai-box .ai-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#7dd3fc;margin-bottom:10px}
 .sector-pills{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
 .pill{padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.25)}
 .progress{height:6px;background:#1f2937;border-radius:3px;overflow:hidden;margin-top:8px}
-.progress-bar{height:100%;border-radius:3px;background:linear-gradient(90deg,#6366f1,#8b5cf6);transition:width .5s ease}
+.progress-bar{height:100%;border-radius:3px;background:linear-gradient(90deg,#38bdf8,#10b981);transition:width .5s ease}
 .mini-stat{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(31,41,55,.5)}
 .mini-stat:last-child{border-bottom:none}
 .rsi-chip{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
@@ -55,9 +57,15 @@ tr:hover td{background:rgba(99,102,241,.05)}
 .compact-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .compact-table th,.compact-table td{padding:9px 10px;font-size:12px}
 .paper-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
-.paper-metric{background:rgba(15,23,42,.55);border:1px solid rgba(31,41,55,.8);border-radius:10px;padding:14px}
+.paper-metric{background:rgba(2,6,23,.42);border:1px solid rgba(51,65,85,.82);border-radius:10px;padding:14px;position:relative;overflow:hidden}
+.paper-metric::after{content:"";position:absolute;left:-80%;top:0;width:45%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.08),transparent);animation:scan 4.8s infinite}
 .paper-metric .label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#64748b;margin-bottom:8px}
 .paper-metric .value{font-size:22px;font-weight:700}
+.chart-shell{height:190px;margin-top:16px;border:1px solid rgba(51,65,85,.7);border-radius:12px;background:rgba(2,6,23,.28);padding:12px}
+#equity-chart{width:100%;height:100%;display:block}
+@keyframes scan{0%{left:-80%}55%,100%{left:135%}}
+@media(max-width:1100px){.paper-grid,.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:720px){.paper-grid,.grid,.grid-3{grid-template-columns:1fr!important}.header{padding:16px 18px}.section,.grid{padding-left:18px;padding-right:18px}}
 </style>
 </head>
 <body>
@@ -91,8 +99,9 @@ tr:hover td{background:rgba(99,102,241,.05)}
       <div class="paper-metric"><div class="label">Cash Surplus</div><div class="value" id="p-cash">₹—</div></div>
       <div class="paper-metric"><div class="label">Open Invested</div><div class="value" id="p-open">₹—</div></div>
       <div class="paper-metric"><div class="label">Total Equity</div><div class="value" id="p-equity">₹—</div></div>
-      <div class="paper-metric"><div class="label">Paper P&L</div><div class="value" id="p-pnl">₹—</div></div>
+      <div class="paper-metric"><div class="label">Current P&L</div><div class="value" id="p-pnl">₹—</div></div>
     </div>
+    <div class="chart-shell"><canvas id="equity-chart"></canvas></div>
     <div class="grid grid-3" style="padding:16px 0 0;gap:12px">
       <div>
         <h3>Open Holdings</h3>
@@ -218,6 +227,50 @@ async function get(url){
 
 function badge(el,text,cls){el.textContent=text;el.className='badge '+cls;}
 function inr(v){return '₹'+Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:2});}
+let latestPaperData=null;
+
+function drawEquityChart(d){
+  const canvas=document.getElementById('equity-chart');
+  if(!canvas)return;
+  const rect=canvas.getBoundingClientRect();
+  const ratio=window.devicePixelRatio||1;
+  canvas.width=Math.max(1,Math.floor(rect.width*ratio));
+  canvas.height=Math.max(1,Math.floor(rect.height*ratio));
+  const ctx=canvas.getContext('2d');
+  ctx.setTransform(ratio,0,0,ratio,0,0);
+  const w=rect.width,h=rect.height;
+  ctx.clearRect(0,0,w,h);
+  ctx.strokeStyle='rgba(148,163,184,.12)';
+  ctx.lineWidth=1;
+  for(let i=1;i<4;i++){const y=(h/4)*i;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+  const trades=(d.recent_positions||[]).slice().reverse();
+  let equity=Number(d.initial_cash||50000);
+  const pts=[equity];
+  trades.forEach(t=>{equity+=Number(t.realized_pnl||0);pts.push(equity);});
+  if(pts.length<2)pts.push(Number(d.equity||equity));
+  const min=Math.min(...pts)*.995;
+  const max=Math.max(...pts)*1.005;
+  const span=Math.max(1,max-min);
+  const x=i=>pts.length===1?w/2:(w-18)*(i/(pts.length-1))+9;
+  const y=v=>h-18-((v-min)/span)*(h-34);
+  const grad=ctx.createLinearGradient(0,0,w,0);
+  grad.addColorStop(0,'#38bdf8');grad.addColorStop(1,'#10b981');
+  const t=(Date.now()%1600)/1600;
+  const visible=Math.max(1,Math.floor((pts.length-1)*t)+1);
+  ctx.beginPath();
+  pts.slice(0,visible+1).forEach((p,i)=>{i?ctx.lineTo(x(i),y(p)):ctx.moveTo(x(i),y(p));});
+  ctx.strokeStyle=grad;ctx.lineWidth=3;ctx.stroke();
+  ctx.lineTo(x(visible),h-18);ctx.lineTo(9,h-18);ctx.closePath();
+  const fill=ctx.createLinearGradient(0,0,0,h);
+  fill.addColorStop(0,'rgba(16,185,129,.22)');fill.addColorStop(1,'rgba(16,185,129,0)');
+  ctx.fillStyle=fill;ctx.fill();
+  pts.forEach((p,i)=>{ctx.beginPath();ctx.arc(x(i),y(p),3,0,Math.PI*2);ctx.fillStyle=i===pts.length-1?'#10b981':'#38bdf8';ctx.fill();});
+  ctx.fillStyle='rgba(226,232,240,.9)';
+  ctx.font='12px Inter';
+  ctx.fillText('Paper Equity Curve',12,18);
+  ctx.fillStyle='rgba(16,185,129,.95)';
+  ctx.fillText(inr(d.equity||0),w-112,18);
+}
 
 // ── KPIs ──
 async function loadHealth(){
@@ -244,6 +297,7 @@ async function loadHealth(){
 
 async function loadPaper(){
   const d=await get('/api/paper');
+  latestPaperData=d;
   document.getElementById('p-start').textContent=inr(d.initial_cash);
   document.getElementById('p-cash').textContent=inr(d.cash_balance);
   document.getElementById('p-open').textContent=inr(d.open_invested);
@@ -252,6 +306,7 @@ async function loadPaper(){
   const pnlEl=document.getElementById('p-pnl');
   pnlEl.textContent=(pnl>=0?'+':'')+inr(pnl);
   pnlEl.style.color=pnl>=0?'#10b981':'#ef4444';
+  drawEquityChart(d);
 
   const open=d.open_positions||[];
   document.getElementById('paper-open').innerHTML=open.length?open.slice(0,5).map(p=>{
@@ -265,6 +320,12 @@ async function loadPaper(){
     return `<div class="mini-stat"><span class="sym">${p.symbol}</span><span class="${cls}">${p.status} | ${ret>=0?'+':''}${ret.toFixed(2)}%</span></div>`;
   }).join(''):'<div class="mini-stat"><span>No paper trades yet</span></div>';
 }
+
+function animateDashboard(){
+  if(latestPaperData)drawEquityChart(latestPaperData);
+  requestAnimationFrame(animateDashboard);
+}
+requestAnimationFrame(animateDashboard);
 
 // ── Sectors ──
 async function loadSectors(){
