@@ -72,19 +72,26 @@ tr:hover td{background:rgba(212,175,55,.055)}
 .paper-metric .label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#64748b;margin-bottom:8px}
 .paper-metric .value{font-size:22px;font-weight:700}
 .chart-shell{height:240px;margin-top:16px;border:1px solid rgba(212,175,55,.28);border-radius:10px;background:linear-gradient(180deg,rgba(5,8,10,.72),rgba(2,6,8,.42));padding:12px;box-shadow:inset 0 0 34px rgba(212,175,55,.045),0 18px 50px rgba(0,0,0,.16);position:relative;overflow:hidden}
-.chart-shell::before{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,rgba(250,204,21,.10),transparent);transform:translateX(-100%);animation:chartSweep 5.4s linear infinite;pointer-events:none}
 .chart-shell::after{content:"LIVE PAPER EQUITY";position:absolute;right:16px;top:12px;font-size:10px;letter-spacing:1.2px;color:rgba(250,204,21,.62)}
 .equity-pills{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
 .equity-pill{padding:7px 11px;border:1px solid rgba(212,175,55,.18);border-radius:8px;background:rgba(2,6,8,.32);font-size:12px;color:#94a3b8}
 .equity-pill strong{color:#e5e7eb;margin-left:6px}
+.range-tabs{display:flex;gap:8px;align-items:center;margin-top:14px}
+.range-tab{border:1px solid rgba(212,175,55,.18);background:rgba(2,6,8,.34);color:#94a3b8;padding:7px 12px;border-radius:8px;font-size:12px;cursor:pointer}
+.range-tab.active{background:rgba(212,175,55,.14);color:#facc15;border-color:rgba(212,175,55,.38)}
+.paper-analytics{display:grid;grid-template-columns:1.2fr .8fr 1fr;gap:12px;margin-top:16px}
+.mini-canvas{width:100%;height:150px;display:block}
+.pick-card{border:1px solid rgba(212,175,55,.16);border-radius:10px;padding:12px;background:rgba(2,6,8,.28);margin-bottom:10px}
+.pick-card .label{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:#64748b;margin-bottom:6px}
+.heatmap{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;margin-top:8px}
+.heat-cell{height:24px;border-radius:6px;border:1px solid rgba(148,163,184,.12);background:rgba(30,41,59,.35)}
 #equity-chart{width:100%;height:100%;display:block}
 @keyframes scan{0%{left:-80%}55%,100%{left:135%}}
-@keyframes chartSweep{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
 @keyframes ringSpin{to{transform:rotate(360deg)}}
 @keyframes ringGlow{0%,100%{box-shadow:0 0 22px rgba(20,184,166,.10)}50%{box-shadow:0 0 42px rgba(212,175,55,.20)}}
 @keyframes barLoad{from{width:0}to{width:var(--w)}}
 @keyframes sparkFloat{0%,100%{opacity:.52;transform:translateY(1px)}50%{opacity:1;transform:translateY(-2px)}}
-@media(max-width:1100px){.paper-grid,.grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:1100px){.paper-grid,.grid,.paper-analytics{grid-template-columns:repeat(2,1fr)}}
 @media(max-width:720px){.paper-grid,.grid,.grid-3{grid-template-columns:1fr!important}.header{padding:16px 18px}.section,.grid{padding-left:18px;padding-right:18px}}
 </style>
 </head>
@@ -123,10 +130,30 @@ tr:hover td{background:rgba(212,175,55,.055)}
     </div>
     <div class="chart-shell"><canvas id="equity-chart"></canvas></div>
     <div class="equity-pills">
-      <div class="equity-pill">Curve Mode <strong>Animated</strong></div>
+      <div class="equity-pill">Curve Mode <strong>Static</strong></div>
       <div class="equity-pill">Return <strong id="p-ret">—%</strong></div>
       <div class="equity-pill">Settled Trades <strong id="p-trades">—</strong></div>
     </div>
+    <div class="range-tabs">
+      <button class="range-tab active" data-range="all">All-time</button>
+      <button class="range-tab" data-range="7d">7D</button>
+      <button class="range-tab" data-range="today">Today</button>
+    </div>
+    <div class="paper-analytics">
+      <div>
+        <h3>Daily P&L Heatmap</h3>
+        <div class="heatmap" id="paper-heatmap"></div>
+      </div>
+      <div>
+        <h3>Sector Exposure</h3>
+        <canvas id="sector-donut" class="mini-canvas"></canvas>
+      </div>
+      <div>
+        <h3>Best / Worst Pick</h3>
+        <div id="best-worst"></div>
+      </div>
+    </div>
+    <div class="chart-shell" style="height:150px"><canvas id="drawdown-chart"></canvas></div>
     <div class="grid grid-3" style="padding:16px 0 0;gap:12px">
       <div>
         <h3>Open Holdings</h3>
@@ -253,19 +280,43 @@ async function get(url){
 function badge(el,text,cls){el.textContent=text;el.className='badge '+cls;}
 function inr(v){return '₹'+Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:2});}
 let latestPaperData=null;
+let paperRange='all';
 
-function drawEquityChart(d){
-  const canvas=document.getElementById('equity-chart');
-  if(!canvas)return;
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('.range-tab');
+  if(!btn)return;
+  paperRange=btn.dataset.range||'all';
+  document.querySelectorAll('.range-tab').forEach(x=>x.classList.toggle('active',x===btn));
+  if(latestPaperData)renderPaperAnalytics(latestPaperData);
+});
+
+function inRange(dateText){
+  if(paperRange==='all')return true;
+  if(!dateText)return false;
+  const d=new Date(dateText+'T00:00:00');
+  const now=new Date();
+  if(paperRange==='today')return d.toDateString()===now.toDateString();
+  if(paperRange==='7d')return (now-d)/(86400000)<=7;
+  return true;
+}
+
+function canvasSetup(id){
+  const canvas=document.getElementById(id);
+  if(!canvas)return null;
   const rect=canvas.getBoundingClientRect();
   const ratio=window.devicePixelRatio||1;
   canvas.width=Math.max(1,Math.floor(rect.width*ratio));
   canvas.height=Math.max(1,Math.floor(rect.height*ratio));
   const ctx=canvas.getContext('2d');
   ctx.setTransform(ratio,0,0,ratio,0,0);
-  const w=rect.width,h=rect.height;
-  const now=Date.now();
-  ctx.clearRect(0,0,w,h);
+  ctx.clearRect(0,0,rect.width,rect.height);
+  return {canvas,ctx,w:rect.width,h:rect.height};
+}
+
+function drawEquityChart(d){
+  const setup=canvasSetup('equity-chart');
+  if(!setup)return;
+  const {ctx,w,h}=setup;
   const bg=ctx.createLinearGradient(0,0,0,h);
   bg.addColorStop(0,'rgba(212,175,55,.05)');
   bg.addColorStop(1,'rgba(20,184,166,.025)');
@@ -276,14 +327,7 @@ function drawEquityChart(d){
   for(let i=1;i<4;i++){const y=(h/4)*i;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
   ctx.strokeStyle='rgba(20,184,166,.06)';
   for(let i=1;i<8;i++){const gx=(w/8)*i;ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,h);ctx.stroke();}
-  const scanX=((now%2800)/2800)*w;
-  const scan=ctx.createLinearGradient(scanX-70,0,scanX+70,0);
-  scan.addColorStop(0,'rgba(212,175,55,0)');
-  scan.addColorStop(.5,'rgba(250,204,21,.18)');
-  scan.addColorStop(1,'rgba(20,184,166,0)');
-  ctx.fillStyle=scan;
-  ctx.fillRect(Math.max(0,scanX-70),0,140,h);
-  const trades=(d.recent_positions||[]).slice().reverse();
+  const trades=(d.positions||d.recent_positions||[]).filter(p=>inRange(p.exit_date||p.date)).slice();
   let equity=Number(d.initial_cash||50000);
   const pts=[equity];
   trades.forEach(t=>{equity+=Number(t.realized_pnl||0);pts.push(equity);});
@@ -295,36 +339,17 @@ function drawEquityChart(d){
   const y=v=>h-18-((v-min)/span)*(h-34);
   const grad=ctx.createLinearGradient(0,0,w,0);
   grad.addColorStop(0,'#d4af37');grad.addColorStop(.55,'#facc15');grad.addColorStop(1,'#14b8a6');
-  const t=(now%2600)/2600;
-  const progress=(1-Math.cos(t*Math.PI))/2;
-  const visibleFloat=Math.max(1,(pts.length-1)*progress);
-  const visible=Math.min(pts.length-1,Math.floor(visibleFloat));
   ctx.beginPath();
-  pts.slice(0,visible+1).forEach((p,i)=>{i?ctx.lineTo(x(i),y(p)):ctx.moveTo(x(i),y(p));});
-  if(visible<pts.length-1){
-    const frac=visibleFloat-visible;
-    const nx=x(visible)+(x(visible+1)-x(visible))*frac;
-    const ny=y(pts[visible])+(y(pts[visible+1])-y(pts[visible]))*frac;
-    ctx.lineTo(nx,ny);
-  }
+  pts.forEach((p,i)=>{i?ctx.lineTo(x(i),y(p)):ctx.moveTo(x(i),y(p));});
   ctx.shadowColor='rgba(250,204,21,.55)';
-  ctx.shadowBlur=14;
+  ctx.shadowBlur=10;
   ctx.strokeStyle=grad;ctx.lineWidth=3;ctx.stroke();
   ctx.shadowBlur=0;
-  const fillX=visible<pts.length-1?x(visible)+(x(visible+1)-x(visible))*(visibleFloat-visible):x(visible);
-  ctx.lineTo(fillX,h-18);ctx.lineTo(9,h-18);ctx.closePath();
+  ctx.lineTo(x(pts.length-1),h-18);ctx.lineTo(9,h-18);ctx.closePath();
   const fill=ctx.createLinearGradient(0,0,0,h);
   fill.addColorStop(0,'rgba(212,175,55,.20)');fill.addColorStop(1,'rgba(20,184,166,0)');
   ctx.fillStyle=fill;ctx.fill();
   pts.forEach((p,i)=>{ctx.beginPath();ctx.arc(x(i),y(p),3,0,Math.PI*2);ctx.fillStyle=i===pts.length-1?'#14b8a6':'#d4af37';ctx.fill();});
-  const headIndex=Math.min(visible,pts.length-1);
-  const headFrac=headIndex<pts.length-1?visibleFloat-headIndex:0;
-  const hx=headIndex<pts.length-1?x(headIndex)+(x(headIndex+1)-x(headIndex))*headFrac:x(headIndex);
-  const hy=headIndex<pts.length-1?y(pts[headIndex])+(y(pts[headIndex+1])-y(pts[headIndex]))*headFrac:y(pts[headIndex]);
-  const pulse=6+Math.sin(now/105)*3;
-  ctx.beginPath();ctx.arc(hx,hy,pulse,0,Math.PI*2);ctx.fillStyle='rgba(250,204,21,.20)';ctx.fill();
-  ctx.beginPath();ctx.arc(hx,hy,4,0,Math.PI*2);ctx.fillStyle='#facc15';ctx.fill();
-  ctx.beginPath();ctx.moveTo(hx,20);ctx.lineTo(hx,h-18);ctx.strokeStyle='rgba(250,204,21,.20)';ctx.lineWidth=1;ctx.stroke();
   ctx.fillStyle='rgba(245,245,244,.92)';
   ctx.font='12px Inter';
   ctx.fillText('Equity Curve',12,18);
@@ -333,6 +358,71 @@ function drawEquityChart(d){
   const ret=Number(d.return_pct||0);
   ctx.fillStyle=ret>=0?'rgba(20,184,166,.95)':'rgba(244,63,94,.95)';
   ctx.fillText(`${ret>=0?'+':''}${ret.toFixed(2)}%`,12,h-10);
+}
+
+function drawDonut(items){
+  const setup=canvasSetup('sector-donut');
+  if(!setup)return;
+  const {ctx,w,h}=setup;
+  const total=items.reduce((s,x)=>s+Math.abs(Number(x.pnl||x.invested||0)),0)||1;
+  const colors=['#d4af37','#14b8a6','#facc15','#64748b','#f43f5e'];
+  let start=-Math.PI/2;
+  items.slice(0,5).forEach((x,i)=>{
+    const val=Math.abs(Number(x.pnl||x.invested||0))/total*Math.PI*2;
+    ctx.beginPath();ctx.moveTo(w/2,h/2);ctx.arc(w/2,h/2,Math.min(w,h)/2-8,start,start+val);ctx.closePath();
+    ctx.fillStyle=colors[i%colors.length];ctx.globalAlpha=.86;ctx.fill();start+=val;
+  });
+  ctx.globalAlpha=1;ctx.beginPath();ctx.arc(w/2,h/2,Math.min(w,h)/4,0,Math.PI*2);ctx.fillStyle='#080b0d';ctx.fill();
+  ctx.fillStyle='#e5e7eb';ctx.font='12px Inter';ctx.textAlign='center';ctx.fillText('Sector',w/2,h/2-2);ctx.fillText('Exposure',w/2,h/2+14);ctx.textAlign='left';
+}
+
+function drawDrawdown(curve){
+  const setup=canvasSetup('drawdown-chart');
+  if(!setup)return;
+  const {ctx,w,h}=setup;
+  const pts=(curve||[]).map(x=>Number(x.drawdown_pct||0));
+  if(!pts.length)return;
+  const min=Math.min(-1,...pts), max=1, span=max-min;
+  const x=i=>pts.length===1?w/2:(w-18)*(i/(pts.length-1))+9;
+  const y=v=>h-18-((v-min)/span)*(h-34);
+  ctx.fillStyle='rgba(244,63,94,.055)';ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='rgba(212,175,55,.10)';ctx.lineWidth=1;
+  for(let i=1;i<4;i++){const yy=(h/4)*i;ctx.beginPath();ctx.moveTo(0,yy);ctx.lineTo(w,yy);ctx.stroke();}
+  ctx.beginPath();pts.forEach((p,i)=>{i?ctx.lineTo(x(i),y(p)):ctx.moveTo(x(i),y(p));});
+  ctx.strokeStyle='#f43f5e';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#e5e7eb';ctx.font='12px Inter';ctx.fillText('Drawdown Curve',12,18);
+}
+
+function renderPaperAnalytics(d){
+  drawEquityChart(d);
+  const positions=(d.positions||[]).filter(p=>inRange(p.exit_date||p.date));
+  const daily=(d.daily_pnl||[]).filter(x=>inRange(x.date));
+  const heat=document.getElementById('paper-heatmap');
+  if(heat){
+    heat.innerHTML=daily.length?daily.slice(-30).map(day=>{
+      const pnl=Number(day.pnl||0);
+      const alpha=Math.min(.9,.18+Math.abs(pnl)/3000);
+      const bg=pnl>=0?`rgba(20,184,166,${alpha})`:`rgba(244,63,94,${alpha})`;
+      return `<div class="heat-cell" title="${day.date}: ${inr(pnl)}" style="background:${bg}"></div>`;
+    }).join(''):'<span style="color:#64748b;font-size:12px">No closed days yet</span>';
+  }
+  const sectorMap={};
+  positions.forEach(p=>{
+    const s=p.sector||'Unknown';
+    sectorMap[s]=sectorMap[s]||{sector:s,pnl:0,invested:0,trades:0};
+    sectorMap[s].pnl+=Number(p.realized_pnl||0);sectorMap[s].invested+=Number(p.invested_amount||0);sectorMap[s].trades++;
+  });
+  drawDonut(Object.values(sectorMap));
+  const curve=(d.equity_curve||[]).filter(x=>x.date==='START'||inRange(x.date));
+  drawDrawdown(curve);
+  const closed=positions.filter(p=>String(p.status||'')!=='open');
+  const best=closed.slice().sort((a,b)=>Number(b.return_pct||0)-Number(a.return_pct||0))[0]||d.best_pick;
+  const worst=closed.slice().sort((a,b)=>Number(a.return_pct||0)-Number(b.return_pct||0))[0]||d.worst_pick;
+  const box=document.getElementById('best-worst');
+  if(box){
+    const card=(label,p,cls)=>p?`<div class="pick-card"><div class="label">${label}</div><div><span class="sym">${p.symbol}</span><span class="${cls}" style="float:right">${Number(p.return_pct||0).toFixed(2)}%</span></div><div class="sub">${p.date||''} | ${inr(p.realized_pnl||0)}</div></div>`:`<div class="pick-card"><div class="label">${label}</div><div class="sub">No data</div></div>`;
+    box.innerHTML=card('Best Pick',best,'up')+card('Worst Pick',worst,'down');
+  }
 }
 
 // ── KPIs ──
@@ -371,7 +461,7 @@ async function loadPaper(){
   const pnlEl=document.getElementById('p-pnl');
   pnlEl.textContent=(pnl>=0?'+':'')+inr(pnl);
   pnlEl.style.color=pnl>=0?'#10b981':'#ef4444';
-  drawEquityChart(d);
+  renderPaperAnalytics(d);
 
   const open=d.open_positions||[];
   document.getElementById('paper-open').innerHTML=open.length?open.slice(0,5).map(p=>{
@@ -385,12 +475,6 @@ async function loadPaper(){
     return `<div class="mini-stat"><span class="sym">${p.symbol}</span><span class="${cls}">${p.status} | ${ret>=0?'+':''}${ret.toFixed(2)}%</span></div>`;
   }).join(''):'<div class="mini-stat"><span>No paper trades yet</span></div>';
 }
-
-function animateDashboard(){
-  if(latestPaperData)drawEquityChart(latestPaperData);
-  requestAnimationFrame(animateDashboard);
-}
-requestAnimationFrame(animateDashboard);
 
 // ── Sectors ──
 async function loadSectors(){

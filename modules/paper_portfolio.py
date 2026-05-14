@@ -262,12 +262,55 @@ def portfolio_summary() -> dict[str, Any]:
             LIMIT 12
             """
         ).fetchall()
+        all_rows = conn.execute(
+            """
+            SELECT pp.*, COALESCE(su.sector, 'Unknown') AS sector
+            FROM paper_positions pp
+            LEFT JOIN stock_universe su ON su.symbol=pp.symbol
+            ORDER BY pp.date ASC, pp.id ASC
+            LIMIT 500
+            """
+        ).fetchall()
 
     open_value = sum(float(r["invested_amount"] or 0) for r in open_rows)
     cash = float(acct["cash_balance"] or 0)
     initial = float(acct["initial_cash"] or STARTING_CASH)
     realized = float(acct["realized_pnl"] or 0)
     equity = cash + open_value
+
+    all_positions = [dict(r) for r in all_rows]
+    closed_positions = [p for p in all_positions if str(p.get("status") or "").lower() != "open"]
+    daily: dict[str, dict[str, Any]] = {}
+    sectors: dict[str, dict[str, Any]] = {}
+    curve = [{"date": "START", "equity": round(initial, 2), "pnl": 0.0, "drawdown_pct": 0.0}]
+    running_equity = initial
+    peak = initial
+
+    for pos in closed_positions:
+        date_s = str(pos.get("exit_date") or pos.get("date") or "")
+        pnl = float(pos.get("realized_pnl") or 0.0)
+        invested = float(pos.get("invested_amount") or 0.0)
+        sector = str(pos.get("sector") or "Unknown")
+        day = daily.setdefault(date_s, {"date": date_s, "pnl": 0.0, "trades": 0})
+        day["pnl"] += pnl
+        day["trades"] += 1
+        sec = sectors.setdefault(sector, {"sector": sector, "invested": 0.0, "pnl": 0.0, "trades": 0})
+        sec["invested"] += invested
+        sec["pnl"] += pnl
+        sec["trades"] += 1
+        running_equity += pnl
+        peak = max(peak, running_equity)
+        drawdown = ((running_equity - peak) / peak * 100) if peak else 0.0
+        curve.append({
+            "date": date_s,
+            "symbol": pos.get("symbol"),
+            "equity": round(running_equity, 2),
+            "pnl": round(pnl, 2),
+            "drawdown_pct": round(drawdown, 2),
+        })
+
+    best = max(closed_positions, key=lambda p: float(p.get("return_pct") or -999999), default=None)
+    worst = min(closed_positions, key=lambda p: float(p.get("return_pct") or 999999), default=None)
     return {
         "initial_cash": round(initial, 2),
         "cash_balance": round(cash, 2),
@@ -277,6 +320,23 @@ def portfolio_summary() -> dict[str, Any]:
         "return_pct": round((equity - initial) / initial * 100, 2) if initial else 0.0,
         "open_positions": [dict(r) for r in open_rows],
         "recent_positions": [dict(r) for r in recent],
+        "positions": all_positions,
+        "daily_pnl": [
+            {"date": k, "pnl": round(v["pnl"], 2), "trades": v["trades"]}
+            for k, v in sorted(daily.items())
+        ],
+        "sector_exposure": [
+            {
+                "sector": v["sector"],
+                "invested": round(v["invested"], 2),
+                "pnl": round(v["pnl"], 2),
+                "trades": v["trades"],
+            }
+            for v in sorted(sectors.values(), key=lambda x: abs(x["pnl"]), reverse=True)
+        ],
+        "equity_curve": curve,
+        "best_pick": dict(best) if best else None,
+        "worst_pick": dict(worst) if worst else None,
         "updated_at": acct["updated_at"],
     }
 
