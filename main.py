@@ -354,6 +354,13 @@ def run_morning_session():
         init_tracking(final)
     except Exception as e:
         logger.debug(f"Tracking init: {e}")
+
+    try:
+        from modules.paper_portfolio import allocate_today
+        result = allocate_today()
+        logger.info("Paper portfolio allocation: %s", result)
+    except Exception as e:
+        logger.debug("Paper portfolio allocation skipped: %s", e)
     
     logger.info("=== MORNING SESSION COMPLETE ===")
 

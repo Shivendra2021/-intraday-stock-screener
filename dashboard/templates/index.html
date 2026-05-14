@@ -54,6 +54,10 @@ tr:hover td{background:rgba(99,102,241,.05)}
 .accuracy-ring span{position:relative;z-index:1;font-size:24px;font-weight:700;color:#e2e8f0}
 .compact-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
 .compact-table th,.compact-table td{padding:9px 10px;font-size:12px}
+.paper-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.paper-metric{background:rgba(15,23,42,.55);border:1px solid rgba(31,41,55,.8);border-radius:10px;padding:14px}
+.paper-metric .label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#64748b;margin-bottom:8px}
+.paper-metric .value{font-size:22px;font-weight:700}
 </style>
 </head>
 <body>
@@ -76,6 +80,36 @@ tr:hover td{background:rgba(99,102,241,.05)}
   <div class="card"><h3>System Accuracy</h3><div class="big-num" id="k-accuracy" style="color:#10b981">—%</div><div class="sub" id="k-acc-sub">Tracked TP/SL</div></div>
   <div class="card"><h3>Today's Picks</h3><div class="big-num" id="k-picks">—</div><div class="sub" id="k-picks-sub">Latest picks</div></div>
   <div class="card"><h3>AI Brain Calls</h3><div class="big-num" id="k-brain">—</div><div class="sub" id="k-brain-sub">Model active</div></div>
+</div>
+
+<!-- Paper Simulation -->
+<div class="section">
+  <div class="section-title"><span class="dot"></span> Demo Cash Account</div>
+  <div class="card">
+    <div class="paper-grid">
+      <div class="paper-metric"><div class="label">Starting Cash</div><div class="value" id="p-start">₹—</div></div>
+      <div class="paper-metric"><div class="label">Cash Surplus</div><div class="value" id="p-cash">₹—</div></div>
+      <div class="paper-metric"><div class="label">Open Invested</div><div class="value" id="p-open">₹—</div></div>
+      <div class="paper-metric"><div class="label">Total Equity</div><div class="value" id="p-equity">₹—</div></div>
+      <div class="paper-metric"><div class="label">Paper P&L</div><div class="value" id="p-pnl">₹—</div></div>
+    </div>
+    <div class="grid grid-3" style="padding:16px 0 0;gap:12px">
+      <div>
+        <h3>Open Holdings</h3>
+        <div id="paper-open" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>Recent Paper Trades</h3>
+        <div id="paper-recent" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>Paper Matching Engine</h3>
+        <div style="font-size:13px;color:#94a3b8;line-height:1.7">
+          ₹50,000 paper capital is split equally across morning top picks. Closed TP/SL/EOD proceeds return to cash and are reused for future picks.
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 
 <!-- Sector Trend -->
@@ -183,6 +217,7 @@ async function get(url){
 }
 
 function badge(el,text,cls){el.textContent=text;el.className='badge '+cls;}
+function inr(v){return '₹'+Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:2});}
 
 // ── KPIs ──
 async function loadHealth(){
@@ -205,6 +240,30 @@ async function loadHealth(){
     (br.grok_configured?'Grok ✅ ':'Grok ❌ ')+(br.gpt_configured?'GPT ✅':'GPT ❌');
   badge(document.getElementById('ai-badge'),br.last_model_used?'AI Active':'AI Idle',
         br.last_model_used?'green':'yellow');
+}
+
+async function loadPaper(){
+  const d=await get('/api/paper');
+  document.getElementById('p-start').textContent=inr(d.initial_cash);
+  document.getElementById('p-cash').textContent=inr(d.cash_balance);
+  document.getElementById('p-open').textContent=inr(d.open_invested);
+  document.getElementById('p-equity').textContent=inr(d.equity);
+  const pnl=Number(d.realized_pnl||0);
+  const pnlEl=document.getElementById('p-pnl');
+  pnlEl.textContent=(pnl>=0?'+':'')+inr(pnl);
+  pnlEl.style.color=pnl>=0?'#10b981':'#ef4444';
+
+  const open=d.open_positions||[];
+  document.getElementById('paper-open').innerHTML=open.length?open.slice(0,5).map(p=>{
+    return `<div class="mini-stat"><span class="sym">${p.symbol}</span><span>${inr(p.invested_amount)} | Qty ${Number(p.quantity||0).toFixed(2)}</span></div>`;
+  }).join(''):'<div class="mini-stat"><span>No open paper holdings</span></div>';
+
+  const recent=d.recent_positions||[];
+  document.getElementById('paper-recent').innerHTML=recent.length?recent.slice(0,6).map(p=>{
+    const ret=Number(p.return_pct||0);
+    const cls=ret>=0?'up':'down';
+    return `<div class="mini-stat"><span class="sym">${p.symbol}</span><span class="${cls}">${p.status} | ${ret>=0?'+':''}${ret.toFixed(2)}%</span></div>`;
+  }).join(''):'<div class="mini-stat"><span>No paper trades yet</span></div>';
 }
 
 // ── Sectors ──
@@ -352,7 +411,7 @@ async function loadHistory(){
 
 // ── Master refresh ──
 async function refresh(){
-  await Promise.all([loadHealth(),loadSectors(),loadPicks(),loadHistory(),loadGrokDashboard(),loadOllamaAgent(),loadTerminal()]);
+  await Promise.all([loadHealth(),loadPaper(),loadSectors(),loadPicks(),loadHistory(),loadGrokDashboard(),loadOllamaAgent(),loadTerminal()]);
   document.getElementById('last-refresh').textContent=new Date().toLocaleTimeString('en-IN');
 }
 

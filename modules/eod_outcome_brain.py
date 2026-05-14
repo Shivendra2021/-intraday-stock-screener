@@ -266,10 +266,17 @@ def reconcile_daily_outcomes(
         )
 
     stats = _refresh_daily_accuracy(target_date)
+    try:
+        from modules.paper_portfolio import settle_closed_positions
+        paper = settle_closed_positions(target_date)
+    except Exception as exc:
+        logger.debug("Paper portfolio EOD settlement skipped: %s", exc)
+        paper = {"error": str(exc)}
     payload = {
         "date": target_date,
         "updates": updates,
         "stats": stats,
+        "paper": paper,
     }
     review = _review_summary(payload) if review_with_brain else {"ok": False, "skipped": True}
     payload["brain_review"] = review

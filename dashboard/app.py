@@ -183,6 +183,15 @@ def api_history():
     })
 
 
+@app.route("/api/paper")
+def api_paper():
+    try:
+        from modules.paper_portfolio import portfolio_summary
+        return jsonify(portfolio_summary())
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+
 @app.route("/api/accuracy")
 def api_accuracy():
     daily   = _q("SELECT date, tp_count, sl_count, total, accuracy, avg_return "

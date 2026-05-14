@@ -211,6 +211,42 @@ def ensure_research_tables() -> None:
                UNIQUE(date, pattern_key)
             )"""
         )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS paper_account (
+               id INTEGER PRIMARY KEY CHECK (id=1),
+               initial_cash REAL DEFAULT 50000,
+               cash_balance REAL DEFAULT 50000,
+               realized_pnl REAL DEFAULT 0,
+               updated_at TEXT
+            )"""
+        )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS paper_positions (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               pick_id INTEGER UNIQUE,
+               date TEXT,
+               symbol TEXT,
+               entry_price REAL,
+               sl_price REAL,
+               target_price REAL,
+               confidence REAL,
+               allocation REAL,
+               quantity REAL,
+               invested_amount REAL,
+               status TEXT DEFAULT 'open',
+               exit_price REAL,
+               exit_date TEXT,
+               realized_pnl REAL DEFAULT 0,
+               return_pct REAL DEFAULT 0,
+               created_at TEXT,
+               closed_at TEXT
+            )"""
+        )
+        conn.execute(
+            """INSERT OR IGNORE INTO paper_account
+               (id, initial_cash, cash_balance, realized_pnl, updated_at)
+               VALUES (1, 50000, 50000, 0, CURRENT_TIMESTAMP)"""
+        )
 
         if "picks" in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}:
             _add_column(conn, "picks", "pattern_key", "TEXT")

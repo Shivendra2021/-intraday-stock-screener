@@ -144,6 +144,11 @@ def _persist_pick_outcome(data: dict, status: str) -> None:
         finally:
             conn.close()
         stats = _refresh_daily_accuracy(date_s)
+        try:
+            from modules.paper_portfolio import settle_closed_positions
+            settle_closed_positions(date_s)
+        except Exception as exc:
+            logger.debug("Paper portfolio settle skipped for %s: %s", symbol, exc)
         line = (
             f"[TRACKER] {status.upper()} {symbol} "
             f"pnl={pnl_value if pnl_value is not None else 0:.2f}% "
