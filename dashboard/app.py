@@ -328,4 +328,4 @@ if __name__ == "__main__":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     print("\n  Stock Analyser V2 Dashboard -> http://localhost:5001")
     print("  Server is running... Press CTRL+C to quit\n")
-    serve(app, host="0.0.0.0", port=5001, _quiet=True)
+    serve(app, host="0.0.0.0", port=5001, threads=16, connection_limit=200, _quiet=True)
