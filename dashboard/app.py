@@ -1,5 +1,5 @@
 """
-dashboard/app.py — MarketMind Pro Dashboard  http://localhost:5001
+dashboard/app.py — Stock Analyser V2 Dashboard  http://localhost:5001
 """
 import sqlite3
 import datetime
@@ -137,10 +137,17 @@ def api_picks():
         "FROM picks WHERE date=? ORDER BY rank",
         (today,)
     )
+    sectors = {
+        row["symbol"]: row.get("sector") or "Unknown"
+        for row in _q("SELECT symbol, sector FROM stock_universe WHERE symbol IN (%s)" % (
+            ",".join(["?"] * len(picks)) if picks else "''"
+        ), tuple(p["symbol"] for p in picks))
+    } if picks else {}
     for p in picks:
         ep = p.get("entry_price") or 0
         tp = p.get("target_price") or 0
         p["upside_pct"] = round((tp - ep) / ep * 100, 2) if ep > 0 else 0.0
+        p["sector"] = sectors.get(p.get("symbol"), "Unknown")
     return jsonify({
         "date":          today,
         "market_status": _market_status(),
@@ -319,6 +326,6 @@ if __name__ == "__main__":
         raise SystemExit(0)
 
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-    print("\n  MarketMind Pro Dashboard -> http://localhost:5001")
+    print("\n  Stock Analyser V2 Dashboard -> http://localhost:5001")
     print("  Server is running... Press CTRL+C to quit\n")
     serve(app, host="0.0.0.0", port=5001, _quiet=True)

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MarketMind Pro — Live Dashboard</title>
+<title>Stock Analyser V2 — Live Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
@@ -49,12 +49,17 @@ tr:hover td{background:rgba(99,102,241,.05)}
 .rsi-bull{background:rgba(16,185,129,.15);color:#10b981}
 .rsi-bear{background:rgba(239,68,68,.15);color:#ef4444}
 .rsi-neutral{background:rgba(245,158,11,.15);color:#f59e0b}
+.accuracy-ring{width:116px;height:116px;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;background:conic-gradient(var(--green) calc(var(--acc,0)*1%),#1f2937 0);position:relative}
+.accuracy-ring::after{content:"";position:absolute;width:86px;height:86px;border-radius:50%;background:var(--card)}
+.accuracy-ring span{position:relative;z-index:1;font-size:24px;font-weight:700;color:#e2e8f0}
+.compact-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.compact-table th,.compact-table td{padding:9px 10px;font-size:12px}
 </style>
 </head>
 <body>
 
 <div class="header">
-  <div class="logo">📊 MarketMind Pro</div>
+  <div class="logo">Stock Analyser V2</div>
   <div class="status-bar">
     <span id="mkt-badge" class="badge yellow">Loading...</span>
     <span id="bot-badge" class="badge purple">BOT</span>
@@ -88,36 +93,32 @@ tr:hover td{background:rgba(99,102,241,.05)}
     </div>
     <div class="grid grid-3" style="padding:0;gap:12px">
       <div>
-        <h3>Next Session Picks</h3>
-        <div id="grok-picks" style="font-size:13px;color:#94a3b8">Loading...</div>
-      </div>
-      <div>
-        <h3>Top Intraday Stocks</h3>
-        <div id="grok-winners" style="font-size:13px;color:#94a3b8">Loading...</div>
+        <h3>Today's Picks</h3>
+        <div id="grok-today-picks" style="font-size:13px;color:#94a3b8">Loading...</div>
       </div>
       <div>
         <h3>Risk / Actions</h3>
         <div id="grok-actions" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>Tomorrow Picks</h3>
+        <div id="grok-tomorrow-picks" style="font-size:13px;color:#94a3b8">Loading...</div>
       </div>
     </div>
   </div>
 </div>
 
 <div class="section">
-  <div class="section-title"><span class="dot"></span> Ollama NSE Intraday Agent</div>
+  <div class="section-title"><span class="dot"></span> Today Top Gainer (For Learning)</div>
   <div class="card">
-    <div class="grid grid-3" style="padding:0;gap:12px">
+    <div class="grid" style="grid-template-columns:2fr 1fr;padding:0;gap:12px">
       <div>
-        <h3>Study Summary</h3>
-        <div id="ollama-summary" style="font-size:13px;color:#94a3b8">Loading...</div>
-      </div>
-      <div>
-        <h3>Highest Return Candidates</h3>
+        <h3>Name / Return / Sector</h3>
         <div id="ollama-candidates" style="font-size:13px;color:#94a3b8">Loading...</div>
       </div>
       <div>
-        <h3>Forced Scanner Rules</h3>
-        <div id="ollama-rules" style="font-size:13px;color:#94a3b8">Loading...</div>
+        <h3>Scan Summary</h3>
+        <div id="ollama-summary" style="font-size:13px;color:#94a3b8">Loading...</div>
       </div>
     </div>
   </div>
@@ -145,14 +146,13 @@ tr:hover td{background:rgba(99,102,241,.05)}
 
 <!-- Today's Picks Table -->
 <div class="section">
-  <div class="section-title"><span class="dot"></span> Today's Picks</div>
+  <div class="section-title"><span class="dot"></span> Today Morning Top Picks</div>
   <div class="card">
-    <table>
+    <table class="compact-table">
       <thead><tr>
-        <th>#</th><th>Symbol</th><th>Entry ₹</th><th>SL ₹</th><th>Target ₹</th>
-        <th>Upside</th><th>RSI</th><th>ADX</th><th>Vol</th><th>Trend</th><th>Status</th>
+        <th>Name</th><th>Confidence Score</th><th>Sector</th><th>SL</th><th>Entry</th><th>TP</th><th>Status</th>
       </tr></thead>
-      <tbody id="picks-tbody"><tr><td colspan="11" style="color:#475569;text-align:center;padding:40px">Loading picks…</td></tr></tbody>
+      <tbody id="picks-tbody"><tr><td colspan="7" style="color:#475569;text-align:center;padding:40px">Loading picks…</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -229,18 +229,11 @@ async function loadGrokDashboard(){
     `${summary}<div class="sub">Updated: ${d.updated_at||'--'} | AI: ${ai.ok?'Grok reviewed':(ai.reason||'local snapshot')}</div>`;
 
   const picks=(d.next_session_picks||[]).slice(0,5);
-  document.getElementById('grok-picks').innerHTML=picks.length?picks.map(p=>{
+  document.getElementById('grok-today-picks').innerHTML=picks.length?picks.map(p=>{
     const entry=Number(p.entry_price||0).toFixed(2);
-    const sl=Number(p.sl_price||0).toFixed(2);
-    const tp=Number(p.target_price||0).toFixed(2);
-    return `<div class="mini-stat"><span class="sym">${p.symbol}</span><span>Entry ${entry} | SL ${sl} | TP ${tp}</span></div>`;
+    const ret=Number(p.result_return||0).toFixed(2);
+    return `<div class="mini-stat"><span class="sym">${p.symbol}</span><span>${p.status||'pending'} | ${ret}%</span></div>`;
   }).join(''):'<div class="mini-stat"><span>No stored picks yet</span></div>';
-
-  const winners=(d.top_intraday_stocks||[]).slice(0,6);
-  document.getElementById('grok-winners').innerHTML=winners.length?winners.map(w=>{
-    const ret=Number(w.return_pct||w.open_to_high_pct||0).toFixed(2);
-    return `<div class="mini-stat"><span class="sym">${w.symbol}</span><span class="up">+${ret}%</span></div>`;
-  }).join(''):'<div class="mini-stat"><span>No intraday winners stored yet</span></div>';
 
   const risks=(ai.risk_flags||[]).slice(0,4);
   const actions=(ai.action_items||[]).slice(0,4);
@@ -248,6 +241,11 @@ async function loadGrokDashboard(){
     ...risks.map(x=>`<div class="mini-stat"><span>Risk</span><span class="down">${x}</span></div>`),
     ...actions.map(x=>`<div class="mini-stat"><span>Action</span><span>${x}</span></div>`)
   ].join('') || '<div class="mini-stat"><span>No risk flags</span></div>';
+
+  document.getElementById('grok-tomorrow-picks').innerHTML=picks.length?picks.map(p=>{
+    const conf=Number(p.confidence||0).toFixed(0);
+    return `<div class="mini-stat"><span class="sym">${p.symbol}</span><span>Conf ${conf}</span></div>`;
+  }).join(''):'<div class="mini-stat"><span>Waiting for next session data</span></div>';
 }
 
 async function loadOllamaAgent(){
@@ -255,20 +253,17 @@ async function loadOllamaAgent(){
   const scan=d.scan||{};
   const study=d.study||{};
   document.getElementById('ollama-summary').innerHTML=
-    `<div>${study.summary||study.winner_profile||'Ollama study is building from NSE scan data.'}</div>
-     <div class="sub">Updated: ${d.updated_at||'--'} | Scanned: ${scan.symbols_scanned||0} | Winners: ${scan.winner_count||0}</div>`;
+    `<div class="mini-stat"><span>Date</span><span>${scan.date||'--'}</span></div>
+     <div class="mini-stat"><span>Time Scanned</span><span>${scan.scan_time||d.updated_at||'--'}</span></div>
+     <div class="mini-stat"><span>Scanned</span><span>${scan.symbols_scanned||0}</span></div>
+     <div class="mini-stat"><span>Winners</span><span class="up">${scan.winner_count||0}</span></div>
+     <div class="sub">${study.summary||study.winner_profile||'Learning summary is building from NSE scan data.'}</div>`;
 
   const candidates=(scan.top_candidates||[]).slice(0,6);
   document.getElementById('ollama-candidates').innerHTML=candidates.length?candidates.map(c=>{
-    const ret=Number(c.open_to_high_pct||c.return_pct||0).toFixed(2);
-    const vol=Number(c.volume_ratio||0).toFixed(2);
-    return `<div class="mini-stat"><span class="sym">${c.symbol}</span><span class="up">+${ret}% | Vol ${vol}x</span></div>`;
+    const ret=Number(c.return_pct||c.open_to_close_pct||c.open_to_high_pct||0).toFixed(2);
+    return `<div class="mini-stat"><span class="sym">${c.symbol}</span><span><span class="up">+${ret}%</span> | ${c.sector||'Unknown'}</span></div>`;
   }).join(''):'<div class="mini-stat"><span>No candidates yet</span></div>';
-
-  const rules=(study.force_filters||[]).slice(0,5);
-  document.getElementById('ollama-rules').innerHTML=rules.length?rules.map(r=>
-    `<div class="mini-stat"><span>Force</span><span>${r}</span></div>`
-  ).join(''):'<div class="mini-stat"><span>No forced rules yet</span></div>';
 }
 
 async function loadTerminal(){
@@ -310,24 +305,19 @@ async function loadPicks(){
   document.getElementById('k-picks-sub').textContent=d.date||'Today';
   const tbody=document.getElementById('picks-tbody');
   if(!picks.length){
-    tbody.innerHTML='<tr><td colspan="11" style="color:#475569;text-align:center;padding:40px">No picks today yet — bot will generate at 08:55 IST</td></tr>';
+    tbody.innerHTML='<tr><td colspan="7" style="color:#475569;text-align:center;padding:40px">No picks today yet — bot will generate at 08:55 IST</td></tr>';
     return;
   }
   tbody.innerHTML=picks.map(p=>{
-    const up=(p.upside_pct||0).toFixed(1);
     const st=p.status||'pending';
-    const reasons=(p.signal_reasons||'').substring(0,30);
+    const conf=Number(p.confidence||0).toFixed(0);
     return `<tr>
-      <td style="color:#475569">${p.rank}</td>
       <td><span class="sym">${p.symbol}</span></td>
-      <td class="price">₹${(p.entry_price||0).toFixed(2)}</td>
+      <td class="up">${conf}</td>
+      <td><span class="sector-tag">${p.sector||'Unknown'}</span></td>
       <td class="down">₹${(p.sl_price||0).toFixed(2)}</td>
+      <td class="price">₹${(p.entry_price||0).toFixed(2)}</td>
       <td class="up">₹${(p.target_price||0).toFixed(2)}</td>
-      <td class="up">+${up}%</td>
-      <td>${rsiChip(p.rsi)}</td>
-      <td style="color:#94a3b8">${p.adx?parseFloat(p.adx).toFixed(1):'—'}</td>
-      <td style="color:#94a3b8">${p.vol_ratio?parseFloat(p.vol_ratio).toFixed(2)+'x':'—'}</td>
-      <td><span style="font-size:11px;color:#818cf8">${(p.ema_alignment||'N/A').replace('EMA_','')}</span></td>
       <td><span class="${st}">${st.replace('_',' ').toUpperCase()}</span></td>
     </tr>`;
   }).join('');
@@ -350,12 +340,13 @@ async function loadHistory(){
   }).join(''):'<tr><td colspan="5" style="color:#475569">No history yet</td></tr>';
 
   // Sys stats
+  const acc=Number(d.overall_accuracy||0);
   document.getElementById('sys-stats').innerHTML=`
+    <div class="accuracy-ring" style="--acc:${Math.max(0,Math.min(100,acc))}"><span>${acc.toFixed(0)}%</span></div>
     <div class="mini-stat"><span>Total Closed</span><span style="color:#e2e8f0">${d.total_closed||0}</span></div>
     <div class="mini-stat"><span>TP Hits</span><span class="up">${d.overall_tp||0}</span></div>
     <div class="mini-stat"><span>SL Hits</span><span class="down">${d.overall_sl||0}</span></div>
-    <div class="mini-stat"><span>Accuracy</span><span style="color:#6366f1;font-weight:700">${d.overall_accuracy||0}%</span></div>
-    <div class="progress"><div class="progress-bar" style="width:${d.overall_accuracy||0}%"></div></div>
+    <div class="mini-stat"><span>Overall Accuracy</span><span style="color:#6366f1;font-weight:700">${acc.toFixed(1)}%</span></div>
   `;
 }
 
