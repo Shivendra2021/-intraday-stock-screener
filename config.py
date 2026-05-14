@@ -17,6 +17,7 @@ PRECLOSE_SCAN_TIME       = "15:00"
 MARKET_LEARNER_START     = "15:35"
 LEARNER_START            = "15:45"
 WEEKLY_REVIEW_TIME       = "16:00"
+EOD_OUTCOME_BRAIN_TIME   = os.getenv("EOD_OUTCOME_BRAIN_TIME", "15:40")
 
 # ── Morning Scan Schedule ─────────────────────────────────────────────
 MORNING_UNIVERSE_SCAN_START = "08:00"

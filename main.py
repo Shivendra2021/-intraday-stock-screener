@@ -574,6 +574,19 @@ def job_tracking_eod():
         logger.debug("Tracking EOD: %s", e)
 
 
+def job_eod_outcome_brain():
+    """Reconcile TP/SL/EOD outcomes and refresh accuracy after market close."""
+    if not _is_trading_day():
+        return
+    try:
+        from modules.eod_outcome_brain import reconcile_daily_outcomes
+
+        result = reconcile_daily_outcomes(send_telegram=True, review_with_brain=True)
+        logger.info("EOD outcome brain updated %s picks: %s", len(result.get("updates", [])), result.get("stats", {}))
+    except Exception as e:
+        logger.error("EOD outcome brain failed: %s", e)
+
+
 def job_heartbeat():
     """Daily heartbeat."""
     logger.info("=== JOB: Heartbeat ===")
@@ -658,7 +671,7 @@ def main():
     scheduler.add_listener(_job_listener, EVENT_JOB_ERROR | EVENT_JOB_EXECUTED)
     
     from config import (
-        AFTER_MARKET_LEARNING_TIME, LEARNER_START, MARKET_LEARNER_START, MORNING_CATCHUP_END,
+        AFTER_MARKET_LEARNING_TIME, EOD_OUTCOME_BRAIN_TIME, LEARNER_START, MARKET_LEARNER_START, MORNING_CATCHUP_END,
         MORNING_FINAL_PICKS, MORNING_UNIVERSE_SCAN_START, PRECLOSE_SCAN_TIME,
         STARTUP_ANALYSIS_ON_LAUNCH,
     )
@@ -688,6 +701,7 @@ def main():
     scheduler.add_job(job_tracking_update, "cron", hour="9-15", minute="*/5", id="tracking_update")
     scheduler.add_job(job_tracking_status, "cron", hour="10-14", minute=0, id="tracking_status")
     scheduler.add_job(job_tracking_eod, "cron", hour=15, minute=31, id="tracking_eod")
+    _add_cron(job_eod_outcome_brain, EOD_OUTCOME_BRAIN_TIME, "eod_outcome_brain", misfire_grace_time=7200)
     
     # Daily
     _add_cron(job_heartbeat, "18:00", "heartbeat")

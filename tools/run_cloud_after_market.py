@@ -26,6 +26,7 @@ for path in ("data", "logs", "output"):
 
 import main  # noqa: E402
 from config import INTRADAY_MIN_RETURN_PCT  # noqa: E402
+from modules.eod_outcome_brain import reconcile_daily_outcomes  # noqa: E402
 from modules.ollama_intraday_agent import daily_winner_learning, scan_full_universe  # noqa: E402
 from modules.time_utils import today_ist_str  # noqa: E402
 
@@ -37,6 +38,14 @@ def run() -> None:
     if not main._is_trading_day():
         print("CLOUD_AFTER_MARKET_SKIP: not a trading day")
         return
+
+    outcome = reconcile_daily_outcomes(send_telegram=True, review_with_brain=True)
+    stats = outcome.get("stats", {})
+    print(
+        "CLOUD_EOD_OUTCOME_RESULT: "
+        f"date={outcome.get('date')} updates={len(outcome.get('updates', []))} "
+        f"tp={stats.get('tp_count')} sl={stats.get('sl_count')} accuracy={stats.get('accuracy')}"
+    )
 
     scan = scan_full_universe()
     print(
