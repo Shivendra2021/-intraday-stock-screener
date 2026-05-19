@@ -35,6 +35,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Restore cloud data cache
+        id: restore-data
+        uses: actions/cache/restore@v4
+        with:
+          path: data
+          key: stock-analyser-data-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            stock-analyser-data-${{ github.ref_name }}-
+            stock-analyser-data-
+
+      - name: Ensure runtime folders
+        run: |
+          mkdir -p data logs output
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -62,3 +76,20 @@ jobs:
 
       - name: Run after-market learning
         run: python tools/run_cloud_after_market.py
+
+      - name: Save cloud data cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data
+          key: stock-analyser-data-${{ github.ref_name }}-${{ github.run_id }}
+
+      - name: Upload runtime data artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: after-market-runtime-data-${{ github.run_id }}
+          path: |
+            data
+            logs
+          retention-days: 7

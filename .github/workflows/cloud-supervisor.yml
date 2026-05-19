@@ -1,21 +1,33 @@
-name: Morning Picks
+name: Cloud Supervisor
 
 on:
   workflow_dispatch:
   schedule:
-    # 08:55, 09:10 and 09:25 Asia/Kolkata, expressed in UTC for GitHub Actions.
+    # Asia/Kolkata times converted to UTC.
+    # 08:55, 09:10, 09:25 IST: official morning + catch-up.
     - cron: "25 3 * * 1-5"
     - cron: "40 3 * * 1-5"
     - cron: "55 3 * * 1-5"
+    # 09:30-14:30 IST: tracking / late recovery safety net every 30 min.
+    - cron: "0,30 4-9 * * 1-5"
+    # 15:35, 15:50, 16:05, 16:30, 19:00 IST: EOD, learning, deep catch-up.
+    - cron: "5 10 * * 1-5"
+    - cron: "20 10 * * 1-5"
+    - cron: "35 10 * * 1-5"
+    - cron: "0 11 * * 1-5"
+    - cron: "30 13 * * 1-5"
 
 concurrency:
-  group: morning-picks
+  group: cloud-supervisor
   cancel-in-progress: false
 
 jobs:
-  morning-picks:
+  cloud-supervisor:
     runs-on: ubuntu-latest
     timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: write
     env:
       TZ: Asia/Kolkata
       PYTHONIOENCODING: utf-8
@@ -34,6 +46,8 @@ jobs:
       GROK_DASHBOARD_AGENT_ENABLED: "False"
       INTRADAY_PATTERN_AGENT_ENABLED: "False"
       OLLAMA_AGENT_ENABLED: "False"
+      AUTOMATION_SUPERVISOR_ENABLED: "True"
+      POSTMARKET_DEEP_LEARNING_ENABLED: "True"
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -69,7 +83,7 @@ jobs:
           missing=0
           for name in TELEGRAM_BOT_TOKEN TELEGRAM_CHAT_ID OPENROUTER_GROK_KEY OPENROUTER_GPT_KEY; do
             if [ -z "${!name}" ]; then
-              echo "::error::$name is missing. Check the repository secret mapped to this env variable."
+              echo "::error::$name is missing. Check repository secrets."
               missing=1
             else
               echo "$name is configured"
@@ -77,8 +91,8 @@ jobs:
           done
           exit "$missing"
 
-      - name: Run morning picks
-        run: python tools/run_cloud_morning.py
+      - name: Run cloud supervisor
+        run: python tools/run_cloud_supervisor.py
 
       - name: Save cloud data cache
         if: always()
@@ -91,7 +105,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: morning-runtime-data-${{ github.run_id }}
+          name: cloud-runtime-data-${{ github.run_id }}
           path: |
             data
             logs
