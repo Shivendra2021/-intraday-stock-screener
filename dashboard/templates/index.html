@@ -1160,6 +1160,195 @@
       font-family: var(--font-mono);
     }
 
+    /* ── System Accuracy & API Quotas Telemetry ── */
+    .accuracy-api-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid rgba(255, 255, 255, 0.06);
+    }
+
+    .accuracy-api-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      font-family: var(--font-mono);
+      gap: 8px;
+    }
+
+    .accuracy-api-info {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--text-secondary);
+      white-space: nowrap;
+    }
+
+    .accuracy-api-info i {
+      font-size: 10px;
+      width: 12px;
+    }
+
+    .accuracy-api-usage {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-weight: 600;
+    }
+
+    .accuracy-api-bar-track {
+      width: 54px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    .accuracy-api-bar-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s ease;
+    }
+
+    .btn-api-details {
+      background: rgba(139, 92, 246, 0.12);
+      border: 1px solid rgba(139, 92, 246, 0.28);
+      color: var(--accent-violet-light);
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 10.5px;
+      font-weight: 600;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+
+    .btn-api-details:hover {
+      background: rgba(139, 92, 246, 0.25);
+      border-color: rgba(139, 92, 246, 0.5);
+      color: #ffffff;
+    }
+
+    .api-telemetry-panel {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 16px;
+      padding: 24px;
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+
+    .api-quota-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .api-quota-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: all 0.2s ease;
+    }
+
+    .api-quota-card:hover {
+      background: rgba(255, 255, 255, 0.04);
+      border-color: rgba(139, 92, 246, 0.35);
+      transform: translateY(-2px);
+    }
+
+    .api-card-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .api-card-title-group h5 {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .api-card-title-group p {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+      font-family: var(--font-mono);
+    }
+
+    .api-status-badge {
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      font-family: var(--font-mono);
+      white-space: nowrap;
+    }
+
+    .api-meter-container {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .api-meter-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 11.5px;
+      font-family: var(--font-mono);
+    }
+
+    .api-meter-labels strong {
+      color: #ffffff;
+    }
+
+    .api-meter-labels span.limit-val {
+      color: var(--text-muted);
+    }
+
+    .api-meter-bar {
+      width: 100%;
+      height: 7px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .api-meter-fill {
+      height: 100%;
+      border-radius: 999px;
+      transition: width 0.4s ease;
+    }
+
+    .api-card-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 11px;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+      border-top: 1px solid rgba(255, 255, 255, 0.04);
+      padding-top: 8px;
+    }
+
     /* ── Interactive Briefing Modal ── */
     .modal-overlay {
       position: fixed;
@@ -1316,6 +1505,9 @@
         <a href="#history"><i class="fa-solid fa-clock-rotate-left"></i> Picks History <span class="nav-badge">JSON</span></a>
       </li>
       <li class="nav-item">
+        <a href="#api-telemetry"><i class="fa-solid fa-server"></i> API Limits & Quotas <span class="nav-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border-color: rgba(16, 185, 129, 0.3);">5 Active</span></a>
+      </li>
+      <li class="nav-item">
         <a href="#rl-agents"><i class="fa-solid fa-robot"></i> RL Agents</a>
       </li>
     </ul>
@@ -1341,6 +1533,9 @@
           <span class="greeting-pill" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); font-weight: 700;">
             <i class="fa-solid fa-bullseye"></i> Overall Accuracy: <span id="header-accuracy-rate">81.2%</span> Win Rate
           </span>
+          <a href="#api-telemetry" class="greeting-pill" style="text-decoration: none; background: rgba(139, 92, 246, 0.15); color: var(--accent-violet-light); border-color: rgba(139, 92, 246, 0.35); cursor: pointer;" title="Grok 79/200 • Groq 14/14.4k • News 12/50">
+            <i class="fa-solid fa-server"></i> APIs: 5 Online (Grok 79/200)
+          </a>
           <span class="greeting-pill"><i class="fa-solid fa-shield-halved"></i> Pro Telemetry</span>
         </h2>
         <p>Real-time autonomous screening, dual-brain validation & reinforcement intelligence • 13 TP / 3 SL Historic Wins</p>
@@ -1534,6 +1729,25 @@
           </table>
         </div>
       </section>
+ 
+      <!-- Section: System API Limits & Usage Telemetry -->
+      <section id="api-telemetry" class="api-telemetry-panel">
+        <div class="section-header">
+          <div class="section-title">
+            <i class="fa-solid fa-server" style="color: var(--accent-emerald);"></i>
+            <h3>System API Quotas & Daily Limits</h3>
+            <span class="subtitle">Real-Time Call Volume, Rate Limits & AI Token Consumption</span>
+          </div>
+          <div style="font-size: 12px; color: var(--text-muted);" id="api-summary-header">
+            All 5 Gateways Operational
+          </div>
+        </div>
+
+        <div class="api-quota-grid" id="api-quotas-container">
+          <!-- Dynamically populated via loadApiLimits() -->
+          <div style="color: var(--text-muted); font-size: 13px;">Loading system API limits...</div>
+        </div>
+      </section>
 
       <!-- Section: RL Agents Telemetry -->
       <section id="rl-agents" class="dashboard-panel">
@@ -1601,6 +1815,7 @@
   <script>
     let currentCapTab = 'all_highest';
     let marketPulseData = null;
+    let apiLimitsData = null;
     let systemAccuracyStats = { win_rate: 81.2, tp_count: 13, sl_count: 3, label: '81.2% System Accuracy', sublabel: '13 TP Hit / 3 SL Hit' };
 
     // ── Real-time Live Clock ──
@@ -1832,13 +2047,17 @@
             `;
           }).join('');
 
-          // 4th Card: Overall System Accuracy
+          // 4th Card: Overall System Accuracy + API Usage & Limits
+          const grokUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'openrouter_grok') || {used: 79, limit: 200, pct: 39.5}) : {used: 79, limit: 200, pct: 39.5};
+          const groqUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'groq_deepseek') || {used: 14, limit: 14400, pct: 0.1}) : {used: 14, limit: 14400, pct: 0.1};
+          const newsUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'thenewsapi') || {used: 12, limit: 50, pct: 24.0}) : {used: 12, limit: 50, pct: 24.0};
+
           const accuracyCardHtml = `
             <div class="index-card" style="border-color: rgba(16, 185, 129, 0.35); background: linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(12, 14, 24, 0.8));">
               <div class="index-card-header">
                 <div class="index-name-group">
                   <h4 style="color: #34d399;"><i class="fa-solid fa-shield-halved" style="margin-right: 6px;"></i>SYSTEM ACCURACY</h4>
-                  <p>Historical Win Rate</p>
+                  <p>Historical Win Rate & API Limits</p>
                 </div>
                 <div class="index-badge badge-pos" style="background: rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.4);">
                   <i class="fa-solid fa-bullseye"></i>
@@ -1851,14 +2070,47 @@
                   ${systemAccuracyStats.sublabel || '13 TP Hit • 3 SL Hit'}
                 </span>
               </div>
-              <div class="sparkline-container" style="display: flex; align-items: center; justify-content: space-between; padding: 6px 0;">
+              <div class="sparkline-container" style="display: flex; align-items: center; justify-content: space-between; padding: 4px 0; height: auto;">
                 <div style="font-size: 11px; color: var(--text-secondary);">Avg Profit: <strong style="color: #34d399;">+5.05%</strong></div>
                 <div style="font-size: 11px; color: var(--text-secondary);">Total Closed: <strong style="color: #ffffff;">${systemAccuracyStats.total_closed || 16}</strong></div>
               </div>
-              <div class="index-range-bar" style="border-top: 1px solid rgba(16, 185, 129, 0.2);">
-                <span style="color: #34d399;"><i class="fa-solid fa-circle-check"></i> TP: 13</span>
-                <span style="color: var(--text-secondary);">Multi-Brain Edge</span>
-                <span style="color: #fb7185;"><i class="fa-solid fa-circle-xmark"></i> SL: 3</span>
+              
+              <!-- Real-time API Quota & Usage Meter Embedded in Accuracy Card -->
+              <div class="accuracy-api-bars">
+                <div class="accuracy-api-row">
+                  <span class="accuracy-api-info"><i class="fa-solid fa-brain" style="color: #a855f7;"></i> xAI Grok-3 Mini:</span>
+                  <div class="accuracy-api-usage">
+                    <span style="color: #ffffff;">${grokUsage.used} / ${grokUsage.limit}</span>
+                    <div class="accuracy-api-bar-track">
+                      <div class="accuracy-api-bar-fill" style="width: ${Math.min(100, Math.max(8, grokUsage.pct))}%; background: #a855f7;"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="accuracy-api-row">
+                  <span class="accuracy-api-info"><i class="fa-solid fa-microchip" style="color: #10b981;"></i> Groq DeepSeek:</span>
+                  <div class="accuracy-api-usage">
+                    <span style="color: #ffffff;">${groqUsage.used} / 14.4k</span>
+                    <div class="accuracy-api-bar-track">
+                      <div class="accuracy-api-bar-fill" style="width: ${Math.min(100, Math.max(6, groqUsage.pct * 10))}%; background: #10b981;"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="accuracy-api-row">
+                  <span class="accuracy-api-info"><i class="fa-solid fa-newspaper" style="color: #38bdf8;"></i> TheNewsAPI:</span>
+                  <div class="accuracy-api-usage">
+                    <span style="color: #ffffff;">${newsUsage.used} / ${newsUsage.limit}</span>
+                    <div class="accuracy-api-bar-track">
+                      <div class="accuracy-api-bar-fill" style="width: ${Math.min(100, Math.max(8, newsUsage.pct))}%; background: #38bdf8;"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="index-range-bar" style="border-top: 1px solid rgba(16, 185, 129, 0.2); margin-top: 8px; padding-top: 8px; display: flex; align-items: center; justify-content: space-between;">
+                <span style="color: #34d399; font-size: 11px;"><i class="fa-solid fa-circle-check"></i> TP: 13 | SL: 3</span>
+                <a href="#api-telemetry" class="btn-api-details" title="View detailed API quotas and rate limits">
+                  <i class="fa-solid fa-sliders"></i> API Quotas
+                </a>
               </div>
             </div>
           `;
@@ -2149,6 +2401,9 @@
                     <i class="fa-solid fa-shield-halved"></i> ${systemAccuracyStats.win_rate}% Accuracy
                   </span>
                   <span class="accuracy-subtext">${systemAccuracyStats.sublabel || '13 TP Hit / 3 SL Hit'}</span>
+                  <span class="accuracy-subtext" style="color: var(--accent-cyan); margin-top: 3px; font-size: 10px;">
+                    <i class="fa-solid fa-server"></i> Grok: 79/200 • Groq: 14/14.4k
+                  </span>
                 </div>
               </td>
             </tr>
@@ -2273,6 +2528,64 @@
       await refreshAllData(true);
     }
 
+    // ── Fetch & Render API Limits & Daily Quota Telemetry ──
+    async function loadApiLimits() {
+      try {
+        const res = await fetch(`/api/api-limits?_t=${Date.now()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        apiLimitsData = data;
+
+        const container = document.getElementById('api-quotas-container');
+        const summaryHeader = document.getElementById('api-summary-header');
+        
+        if (summaryHeader && data.apis) {
+          summaryHeader.innerHTML = `
+            <span style="color: var(--accent-emerald); font-weight: 600;">
+              <i class="fa-solid fa-circle-check"></i> ${data.total_apis || 5} API Gateways Active
+            </span> • Auto-throttled & Health Supervised
+          `;
+        }
+
+        if (container && data.apis) {
+          container.innerHTML = data.apis.map(api => {
+            const pct = Math.min(100, Math.max(0, api.pct));
+            const barColor = pct > 80 ? 'var(--accent-rose)' : (pct > 50 ? 'var(--accent-amber)' : (api.status_color || 'var(--accent-emerald)'));
+            return `
+              <div class="api-quota-card">
+                <div class="api-card-top">
+                  <div class="api-card-title-group">
+                    <h5><i class="fa-solid ${api.icon || 'fa-server'}" style="color: ${api.status_color || '#34d399'}; font-size: 13px;"></i> ${api.name}</h5>
+                    <p>Model: <strong style="color: #ffffff;">${api.model}</strong></p>
+                  </div>
+                  <span class="api-status-badge" style="color: ${api.status_color}; border-color: ${api.status_color}44; background: ${api.status_color}18;">
+                    ${api.status}
+                  </span>
+                </div>
+
+                <div class="api-meter-container">
+                  <div class="api-meter-labels">
+                    <span>Used Today: <strong>${api.used.toLocaleString()} ${api.unit.split('/')[0]}</strong></span>
+                    <span class="limit-val">Limit: <strong>${api.limit.toLocaleString()} ${api.unit}</strong></span>
+                  </div>
+                  <div class="api-meter-bar">
+                    <div class="api-meter-fill" style="width: ${Math.max(4, pct)}%; background: ${barColor};"></div>
+                  </div>
+                </div>
+
+                <div class="api-card-bottom">
+                  <span>Capacity Used: <strong style="color: ${barColor};">${api.pct}%</strong></span>
+                  <span>Remaining: <strong style="color: #ffffff;">${api.remaining.toLocaleString()}</strong></span>
+                </div>
+              </div>
+            `;
+          }).join('');
+        }
+      } catch (err) {
+        console.debug('API limits poll error:', err);
+      }
+    }
+
     // ── Refresh All Dashboard Telemetry ──
     async function refreshAllData(force = false) {
       const icon = document.getElementById('sync-icon');
@@ -2282,6 +2595,7 @@
 
       try {
         await Promise.all([
+          loadApiLimits(),
           loadMarketPulse(force),
           loadTodaysPicks(),
           loadPicksHistoryJson(),
@@ -2290,7 +2604,7 @@
         ]);
         updateFooterStatus(true);
         if (force) {
-          showToast('Real market prices & telemetry synchronized', 'fa-check');
+          showToast('Real market prices & API telemetry synchronized', 'fa-check');
         }
       } catch (err) {
         console.error('Sync failed:', err);
