@@ -1,0 +1,15 @@
+[Unit]
+Description=MarketMind Pro Intraday Screener Dashboard
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/-intraday-stock-screener
+ExecStart=/root/-intraday-stock-screener/venv/bin/python dashboard/app.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

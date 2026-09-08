@@ -1,0 +1,15 @@
+[Unit]
+Description=MarketMind Pro Intraday Autonomous Bot Engine
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/-intraday-stock-screener
+ExecStart=/root/-intraday-stock-screener/venv/bin/python main.py
+Restart=always
+RestartSec=10
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

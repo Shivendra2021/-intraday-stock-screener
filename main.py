@@ -839,6 +839,13 @@ def main():
     scheduler.add_job(job_tracking_eod, "cron", hour=15, minute=31, id="tracking_eod")
     _add_cron(job_eod_outcome_brain, EOD_OUTCOME_BRAIN_TIME, "eod_outcome_brain", misfire_grace_time=7200)
     
+    # Automated Data Backup
+    try:
+        from tools.backup_data import run_backup
+        _add_cron(run_backup, "16:15", "daily_data_backup")
+    except Exception as exc:
+        logger.warning("Could not register daily_data_backup job: %s", exc)
+
     # Daily
     _add_cron(job_heartbeat, "18:00", "heartbeat")
     
