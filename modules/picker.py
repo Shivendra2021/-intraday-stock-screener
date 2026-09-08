@@ -21,21 +21,24 @@ def _calculate_levels(stock: dict) -> dict | None:
     """
     Calculate entry, SL, target, and risk-reward for one stock.
     Returns None if risk-reward < MIN_RISK_REWARD.
+    Dynamically targets 5.0% - 8.0% return based on the stock's prime intraday period.
     """
     from config import (SL_ATR_MULTIPLIER, MAX_SL_PCT, MIN_RISK_REWARD,
                         MIN_TARGET_MOVE_PCT, MAX_TARGET_MOVE_PCT)
+    from modules.grok_brain import evaluate_stock_intraday_period
 
     price = stock["price"]
     atr   = stock["atr"]
+
+    # Evaluate intraday timing and high-return target
+    timing = evaluate_stock_intraday_period(stock)
+    move_pct = timing.get("target_return_pct") or ((MIN_TARGET_MOVE_PCT + MAX_TARGET_MOVE_PCT) / 2)
 
     # Stop Loss: ATR-based, capped at MAX_SL_PCT
     sl_atr  = price - (atr * SL_ATR_MULTIPLIER)
     sl_pct  = price * (1 - MAX_SL_PCT / 100)
     sl_price = max(sl_atr, sl_pct)  # tighter of two
 
-    # Target: random in configured range for realistic expectation
-    # Deterministic middle of configured range (better than random)
-    move_pct     = (MIN_TARGET_MOVE_PCT + MAX_TARGET_MOVE_PCT) / 2
     target_price = price * (1 + move_pct / 100)
 
     risk   = price - sl_price
@@ -52,11 +55,17 @@ def _calculate_levels(stock: dict) -> dict | None:
 
     return {
         **stock,
-        "entry_price":  round(price, 2),
-        "sl_price":     round(sl_price, 2),
-        "target_price": round(target_price, 2),
-        "upside_pct":   round(upside_pct, 2),
-        "risk_reward":  round(rr, 2),
+        "entry_price":       round(price, 2),
+        "sl_price":          round(sl_price, 2),
+        "target_price":      round(target_price, 2),
+        "upside_pct":        round(upside_pct, 2),
+        "risk_reward":       round(rr, 2),
+        "prime_window":      timing.get("prime_window"),
+        "period_code":       timing.get("period_code"),
+        "target_return_pct": timing.get("target_return_pct"),
+        "timing_strategy":   timing.get("strategy"),
+        "time_cutoff":       timing.get("time_cutoff"),
+        "edge_rationale":    timing.get("edge_rationale"),
     }
 
 
@@ -172,6 +181,9 @@ def save_picks_to_history_json(picks: list, date_str: str | None = None, timesta
             "status": p.get("status", "pending"),
             "sector": p.get("sector", "Equities"),
             "signal_reasons": p.get("signal_reasons", ""),
+            "prime_window": p.get("prime_window", "09:15 - 10:15 AM (Morning Momentum)"),
+            "timing_strategy": p.get("timing_strategy", "Opening Range Breakout (ORB) on 2x+ Vol Surge"),
+            "target_return_pct": p.get("target_return_pct", round(float(p.get("upside_pct", 6.0)), 2)),
             "created_at": iso_now,
         })
 
@@ -332,6 +344,9 @@ def _grok_review_evidence_pack(candidates: list[dict], rejected: list[dict]) -> 
             "rsi": c.get("rsi"),
             "ema_alignment": c.get("ema_alignment"),
             "vol_ratio": c.get("vol_ratio"),
+            "prime_window": c.get("prime_window"),
+            "target_return_pct": c.get("target_return_pct"),
+            "timing_strategy": c.get("timing_strategy"),
             "signal_reasons": c.get("signal_reasons"),
         })
 
@@ -340,6 +355,7 @@ def _grok_review_evidence_pack(candidates: list[dict], rejected: list[dict]) -> 
         {
             "candidate_count": len(candidates),
             "rejected_count": len(rejected),
+            "intraday_return_target": "5.0% - 8.0% return in specific intraday market period",
             "evidence": evidence,
             "rejected_summary": [
                 {

@@ -76,8 +76,67 @@ def _from_rss(limit: int) -> list[dict[str, Any]]:
     return rows
 
 
-def fetch_market_news(limit: int = 20) -> dict[str, Any]:
-    """Return market news without relying on the invalid NewsAPI key."""
+NEWS_CACHE_FILE = "data/news_cache.json"
+CACHE_TTL_SECONDS = 1800  # 30 minutes
+
+
+def _load_cached_news() -> dict[str, Any] | None:
+    """Load news from local disk cache if still within 30-minute TTL."""
+    import json
+    import os
+    import time
+
+    if not os.path.exists(NEWS_CACHE_FILE):
+        return None
+    try:
+        with open(NEWS_CACHE_FILE, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        cached_epoch = data.get("cache_epoch", 0)
+        if (time.time() - cached_epoch) < CACHE_TTL_SECONDS and data.get("items"):
+            logger.debug("Loaded %s news items from 30-min cache (age: %ds)",
+                         len(data.get("items", [])), int(time.time() - cached_epoch))
+            return data
+    except Exception as exc:
+        logger.debug("Error reading news cache: %s", exc)
+    return None
+
+
+def _save_cached_news(payload: dict[str, Any]) -> None:
+    """Save news payload to local disk cache."""
+    import json
+    import os
+    import time
+
+    try:
+        os.makedirs(os.path.dirname(NEWS_CACHE_FILE) or ".", exist_ok=True)
+        to_save = dict(payload)
+        to_save["cache_epoch"] = time.time()
+        temp_file = f"{NEWS_CACHE_FILE}.tmp"
+        with open(temp_file, "w", encoding="utf-8") as f:
+            json.dump(to_save, f, indent=2)
+        os.replace(temp_file, NEWS_CACHE_FILE)
+        logger.debug("Saved news payload to %s", NEWS_CACHE_FILE)
+    except Exception as exc:
+        logger.debug("Could not save news cache: %s", exc)
+
+
+def fetch_market_news(limit: int = 20, force_refresh: bool = False) -> dict[str, Any]:
+    """
+    Return market news with 30-minute disk caching to preserve API quotas.
+    Falls back gracefully from TheNewsAPI to RSS feeds.
+    """
+    if not force_refresh:
+        cached = _load_cached_news()
+        if cached:
+            items = cached.get("items", [])[:limit]
+            return {
+                "items": items,
+                "provider": cached.get("provider", "cached"),
+                "count": len(items),
+                "timestamp": cached.get("timestamp", datetime.datetime.now().isoformat(timespec="seconds")),
+                "cached": True,
+            }
+
     items = _from_thenewsapi(limit)
     provider = "thenewsapi"
     if len(items) < max(3, min(limit, 10)):
@@ -85,9 +144,16 @@ def fetch_market_news(limit: int = 20) -> dict[str, Any]:
         items.extend(rss_items)
         provider = "thenewsapi+rss" if items and provider == "thenewsapi" else "rss"
 
-    return {
+    payload = {
         "items": items[:limit],
         "provider": provider if items else "none",
         "count": len(items[:limit]),
         "timestamp": datetime.datetime.now().isoformat(timespec="seconds"),
+        "cached": False,
     }
+
+    if items:
+        _save_cached_news(payload)
+
+    return payload
+

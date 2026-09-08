@@ -365,46 +365,102 @@ def review_event(event_type: str, payload: dict[str, Any]) -> dict[str, Any]:
     return parsed
 
 
+def evaluate_stock_intraday_period(stock: dict) -> dict[str, Any]:
+    """
+    Finalize specific intraday market period and return criteria for a stock:
+    - 09:15 - 10:15 AM: Morning Opening Momentum & ORB Breakout (Target: 5.5% - 8.0%)
+    - 10:15 - 12:30 PM: Midday VWAP Pullback & Trend Continuation (Target: 5.0% - 6.5%)
+    - 12:30 - 02:15 PM: Afternoon Breakout & European Open Acceleration (Target: 5.0% - 7.0%)
+    """
+    gap = float(stock.get("gap_up", 0.0) or 0.0)
+    vol = float(stock.get("vol_ratio", 1.0) or 1.0)
+    rsi = float(stock.get("rsi", 50.0) or 50.0)
+    adx = float(stock.get("adx", 20.0) or 20.0)
+    ema = str(stock.get("ema_alignment", ""))
+
+    # Morning Opening Momentum: Gap up + heavy volume expansion
+    if (gap >= 0.8 and vol >= 1.5) or vol >= 2.2:
+        prime_window = "09:15 - 10:15 AM (Morning Momentum)"
+        period_code = "MORNING_ORB"
+        target_return = round(min(8.0, max(5.2, 5.0 + (vol - 1.2) * 1.0 + max(0.0, gap) * 0.4)), 1)
+        strategy = "Opening Range Breakout (ORB) on 2x+ Vol Surge"
+        time_cutoff = "10:30 AM (Tighten SL to breakeven if +2.5% achieved)"
+        edge_rationale = "Rapid opening liquidity expansion & morning gap momentum"
+    # Midday VWAP Consolidation & Continuation
+    elif ema in ("EMA_full_bull", "EMA_partial_bull") and 52 <= rsi <= 68:
+        prime_window = "10:15 - 12:30 PM (VWAP Continuation)"
+        period_code = "MIDDAY_VWAP"
+        target_return = round(min(7.0, max(5.0, 4.8 + (rsi - 50) * 0.12)), 1)
+        strategy = "VWAP / EMA 9 Pullback hold, buy institutional absorption"
+        time_cutoff = "12:45 PM (Exit if trading below VWAP)"
+        edge_rationale = "Sustained institutional accumulation with healthy pullback"
+    # Afternoon Breakout / European Push
+    else:
+        prime_window = "12:30 - 02:15 PM (Afternoon Surge)"
+        period_code = "AFTERNOON_PUSH"
+        target_return = round(min(7.5, max(5.0, 5.0 + (adx / 25.0))), 1)
+        strategy = "High-of-Day Breakout on secondary volume surge"
+        time_cutoff = "02:45 PM (Square-off before market close)"
+        edge_rationale = "Secondary momentum wave & short-squeeze into late session"
+
+    return {
+        "prime_window": prime_window,
+        "period_code": period_code,
+        "target_return_pct": target_return,
+        "strategy": strategy,
+        "time_cutoff": time_cutoff,
+        "edge_rationale": edge_rationale,
+    }
+
+
 def analyse_stocks_deep(stocks: list[dict], sector_context: str = "") -> str:
     """
     Deep AI analysis of top-20 stock candidates.
     Returns a formatted string summary for Telegram.
-    Uses Grok as stock analyser; GPT-4o as fallback.
+    Uses Grok as stock analyser; GPT-4o / Groq DeepSeek as fallback.
+    Prioritizes Small & Midcap explosive return criteria across specific intraday time periods.
     """
     allowed, reason = _allow_call()
     if not allowed:
         return f"[AI analysis skipped: {reason}]"
 
     system_prompt = (
-        "You are an expert Indian stock market analyst specialising in intraday momentum. "
-        "Analyse the provided stock candidates and identify the top 5 most likely to give "
-        "6-7% intraday returns tomorrow based on: sector trend, RSI momentum, volume surge, "
-        "proximity to 52-week high, results-day effect, and EMA alignment. "
-        "Format your response as: for each pick, one line: RANK. SYMBOL | Why it moves | Key risk. "
-        "Be specific and concise. Max 250 words total."
+        "You are the Chief Intraday Strategist for Indian Small & Midcap momentum stocks. "
+        "Large caps are strictly excluded. We only focus on high-beta Small & Midcaps targeting "
+        "5.0% to 8.0% intraday gains. "
+        "Analyse the provided stock candidates and identify the top 5 most likely to deliver "
+        "maximum return during their specific INTRADAY MARKET PERIOD: "
+        "- Period 1 (09:15-10:15 AM): Morning ORB breakout & 2x vol surge. "
+        "- Period 2 (10:15-12:30 PM): VWAP / EMA-9 pullback continuation. "
+        "- Period 3 (12:30-02:15 PM): Afternoon high-of-day acceleration. "
+        "For each pick, format strictly on one line: "
+        "RANK. SYMBOL | PRIME TIME: [window] | TARGET: [+X%] | STRATEGY: [action] | WHY IT MOVES: [catalyst] | RISK: [stop/invalid]. "
+        "Be specific, quantitative, and concise. Max 300 words total."
     )
     user_content = (
         f"Top trending sectors: {sector_context}\n\n"
-        f"Stock candidates (top 20 by score):\n"
+        f"Small & Midcap candidates (top 20 by quantitative score):\n"
     )
     for s in stocks[:20]:
+        timing = evaluate_stock_intraday_period(s)
         user_content += (
             f"- {s.get('symbol')}: Price=₹{s.get('price', 0):.2f} "
             f"RSI={s.get('rsi', 0):.1f} Vol={s.get('vol_ratio', 1):.2f}x "
             f"EMA={s.get('ema_alignment', 'N/A')} ADX={s.get('adx', 0):.1f} "
-            f"Score={s.get('score', 0):.1f} Gap={s.get('gap_up', 0):.2f}%\n"
+            f"Score={s.get('score', 0):.1f} Gap={s.get('gap_up', 0):.2f}% "
+            f"Suggested Window: {timing['prime_window']} (Target: +{timing['target_return_pct']}%)\n"
         )
-    user_content += "\nWhich 5 stocks have the best 6-7% intraday return probability tomorrow?"
+    user_content += "\nWhich 5 Small/Midcap stocks have the highest intraday return probability in their specific market time window?"
 
     result = _call_brain([
         {"role": "system", "content": system_prompt},
         {"role": "user",   "content": user_content},
-    ], max_tokens=500)
+    ], max_tokens=600)
 
     if not result.get("ok"):
         return f"[AI analysis failed: {result.get('error', 'unknown')}]"
     model_used = result.get("model", "AI")
-    return f"🤖 <b>AI Analysis ({model_used.split('/')[-1]})</b>:\n{result['content']}"
+    return f"🤖 <b>AI Intraday Period Analysis ({model_used.split('/')[-1]})</b>:\n{result['content']}"
 
 
 def review_telegram_alert(text: str, event_type: str = "telegram_alert") -> str:

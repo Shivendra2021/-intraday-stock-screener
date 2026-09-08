@@ -116,11 +116,37 @@ PATTERN_MIN_HIT_RATE             = float(os.getenv("PATTERN_MIN_HIT_RATE", "0.50
 PATTERN_MIN_AVG_RETURN           = float(os.getenv("PATTERN_MIN_AVG_RETURN", "0.10"))
 
 # ── Universe ───────────────────────────────────────────────────────────────────
+UNIVERSE_MODE                    = os.getenv("UNIVERSE_MODE", "small_midcap").strip().lower() # 'small_midcap' or 'all'
+INTRADAY_MAX_MARKET_CAP_CR       = float(os.getenv("INTRADAY_MAX_MARKET_CAP_CR", "25000"))
 UNIVERSE_VALIDATE_ON_START       = os.getenv("UNIVERSE_VALIDATE_ON_START", "True").strip().lower() in ("true", "1", "yes")
 STARTUP_ANALYSIS_ON_LAUNCH       = os.getenv("STARTUP_ANALYSIS_ON_LAUNCH", "True").strip().lower() in ("true", "1", "yes")
 UNIVERSE_VALIDATION_BATCH_SIZE   = int(os.getenv("UNIVERSE_VALIDATION_BATCH_SIZE", "200"))
 UNIVERSE_VALIDATION_LOOKBACK_DAYS = int(os.getenv("UNIVERSE_VALIDATION_LOOKBACK_DAYS", "5"))
 BSE_UNIVERSE_ENABLED             = os.getenv("BSE_UNIVERSE_ENABLED", "False").strip().lower() in ("true", "1", "yes")
+
+# Large-cap exclude list: Nifty 50 and mega-caps (low intraday beta <1.5%, exclude from explosive picks)
+LARGECAP_EXCLUDE_LIST = {
+    "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "HINDUNILVR", "SBIN",
+    "BHARTIARTL", "ITC", "KOTAKBANK", "LT", "AXISBANK", "ASIANPAINT", "MARUTI",
+    "SUNPHARMA", "TITAN", "BAJFINANCE", "ULTRACEMCO", "WIPRO", "NESTLEIND",
+    "HCLTECH", "POWERGRID", "NTPC", "TECHM", "JSWSTEEL", "TATASTEEL", "ONGC",
+    "TATAMOTORS", "BAJAJFINSV", "ADANIENT", "ADANIPORTS", "COALINDIA", "DIVISLAB",
+    "DRREDDY", "EICHERMOT", "GRASIM", "HDFCLIFE", "INDUSINDBK", "M&M", "SBILIFE",
+    "APOLLOHOSP", "BAJAJ-AUTO", "BPCL", "CIPLA", "BRITANNIA", "HEROMOTOCO",
+    "HINDALCO", "LTIM", "TATACONSUM", "SHREECEM", "PIDILITIND", "SIEMENS",
+    "ADANIGREEN", "ADANIWILMAR", "AMBUJACEM", "BANKBARODA", "BERGEPAINT",
+    "BOSCHLTD", "CANBK", "COLPAL", "DABUR", "DLF", "GAIL", "GODREJCP",
+    "HAVELLS", "ICICIPRULI", "IOC", "IRCTC", "JINDALSTEL", "MARICO", "NAUKRI",
+    "PNB", "SRF", "TVSMOTOR", "VEDL", "ZOMATO", "ABB", "HAL", "BEL",
+    "TRENT", "CHOLAFIN", "VBL", "LICI", "JIOFIN", "INDHOTEL", "MOTHERSON"
+}
+
+# ── Intraday Market Periods & Return Targeting ────────────────────────────────
+INTRADAY_TARGET_RETURN_MIN_PCT   = float(os.getenv("INTRADAY_TARGET_RETURN_MIN_PCT", "5.0"))
+INTRADAY_TARGET_RETURN_MAX_PCT   = float(os.getenv("INTRADAY_TARGET_RETURN_MAX_PCT", "8.0"))
+INTRADAY_PERIOD_MORNING          = "09:15-10:15"  # Opening range breakout & vol surge (2.5x)
+INTRADAY_PERIOD_MIDDAY           = "10:15-12:30"  # VWAP pullbacks & flag continuations
+INTRADAY_PERIOD_AFTERNOON        = "12:30-14:15"  # Afternoon acceleration & day-high breaks
 
 DRY_RUN = os.getenv("DRY_RUN", "False").strip().lower() in ("true", "1", "yes")
 

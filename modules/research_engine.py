@@ -30,19 +30,20 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 
 SECTOR_STOCKS: dict[str, list[str]] = {
-    "IT":        ["TCS", "INFY", "WIPRO", "HCLTECH", "TECHM", "MPHASIS", "PERSISTENT", "COFORGE"],
-    "Finance":   ["HDFCBANK", "ICICIBANK", "SBIN", "KOTAKBANK", "AXISBANK", "BAJFINANCE", "IDFCFIRSTB", "FEDERALBNK", "INDUSINDBK"],
-    "Auto":      ["HEROMOTOCO", "TMCV", "MARUTI", "BAJAJ-AUTO", "TVSMOTOR", "EICHERMOT", "MOTHERSON", "M&M", "ESCORTS"],
-    "Pharma":    ["SUNPHARMA", "DRREDDY", "CIPLA", "DIVISLAB", "ALKEM", "AUROPHARMA", "LUPIN", "TORNTPHARM", "BIOCON"],
-    "Cement":    ["ULTRACEMCO", "SHREECEM", "ACC", "AMBUJACEM", "RAMCOCEM", "JKCEMENT", "HEIDELBERG", "ORIENTCEM"],
-    "Metals":    ["TATASTEEL", "JSWSTEEL", "HINDALCO", "VEDL", "NMDC", "SAIL", "JINDALSTEL", "COALINDIA"],
-    "FMCG":      ["HINDUNILVR", "ITC", "DABUR", "BRITANNIA", "MARICO", "COLPAL", "NESTLEIND", "GODREJCP", "UBL"],
-    "Infra":     ["LT", "NTPC", "POWERGRID", "BHEL", "CONCOR", "IRCTC", "DLF", "GODREJPROP"],
-    "Energy":    ["RELIANCE", "ONGC", "BPCL", "IOC", "PETRONET", "GAIL", "ADANIGREEN", "TATAPOWER"],
-    "Banking":   ["HDFCBANK", "SBIN", "BANKBARODA", "PNB", "CANBK", "UNIONBANK", "SBICARD", "SBILIFE"],
-    "Smallcap":  ["DIXON", "DMART", "POLYCAB", "PIIND", "AAVAS", "NUVAMA", "RATEGAIN",
+    "IT":        ["MPHASIS", "PERSISTENT", "COFORGE", "BSOFT", "KPITTECH", "TATAELXSI", "CYIENT", "SONATSOFTW"],
+    "Finance":   ["ANGELONE", "CDSL", "BSE", "MANAPPURAM", "MUTHOOTFIN", "POONAWALLA", "DELTACORP", "MFSL"],
+    "Auto":      ["EXIDEIND", "AMBER", "SONACOMS", "TIMKEN", "SUNDRMFAST", "ELECON"],
+    "Pharma":    ["ALKEM", "AUROPHARMA", "LUPIN", "TORNTPHARM", "BIOCON", "GLENMARK", "IPCALAB", "LAURUSLABS", "GRANULES"],
+    "Cement":    ["RAMCOCEM", "JKCEMENT", "HEIDELBERG", "ORIENTCEM", "INDIACEM"],
+    "Metals":    ["NMDC", "SAIL", "NATIONALUM", "HINDCOPPER", "JINDALSAW", "WELCORP"],
+    "FMCG":      ["JYOTHYLAB", "RADICO", "TASTYBITE", "DEVYANI", "SAPPHIRE", "BIKAJI"],
+    "Infra":     ["BHEL", "CONCOR", "PRESTIGE", "SOBHA", "GODREJPROP", "OBEROIRLTY", "RVNL", "IRFC", "HUDCO", "SJVN", "MAZDOCK", "COCHINSHIP", "RAILTEL", "NBCC", "RITES", "IRCON", "NCC"],
+    "Energy":    ["TATAPOWER", "SUZLON", "CESC", "TORNTPOWER", "SJVN"],
+    "Banking":   ["IDFCFIRSTB", "KARURVYSYA", "FEDERALBNK", "UNIONBANK", "UCOBANK"],
+    "Smallcap":  ["DIXON", "POLYCAB", "PIIND", "AAVAS", "NUVAMA", "RATEGAIN",
                   "KAYNES", "JYOTHYLAB", "ASTRAL", "GRINDWELL", "ELGIEQUIP",
-                  "COFORGE", "DEEPAKNTR", "BLUEDART", "METROPOLIS", "LATENTVIEW"],
+                  "COFORGE", "DEEPAKNTR", "BLUEDART", "METROPOLIS", "LATENTVIEW",
+                  "TEJASNET", "NETWEB"],
 }
 
 # Patterns giving consistent 6-7% intraday returns:
@@ -358,13 +359,15 @@ def _score_candidate(sym: str) -> dict | None:
 
 
 def _get_sector_candidates(top_sectors: list[str]) -> list[str]:
-    """Get stock candidates from top sectors + smallcap universe."""
+    """Get stock candidates from top sectors + smallcap universe (filtered for Small & Midcap only)."""
+    from modules.scanner import is_small_or_midcap
     candidates = set()
     for sector in top_sectors:
         candidates.update(SECTOR_STOCKS.get(sector, []))
     # Always include smallcap
     candidates.update(SECTOR_STOCKS.get("Smallcap", []))
-    return list(candidates)
+    return [s for s in candidates if is_small_or_midcap(s)]
+
 
 
 def scan_for_picks(

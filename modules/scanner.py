@@ -15,29 +15,41 @@ import pandas as pd
 
 logger = logging.getLogger(__name__)
 
-# ── Fallback Nifty500 symbol list (yfinance suffix) ──────────────────────────
-# This list is used when NSE scraping is unavailable.
-NIFTY500_FALLBACK = [
-    "RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK", "HINDUNILVR", "SBIN",
-    "BHARTIARTL", "ITC", "KOTAKBANK", "LT", "AXISBANK", "ASIANPAINT", "MARUTI",
-    "SUNPHARMA", "TITAN", "BAJFINANCE", "ULTRACEMCO", "WIPRO", "NESTLEIND",
-    "HCLTECH", "POWERGRID", "NTPC", "TECHM", "JSWSTEEL", "TATASTEEL", "ONGC",
-    "TATAMOTORS", "BAJAJFINSV", "ADANIENT", "ADANIPORTS", "COALINDIA", "DIVISLAB",
-    "DRREDDY", "EICHERMOT", "GRASIM", "HDFCLIFE", "INDUSINDBK", "M&M", "SBILIFE",
-    "APOLLOHOSP", "BAJAJ-AUTO", "BPCL", "CIPLA", "BRITANNIA", "HEROMOTOCO",
-    "HINDALCO", "LTIM", "TATACONSUM", "UPL", "VEDL", "SHREECEM", "PIDILITIND",
-    "SIEMENS", "ADANIGREEN", "ADANIWILMAR", "AMBUJACEM", "AUROPHARMA", "BANKBARODA",
-    "BERGEPAINT", "BIOCON", "BOSCHLTD", "CANBK", "CHOLAFIN", "COLPAL", "CONCOR",
-    "CUMMINSIND", "DABUR", "DLF", "ESCORTS", "FEDERALBNK", "FORTIS", "GAIL",
-    "GLAXO", "GODREJCP", "GODREJPROP", "HAVELLS", "ICICIPRULI", "IDFCFIRSTB",
-    "INDHOTEL", "INDUSTOWER", "INFY", "IOC", "IRCTC", "JINDALSTEL", "JUBLFOOD",
-    "LICHSGFIN", "LUPIN", "MCDOWELL-N", "MFSL", "MOTHERSON", "MPHASIS", "MRF",
-    "MUTHOOTFIN", "NAUKRI", "NMDC", "PAGEIND", "PEL", "PERSISTENT", "PETRONET",
-    "PFC", "PIIND", "PNB", "POLYCAB", "PVRINOX", "RAMCOCEM", "RECLTD", "SAIL",
-    "SBICARD", "SRF", "STARHEALTH", "SUNTV", "TORNTPHARM", "TORNTPOWER", "TVSMOTOR",
-    "UBL", "UNIONBANK", "VOLTAS", "WHIRLPOOL", "ZEEL", "ZOMATO", "NYKAA",
-    "PAYTM", "MARICO", "ALKEM", "ABBOTINDIA", "ACC", "AARTIIND",
+# ── Fallback Small & Midcap symbol list (high-momentum, explosive beta) ───────
+SMALL_MIDCAP_FALLBACK = [
+    "SUZLON", "PERSISTENT", "BSOFT", "DIXON", "ANGELONE", "CDSL", "BSE", "KPITTECH",
+    "TATAELXSI", "MAZDOCK", "RVNL", "IRFC", "HUDCO", "SJVN", "FACT", "NATIONALUM",
+    "NMDC", "EXIDEIND", "AMBER", "KAYNES", "PRESTIGE", "SOBHA", "GODREJPROP",
+    "OBEROIRLTY", "DEEPAKNTR", "JUBLFOOD", "TORNTPHARM", "AUROPHARMA", "LUPIN", "GLENMARK",
+    "COFORGE", "LTTS", "CYIENT", "SONACOMS", "TIMKEN", "VOLTAS", "BLUESTARCO", "ASTRAL",
+    "SUPREMEIND", "CGPOWER", "KEC", "APARINDS", "COCHINSHIP", "RAILTEL", "UNIONBANK",
+    "IDFCFIRSTB", "KARURVYSYA", "FEDERALBNK", "MANAPPURAM", "MUTHOOTFIN", "POONAWALLA",
+    "DELTACORP", "TATACOMM", "POLYCAB", "KEI", "CESC", "JYOTHYLAB", "AARTIIND",
+    "TATACHEM", "HFCL", "NBCC", "RITES", "IRCON", "NCC", "ELECON", "TEJASNET",
+    "NETWEB", "TRIDENT", "ALOKINDS", "LEMONTREE", "CHALET", "DEVYANI", "SAPPHIRE",
+    "CUMMINSIND", "ESCORTS", "FORTIS", "GLAXO", "INDUSTOWER", "LICHSGFIN",
+    "MCDOWELL-N", "MFSL", "MPHASIS", "MRF", "PAGEIND", "PEL", "PETRONET", "PFC",
+    "PIIND", "PVRINOX", "RAMCOCEM", "RECLTD", "SAIL", "SBICARD", "STARHEALTH", "SUNTV",
+    "TORNTPOWER", "UBL", "WHIRLPOOL", "ZEEL", "NYKAA", "PAYTM", "ALKEM", "ABBOTINDIA",
+    "ACC", "CENTURYTEX", "CROMPTON", "DEEPAKFERT", "GNFC", "GRANULES", "GRAPHITE",
+    "HEG", "HINDCOPPER", "IBREALEST", "INDIACEM", "INDIAMART", "INTELLECT", "IPCALAB",
+    "JBCHEPHARM", "JINDALSAW", "KIMS", "L&TFH", "LAURUSLABS", "METROPOLIS", "NATCOPHARM",
+    "RADICO", "RAYMOND", "ROUTE", "SCHAEFFLER", "SONATSOFTW", "SUNDRMFAST",
+    "SYNGENE", "TATAINVEST", "TANLA", "THERMAX", "TRITURBINE", "UCOBANK", "VIPIND", "WELCORP"
 ]
+
+NIFTY500_FALLBACK = SMALL_MIDCAP_FALLBACK  # Default to Small & Midcap universe
+
+
+def is_small_or_midcap(symbol: str) -> bool:
+    """Return True if symbol is a Small or Midcap stock (not in large-cap exclusion list)."""
+    try:
+        from config import LARGECAP_EXCLUDE_LIST
+        clean_sym = symbol.strip().upper().replace(".NS", "").replace(".BO", "")
+        return clean_sym not in LARGECAP_EXCLUDE_LIST
+    except Exception:
+        return True
+
 
 # Known NSE holidays (YYYY-MM-DD) — updated list for 2024-2025
 NSE_HOLIDAYS_STATIC = {
@@ -187,9 +199,9 @@ def _fetch_bse() -> list:
 
 
 def _fallback_universe() -> list:
-    """Use hardcoded Nifty500 list when all scraping fails."""
-    logger.warning("All NSE scraping failed — using Nifty500 fallback list")
-    return [{"symbol": s, "exchange": "NSE", "sector": ""} for s in NIFTY500_FALLBACK]
+    """Use hardcoded Small & Midcap list when all scraping fails."""
+    logger.warning("All NSE scraping failed — using Small & Midcap fallback list")
+    return [{"symbol": s, "exchange": "NSE", "sector": ""} for s in SMALL_MIDCAP_FALLBACK]
 
 
 def _upsert_to_db(stocks: list):
@@ -216,6 +228,7 @@ def _upsert_to_db(stocks: list):
 def get_universe(force_refresh: bool = False) -> list:
     """
     Return list of active stock symbols.
+    Filters to Small & Midcap only if UNIVERSE_MODE == 'small_midcap'.
     Tries: nsepython → NSE CSV API → fallback list.
     Caches result in module-level variable for the session.
     """
@@ -253,6 +266,17 @@ def get_universe(force_refresh: bool = False) -> list:
 
     if not stocks:
         stocks = _fallback_universe()
+
+    # Apply Small & Midcap filter (exclude large caps / mega-caps)
+    try:
+        from config import UNIVERSE_MODE, LARGECAP_EXCLUDE_LIST
+        if UNIVERSE_MODE == "small_midcap":
+            before_cnt = len(stocks)
+            stocks = [s for s in stocks if s["symbol"].upper() not in LARGECAP_EXCLUDE_LIST]
+            logger.info("Small & Midcap universe filter: %s -> %s stocks (excluded %s large caps)",
+                        before_cnt, len(stocks), before_cnt - len(stocks))
+    except Exception as exc:
+        logger.warning("Small/Midcap filter failed: %s", exc)
 
     _upsert_to_db(stocks)
     _universe_cache = [s["symbol"] for s in stocks]

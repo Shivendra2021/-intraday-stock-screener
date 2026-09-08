@@ -271,6 +271,9 @@ def _score_stock(symbol: str) -> dict | None:
     avg_volume = ind.get("avg_volume", 0)
 
     # Hard filters
+    from modules.scanner import is_small_or_midcap
+    if not is_small_or_midcap(symbol):
+        return None
     if price < MIN_PRICE_FILTER:
         return None
     if avg_volume < MIN_VOLUME_FILTER:
