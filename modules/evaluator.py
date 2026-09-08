@@ -43,7 +43,12 @@ def run_evaluator():
 
     ensure_research_tables()
 
-    today = datetime.date.today().isoformat()
+    try:
+        from modules.time_utils import today_ist_str
+
+        today = today_ist_str()
+    except Exception:
+        today = datetime.date.today().isoformat()
     logger.info(f"Running evaluator for {today}")
 
     with sqlite3.connect(DB_PATH) as conn:
@@ -51,7 +56,9 @@ def run_evaluator():
 
         # Close pending picks at EOD price
         pending = conn.execute(
-            "SELECT id, symbol, entry_price FROM picks WHERE date=? AND status='pending'",
+            "SELECT id, symbol, entry_price FROM picks WHERE date=? AND status='pending' "
+            "AND COALESCE(session_type, 'morning_final')='morning_final' "
+            "AND COALESCE(is_official_morning, 1)=1",
             (today,)
         ).fetchall()
 
@@ -62,7 +69,9 @@ def run_evaluator():
             else:
                 ret = 0.0
             conn.execute(
-                "UPDATE picks SET status='open_eod', result_return=? WHERE id=?",
+                "UPDATE picks SET status='open_eod', result_return=? WHERE id=? "
+                "AND COALESCE(session_type, 'morning_final')='morning_final' "
+                "AND COALESCE(is_official_morning, 1)=1",
                 (round(ret, 4), pick["id"])
             )
         conn.commit()
@@ -77,7 +86,10 @@ def run_evaluator():
 
         # Aggregate today's picks
         rows = conn.execute(
-            "SELECT status, result_return FROM picks WHERE date=?", (today,)
+            "SELECT status, result_return FROM picks WHERE date=? "
+            "AND COALESCE(session_type, 'morning_final')='morning_final' "
+            "AND COALESCE(is_official_morning, 1)=1",
+            (today,)
         ).fetchall()
 
     tp_count    = sum(1 for r in rows if r["status"] == "tp_hit")

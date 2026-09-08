@@ -188,15 +188,27 @@ def _features(symbol: str, frame: pd.DataFrame) -> dict[str, Any] | None:
 
 
 def scan_full_universe() -> dict[str, Any]:
-    from config import OLLAMA_AGENT_CHUNK_SIZE, OLLAMA_AGENT_MIN_RETURN_PCT, OLLAMA_AGENT_TOP_CANDIDATES
+    from config import (
+        OLLAMA_AGENT_CHUNK_SIZE,
+        OLLAMA_AGENT_MIN_RETURN_PCT,
+        OLLAMA_AGENT_TOP_CANDIDATES,
+        OLLAMA_ROTATING_BATCH_SIZE,
+    )
     from modules.fetch import SYMBOL_ALIASES
+    from modules.heavy_job_coordinator import rotating_batch
     import yfinance as yf
 
-    symbols = _universe()
+    full_universe = _universe()
+    symbols, progress = rotating_batch("ollama_intraday_agent", full_universe, OLLAMA_ROTATING_BATCH_SIZE)
     scan_time = now_ist().strftime("%H:%M:%S")
     candidates: list[dict[str, Any]] = []
     failed_batches = 0
-    logger.info("Ollama intraday agent scanning %s NSE symbols", len(symbols))
+    logger.info(
+        "Ollama intraday agent scanning batch %s-%s of %s NSE symbols",
+        progress.get("start_index", 0),
+        progress.get("end_index", 0),
+        progress.get("total", len(full_universe)),
+    )
 
     for batch in _chunks(symbols, max(10, OLLAMA_AGENT_CHUNK_SIZE)):
         tickers = [f"{SYMBOL_ALIASES.get(sym, sym)}.NS" for sym in batch]
@@ -228,6 +240,8 @@ def scan_full_universe() -> dict[str, Any]:
         "date": _today(),
         "scan_time": scan_time,
         "symbols_scanned": len(symbols),
+        "total_universe": len(full_universe),
+        "scan_progress": progress,
         "candidates_found": len(candidates),
         "winner_count": len(winners),
         "failed_batches": failed_batches,
@@ -319,7 +333,7 @@ def _call_ollama(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _call_openrouter_learning(payload: dict[str, Any]) -> dict[str, Any]:
-    """Use GPT as primary after-market learner, with Grok fallback."""
+    """Use GPT as primary after-market learner, with Grok and Groq DeepSeek fallback."""
     try:
         from modules.dual_brain import _call_openrouter
         from config import (
@@ -361,9 +375,23 @@ def _call_openrouter_learning(payload: dict[str, Any]) -> dict[str, Any]:
             parsed["model"] = GROK_MODEL
             parsed["brain_role"] = "grok_fallback"
             return parsed
-        return {"ok": False, "error": result.get("error", "Grok fallback failed")}
+        logger.warning("Grok daily learning fallback failed, trying Groq DeepSeek: %s", result.get("error"))
 
-    return {"ok": False, "error": "No OpenRouter GPT/Grok key configured"}
+    try:
+        from modules.grok_brain import _call_groq_deepseek, _config as _brain_config
+
+        result = _call_groq_deepseek(messages, _brain_config(), 900)
+        if result.get("ok"):
+            parsed = _parse_json(result.get("content", ""))
+            parsed["ok"] = True
+            parsed["model"] = result.get("model")
+            parsed["brain_role"] = "groq_deepseek_reasoning_fallback"
+            return parsed
+        return {"ok": False, "error": result.get("error", "Groq DeepSeek fallback failed")}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)[:300]}
+
+    return {"ok": False, "error": "No GPT/Grok/Groq learning key configured"}
 
 
 def _parse_json(text: str) -> dict[str, Any]:
@@ -566,6 +594,7 @@ def _notify_daily_learning(result: dict[str, Any]) -> None:
             f"{summary}\n\n"
             "<i>Research only. Lessons feed future scoring.</i>",
             review_with_grok=False,
+            event_type="daily_winner_learning",
         )
     except Exception as exc:
         logger.debug("Daily winner learning Telegram notify failed: %s", exc)
@@ -598,6 +627,17 @@ def _save_state(state: dict[str, Any]) -> None:
         json.dump(state, fp, indent=2, ensure_ascii=False, default=str)
 
 
+def _load_state() -> dict[str, Any]:
+    try:
+        if os.path.exists(STATE_FILE):
+            with open(STATE_FILE, "r", encoding="utf-8") as fp:
+                data = json.load(fp)
+            return data if isinstance(data, dict) else {}
+    except Exception:
+        pass
+    return {}
+
+
 def _notify(scan: dict[str, Any], study: dict[str, Any]) -> None:
     from config import OLLAMA_AGENT_NOTIFY_TELEGRAM
 
@@ -614,36 +654,67 @@ def _notify(scan: dict[str, Any], study: dict[str, Any]) -> None:
             f"Top: {top or 'None'}\n"
             f"{summary}",
             review_with_grok=False,
+            event_type="ollama_intraday_update",
         )
     except Exception as exc:
         logger.debug("Ollama agent Telegram notify failed: %s", exc)
 
 
 def run_ollama_cycle(send_telegram: bool = False, study: bool = False) -> dict[str, Any]:
-    scan = scan_full_universe()
-    study_result = study_scan(scan) if study else {
-        "ok": True,
-        "model": "numeric_scan_only",
-        "summary": "Intraday scan stored. GPT-primary learning runs once after market close.",
-        "top_symbols": [row.get("symbol") for row in scan.get("top_candidates", [])[:10]],
-    }
-    state = {
-        "updated_at": _now(),
-        "scan": scan,
-        "study": study_result,
-        "status": "ok" if study_result.get("ok") else "partial",
-    }
-    _save_state(state)
-    if send_telegram:
-        _notify(scan, study_result)
-    logger.info(
-        "Ollama intraday agent cycle complete: scanned=%s candidates=%s winners=%s study=%s",
-        scan.get("symbols_scanned"),
-        scan.get("candidates_found"),
-        scan.get("winner_count"),
-        "ok" if study_result.get("ok") else study_result.get("error", "partial"),
-    )
-    return state
+    from modules.heavy_job_coordinator import acquire_heavy_job
+
+    with acquire_heavy_job("ollama_intraday_scan", priority=3, stale_after_seconds=900) as lease:
+        if not lease.acquired:
+            state = _load_state()
+            state["updated_at"] = _now()
+            state["status"] = "skipped_busy"
+            state["skip_reason"] = lease.reason
+            _save_state(state)
+            logger.info("Ollama intraday agent skipped: %s", lease.reason)
+            return state
+
+        scan = scan_full_universe()
+        study_result = study_scan(scan) if study else {
+            "ok": True,
+            "model": "numeric_scan_only",
+            "summary": "Intraday scan stored. GPT-primary learning runs once after market close.",
+            "top_symbols": [row.get("symbol") for row in scan.get("top_candidates", [])[:10]],
+        }
+        state = {
+            "updated_at": _now(),
+            "scan": scan,
+            "study": study_result,
+            "status": "ok" if study_result.get("ok") else "partial",
+        }
+        _save_state(state)
+        if send_telegram:
+            _notify(scan, study_result)
+        logger.info(
+            "Ollama intraday agent cycle complete: scanned=%s/%s candidates=%s winners=%s study=%s",
+            scan.get("symbols_scanned"),
+            scan.get("total_universe"),
+            scan.get("candidates_found"),
+            scan.get("winner_count"),
+            "ok" if study_result.get("ok") else study_result.get("error", "partial"),
+        )
+        return state
+
+
+def _should_run_intraday_scan() -> bool:
+    """Run frequent full-universe scans only before/during market, not all night."""
+    try:
+        from modules.scanner import is_market_holiday, is_market_open, is_weekend
+
+        today = now_ist().date()
+        if is_weekend(today) or is_market_holiday(today):
+            return False
+        current = now_ist().time()
+        premarket_start = dt.time(7, 30)
+        post_market_stop = dt.time(15, 45)
+        return premarket_start <= current <= post_market_stop or is_market_open()
+    except Exception:
+        current = now_ist().time()
+        return dt.time(7, 30) <= current <= dt.time(15, 45)
 
 
 def get_ollama_agent_state(max_age_seconds: int = 1800) -> dict[str, Any]:
@@ -656,7 +727,10 @@ def get_ollama_agent_state(max_age_seconds: int = 1800) -> dict[str, Any]:
                 return state
         except Exception:
             pass
-    return run_ollama_cycle(send_telegram=False, study=False)
+    state = run_ollama_cycle(send_telegram=False, study=False)
+    if state.get("status") == "skipped_busy":
+        return _load_state()
+    return state
 
 
 def ollama_intraday_boost(row: dict[str, Any]) -> int:
@@ -701,7 +775,10 @@ def start_ollama_intraday_agent(interval_minutes: int | None = None) -> dict[str
     def _loop() -> None:
         while _agent_running:
             try:
-                run_ollama_cycle(send_telegram=False, study=False)
+                if _should_run_intraday_scan():
+                    run_ollama_cycle(send_telegram=False, study=False)
+                else:
+                    logger.info("Ollama intraday agent sleeping outside scan window")
             except Exception as exc:
                 logger.error("Ollama intraday agent cycle failed: %s", exc)
             time.sleep(max(300, interval_minutes * 60))

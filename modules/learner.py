@@ -18,11 +18,19 @@ logger = logging.getLogger(__name__)
 def _get_todays_results() -> tuple[list, list]:
     """Return (winners, losers) from today's picks."""
     from config import DB_PATH
-    today = datetime.date.today().isoformat()
+    try:
+        from modules.time_utils import today_ist_str
+
+        today = today_ist_str()
+    except Exception:
+        today = datetime.date.today().isoformat()
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT * FROM picks WHERE date=?", (today,)
+            "SELECT * FROM picks WHERE date=? "
+            "AND COALESCE(session_type, 'morning_final')='morning_final' "
+            "AND COALESCE(is_official_morning, 1)=1",
+            (today,),
         ).fetchall()
 
     winners = [dict(r) for r in rows if r["status"] == "tp_hit"]
@@ -65,7 +73,12 @@ def _extract_pattern_key_from_pick(pick: dict) -> str | None:
 def _update_own_picks_patterns(winner_keys: list, loser_keys: list):
     """Update patterns table based on own picks performance."""
     from config import DB_PATH
-    today_str = datetime.date.today().isoformat()
+    try:
+        from modules.time_utils import today_ist_str
+
+        today_str = today_ist_str()
+    except Exception:
+        today_str = datetime.date.today().isoformat()
     all_keys  = set(winner_keys + loser_keys)
 
     if not all_keys:
@@ -136,6 +149,14 @@ def run_learner():
             loser_keys.append(key)
 
     _update_own_picks_patterns(winner_keys, loser_keys)
+    
+    # Update Contextual Bandit with today's realized results
+    try:
+        from modules.bandit_selector import update_bandit_eod
+        update_bandit_eod(winners + losers)
+    except Exception as exc:
+        logger.warning("Contextual Bandit EOD update skipped: %s", exc)
+
     logger.info(f"Own-picks learner complete. "
                 f"Winner keys: {winner_keys}, Loser keys: {loser_keys}")
 

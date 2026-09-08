@@ -62,6 +62,33 @@ def _now_str() -> str:
         return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
+def _now_time_str() -> str:
+    try:
+        from modules.time_utils import now_ist
+
+        return now_ist().strftime("%H:%M")
+    except Exception:
+        return datetime.datetime.now().strftime("%H:%M")
+
+
+def _now_clock_str() -> str:
+    try:
+        from modules.time_utils import now_ist
+
+        return now_ist().strftime("%H:%M:%S")
+    except Exception:
+        return datetime.datetime.now().strftime("%H:%M:%S")
+
+
+def _display_date_str() -> str:
+    try:
+        from modules.time_utils import now_ist
+
+        return now_ist().strftime("%d %b %Y")
+    except Exception:
+        return datetime.date.today().strftime("%d %b %Y")
+
+
 def _refresh_daily_accuracy(date_s: str) -> dict:
     """Rebuild daily TP/SL accuracy from stored picks for one date."""
     try:
@@ -77,6 +104,8 @@ def _refresh_daily_accuracy(date_s: str) -> dict:
                     AVG(CASE WHEN result_return IS NOT NULL THEN result_return END)
                 FROM picks
                 WHERE date=?
+                  AND COALESCE(session_type, 'morning_final')='morning_final'
+                  AND COALESCE(is_official_morning, 1)=1
                 """,
                 (date_s,),
             ).fetchone()
@@ -137,6 +166,10 @@ def _persist_pick_outcome(data: dict, status: str) -> None:
                 UPDATE picks
                 SET status=?, result_return=?
                 WHERE date=? AND symbol=?
+                  AND (
+                    (COALESCE(session_type, 'morning_final')='morning_final' AND COALESCE(is_official_morning, 1)=1)
+                    OR COALESCE(session_type, '')='late_intraday_recovery'
+                  )
                 """,
                 (status, pnl_value, date_s, symbol),
             )
@@ -166,16 +199,25 @@ def _persist_pick_outcome(data: dict, status: str) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def _is_market_open() -> bool:
-    now = datetime.datetime.now()
-    if now.weekday() >= 5:
-        return False
-    market_open  = now.replace(hour=9,  minute=15, second=0, microsecond=0)
+    try:
+        from modules.scanner import is_market_holiday, is_weekend
+        from modules.time_utils import now_ist, today_ist
+
+        today = today_ist()
+        if is_weekend(today) or is_market_holiday(today):
+            return False
+        now = now_ist().replace(tzinfo=None)
+    except Exception:
+        now = datetime.datetime.now()
+        if now.weekday() >= 5:
+            return False
+    market_open = now.replace(hour=9, minute=15, second=0, microsecond=0)
     market_close = now.replace(hour=15, minute=30, second=0, microsecond=0)
     return market_open <= now <= market_close
 
 
 def _market_time_str() -> str:
-    return datetime.datetime.now().strftime("%H:%M:%S IST")
+    return f"{_now_clock_str()} IST"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -274,11 +316,33 @@ def update_tracking() -> dict:
         data["current_price"] = round(price, 2)
         data["pnl_pct"]       = pnl
         data["price_history"].append({
-            "time":  datetime.datetime.now().strftime("%H:%M"),
+            "time":  _now_time_str(),
             "price": round(price, 2),
         })
 
         now_str = _now_str()
+
+        # Intraday RL Trailing Stop & Early Exit Manager
+        try:
+            from modules.rl_intraday_manager import process_tick_with_rl
+            rl_eval = process_tick_with_rl(data)
+            if rl_eval.get("sl_modified"):
+                old_sl = data.get("sl_price")
+                data["sl_price"] = rl_eval["new_sl"]
+                data["rl_trailing_action"] = rl_eval["action_name"]
+                logger.info("RL trailing stop updated for %s: %.2f -> %.2f (%s)", sym, old_sl, data["sl_price"], rl_eval["reason"])
+            if rl_eval.get("trigger_early_exit") and not data.get("hit_tp") and not data.get("hit_sl"):
+                data["hit_tp"] = now_str
+                data["status"] = "TP_HIT"
+                data["exit_price"] = round(price, 2)
+                data["exit_time"] = now_str
+                data["rl_exit_reason"] = rl_eval["reason"]
+                logger.info("RL early exit executed for %s: %s", sym, rl_eval["reason"])
+                _alert_tp_hit(data)
+                _persist_pick_outcome(data, "tp_hit")
+                continue
+        except Exception as exc:
+            logger.debug("RL intraday evaluation skipped for %s: %s", sym, exc)
 
         if price <= sl and not data.get("hit_sl"):
             data["hit_sl"]     = now_str
@@ -313,7 +377,7 @@ def send_hourly_status() -> None:
         logger.info("No tracking data for hourly status")
         return
 
-    hour = datetime.datetime.now().strftime("%H:%M")
+    hour = _now_time_str()
     lines = [
         f"📊 <b>TRACKING STATUS — {hour} IST</b>",
         "",
@@ -354,7 +418,7 @@ def send_hourly_status() -> None:
     avg_pnl = total_pnl / len(tracking) if tracking else 0
     lines.append(f"📈 Avg P&L: {'+' if avg_pnl >= 0 else ''}{avg_pnl:.2f}% | Active: {active_count}/{len(tracking)}")
 
-    _send_telegram("\n".join(lines))
+    _send_telegram("\n".join(lines), event_type="tracking_hourly_status")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -407,7 +471,7 @@ def _alert_sl_hit(data: dict) -> None:
     price  = data.get("exit_price", 0)
     entry  = data.get("entry_price", 0)
     pnl    = data.get("pnl_pct", 0)
-    time_s = datetime.datetime.now().strftime("%H:%M IST")
+    time_s = f"{_now_time_str()} IST"
     msg = (
         f"🛑 <b>STOP LOSS HIT — {sym}</b>\n\n"
         f"⏰ Time: {time_s}\n"
@@ -415,7 +479,7 @@ def _alert_sl_hit(data: dict) -> None:
         f"📉 Loss: {pnl:.2f}%\n\n"
         f"<i>Stock removed from active tracking</i>"
     )
-    _send_telegram(msg)
+    _send_telegram(msg, event_type="sl_hit")
 
 
 def _alert_tp_hit(data: dict) -> None:
@@ -423,7 +487,7 @@ def _alert_tp_hit(data: dict) -> None:
     price  = data.get("exit_price", 0)
     entry  = data.get("entry_price", 0)
     pnl    = data.get("pnl_pct", 0)
-    time_s = datetime.datetime.now().strftime("%H:%M IST")
+    time_s = f"{_now_time_str()} IST"
     msg = (
         f"✅ <b>TARGET HIT — {sym}</b>\n\n"
         f"⏰ Time: {time_s}\n"
@@ -431,12 +495,12 @@ def _alert_tp_hit(data: dict) -> None:
         f"📈 Gain: +{pnl:.2f}%\n\n"
         f"<i>Book profits! Stock removed from active tracking</i>"
     )
-    _send_telegram(msg)
+    _send_telegram(msg, event_type="tp_hit")
 
 
 def _send_eod_report(tracking: dict) -> None:
     """Build and send the EOD report to Telegram."""
-    today = datetime.date.today().strftime("%d %b %Y")
+    today = _display_date_str()
     lines = [
         f"📋 <b>EOD REPORT — {today}</b>",
         "=" * 40,
@@ -478,14 +542,14 @@ def _send_eod_report(tracking: dict) -> None:
     lines.append(f"⏰ Market closed at 15:30 IST")
     lines.append("<i>Research only. Not a trade recommendation.</i>")
 
-    _send_telegram("\n".join(lines))
+    _send_telegram("\n".join(lines), event_type="tracking_eod_report")
 
 
-def _send_telegram(text: str) -> None:
+def _send_telegram(text: str, event_type: str = "tracking_update") -> None:
     """Send message via the alerts module."""
     try:
         from modules.alerts import _send
-        _send(text)
+        _send(text, review_with_grok=False, event_type=event_type)
     except Exception as e:
         logger.error("Telegram send failed: %s", e)
 
@@ -510,5 +574,5 @@ def get_tracking_status() -> dict:
         "sl_hit":   sl_hit,
         "avg_pnl":  round(avg_pnl, 2),
         "picks":    tracking,
-        "as_of":    datetime.datetime.now().strftime("%H:%M:%S"),
+        "as_of":    _now_clock_str(),
     }

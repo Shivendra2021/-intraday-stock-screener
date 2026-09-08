@@ -38,6 +38,8 @@ def _config() -> dict:
     from config import (
         OPENROUTER_GROK_KEY, OPENROUTER_GPT_KEY, OPENROUTER_BASE_URL,
         GROK_MODEL, GPT_MODEL,
+        GROQ_API_KEY, GROQ_BASE_URL, GROQ_DEEPSEEK_MODEL,
+        GROQ_DEEPSEEK_ENABLED, GROQ_DEEPSEEK_TIMEOUT_SECONDS,
         XAI_BRAIN_ENABLED, XAI_BRAIN_MAX_DAILY_CALLS,
         XAI_BRAIN_MIN_INTERVAL_SECONDS, XAI_BRAIN_REVIEW_ALERTS,
         XAI_BRAIN_TIMEOUT_SECONDS,
@@ -48,6 +50,11 @@ def _config() -> dict:
         "base_url":     OPENROUTER_BASE_URL,
         "grok_model":   GROK_MODEL,
         "gpt_model":    GPT_MODEL,
+        "groq_key":     GROQ_API_KEY,
+        "groq_base_url": GROQ_BASE_URL,
+        "groq_deepseek_model": GROQ_DEEPSEEK_MODEL,
+        "groq_deepseek_enabled": GROQ_DEEPSEEK_ENABLED,
+        "groq_timeout": GROQ_DEEPSEEK_TIMEOUT_SECONDS,
         "enabled":      XAI_BRAIN_ENABLED,
         "review_alerts": XAI_BRAIN_REVIEW_ALERTS,
         "max_daily_calls": XAI_BRAIN_MAX_DAILY_CALLS,
@@ -103,7 +110,7 @@ def _increment_daily_call(state: dict) -> None:
 def is_enabled() -> bool:
     cfg = _config()
     return bool(cfg["enabled"] and cfg["review_alerts"] and
-                (cfg["grok_key"] or cfg["gpt_key"]))
+                (cfg["grok_key"] or cfg["gpt_key"] or (cfg["groq_deepseek_enabled"] and cfg["groq_key"])))
 
 
 def get_brain_status() -> dict[str, Any]:
@@ -113,8 +120,11 @@ def get_brain_status() -> dict[str, Any]:
         "enabled": bool(cfg["enabled"] and cfg["review_alerts"]),
         "grok_configured": bool(cfg["grok_key"]),
         "gpt_configured": bool(cfg["gpt_key"]),
+        "groq_configured": bool(cfg["groq_key"]),
+        "groq_deepseek_enabled": bool(cfg["groq_deepseek_enabled"]),
         "grok_model": cfg["grok_model"],
         "gpt_model": cfg["gpt_model"],
+        "groq_deepseek_model": cfg["groq_deepseek_model"],
         "daily_calls": _daily_call_count(state),
         "max_daily_calls": cfg["max_daily_calls"],
         "last_ok": state.get("last_ok"),
@@ -128,7 +138,7 @@ def _allow_call() -> tuple[bool, str]:
     state = _load_state()
     if not cfg["enabled"] or not cfg["review_alerts"]:
         return False, "disabled"
-    if not cfg["grok_key"] and not cfg["gpt_key"]:
+    if not cfg["grok_key"] and not cfg["gpt_key"] and not (cfg["groq_deepseek_enabled"] and cfg["groq_key"]):
         return False, "no API keys configured"
     if _daily_call_count(state) >= cfg["max_daily_calls"]:
         return False, "daily budget reached"
@@ -183,8 +193,67 @@ def _call_openrouter(
         return {"ok": False, "error": str(exc)}
 
 
+def _strip_reasoning_tags(content: str) -> str:
+    """Remove DeepSeek-style private reasoning blocks before user-facing output."""
+    text = str(content or "").strip()
+    text = text.replace("<think>\n</think>", "")
+    if "<think>" in text and "</think>" in text:
+        text = text.split("</think>", 1)[1]
+    return text.strip()
+
+
+def _call_groq_deepseek(messages: list[dict], cfg: dict, max_tokens: int = 600) -> dict[str, Any]:
+    """Single attempt to call Groq's OpenAI-compatible DeepSeek-R1 distill endpoint."""
+    if not cfg.get("groq_deepseek_enabled") or not cfg.get("groq_key"):
+        return {"ok": False, "error": "Groq DeepSeek disabled or missing key"}
+    headers = {
+        "Authorization": f"Bearer {cfg['groq_key']}",
+        "Content-Type": "application/json",
+    }
+    candidates = [
+        cfg["groq_deepseek_model"],
+        "llama-3.3-70b-versatile",
+        "groq/compound-mini",
+        "openai/gpt-oss-20b",
+    ]
+    seen: set[str] = set()
+    last_error = ""
+    for model in [m for m in candidates if not (m in seen or seen.add(m))]:
+        payload = {
+            "model": model,
+            "messages": messages,
+            "temperature": 0.2,
+            "max_tokens": max_tokens,
+        }
+        try:
+            response = requests.post(
+                cfg["groq_base_url"],
+                headers=headers,
+                json=payload,
+                timeout=cfg["groq_timeout"],
+            )
+            if response.status_code == 429:
+                return {"ok": False, "error": "groq_rate_limited", "status_code": 429}
+            if response.status_code >= 400:
+                last_error = response.text[:300]
+                if any(term in last_error.lower() for term in ("decommissioned", "not found", "does not exist", "invalid model")):
+                    logger.warning("Groq model %s unavailable, trying next fallback", model)
+                    continue
+                return {"ok": False, "error": last_error, "status_code": response.status_code}
+            data = response.json()
+            message = data["choices"][0].get("message", {})
+            content = _strip_reasoning_tags(message.get("content") or "")
+            if not content:
+                last_error = "empty Groq DeepSeek content"
+                continue
+            return {"ok": True, "content": content, "model": model}
+        except Exception as exc:
+            last_error = str(exc)
+    return {"ok": False, "error": last_error or "No Groq fallback model succeeded"}
+
+
 def _call_brain(messages: list[dict], max_tokens: int = 600) -> dict[str, Any]:
-    """Try GPT first, then Grok as fallback. Updates state."""
+    """Try GPT first, Grok second, then Groq DeepSeek as controlled fallback."""
     cfg = _config()
     state = _load_state()
     _increment_daily_call(state)
@@ -216,7 +285,21 @@ def _call_brain(messages: list[dict], max_tokens: int = 600) -> dict[str, Any]:
             )
             logger.info("AI Brain: Grok fallback used %s", cfg["grok_model"])
             return result
-        _update_state(last_error=f"Both models failed: {result.get('error','')[:200]}")
+        logger.warning("Grok fallback failed (%s), trying Groq DeepSeek...", result.get("error", "unknown"))
+
+    # 3. Controlled reasoning fallback through Groq DeepSeek-R1 distill.
+    result = _call_groq_deepseek(messages, cfg, max_tokens)
+    if result.get("ok"):
+        model_used = result.get("model") or cfg["groq_deepseek_model"]
+        _update_state(
+            last_ok=datetime.datetime.now().isoformat(timespec="seconds"),
+            last_error="",
+            last_model_used=model_used + " (groq fallback)",
+        )
+        logger.info("AI Brain: Groq DeepSeek fallback used %s", model_used)
+        return result
+
+    _update_state(last_error=f"All AI providers failed: {result.get('error','')[:200]}")
 
     return {"ok": False, "error": "All AI providers failed"}
 

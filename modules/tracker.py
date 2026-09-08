@@ -37,11 +37,19 @@ def _fetch_live_price(symbol: str) -> float | None:
 def _get_open_picks() -> list:
     """Return all picks with status='pending' for today."""
     from config import DB_PATH
-    today = datetime.date.today().isoformat()
+    try:
+        from modules.time_utils import today_ist_str
+
+        today = today_ist_str()
+    except Exception:
+        today = datetime.date.today().isoformat()
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT * FROM picks WHERE status='pending' AND date=?", (today,)
+            "SELECT * FROM picks WHERE status='pending' AND date=? "
+            "AND COALESCE(session_type, 'morning_final')='morning_final' "
+            "AND COALESCE(is_official_morning, 1)=1",
+            (today,),
         ).fetchall()
     return [dict(r) for r in rows]
 
@@ -51,7 +59,9 @@ def _update_pick_status(pick_id: int, status: str, result_return: float):
     from config import DB_PATH
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
-            "UPDATE picks SET status=?, result_return=? WHERE id=?",
+            "UPDATE picks SET status=?, result_return=? WHERE id=? "
+            "AND COALESCE(session_type, 'morning_final')='morning_final' "
+            "AND COALESCE(is_official_morning, 1)=1",
             (status, round(result_return, 4), pick_id)
         )
         conn.commit()

@@ -64,7 +64,12 @@ def allocate_for_date(date_s: str, max_picks: int = 5) -> dict[str, Any]:
     ensure_account()
     with _connect() as conn:
         existing = conn.execute(
-            "SELECT COUNT(*) FROM paper_positions WHERE date=?",
+            """SELECT COUNT(*)
+                 FROM paper_positions pp
+                 JOIN picks p ON p.id=pp.pick_id
+                WHERE pp.date=?
+                  AND COALESCE(p.session_type, 'morning_final')='morning_final'
+                  AND COALESCE(p.is_official_morning, 1)=1""",
             (date_s,),
         ).fetchone()[0]
         if existing:
@@ -75,6 +80,8 @@ def allocate_for_date(date_s: str, max_picks: int = 5) -> dict[str, Any]:
             SELECT id, date, symbol, entry_price, sl_price, target_price, confidence, status
             FROM picks
             WHERE date=? AND entry_price > 0
+              AND COALESCE(session_type, 'morning_final')='morning_final'
+              AND COALESCE(is_official_morning, 1)=1
             ORDER BY confidence DESC, rank ASC, id ASC
             LIMIT ?
             """,
@@ -229,7 +236,13 @@ def rebuild_from_picks_if_empty() -> dict[str, Any]:
     ensure_account()
     with _connect() as conn:
         count = conn.execute("SELECT COUNT(*) FROM paper_positions").fetchone()[0]
-        dates = [r[0] for r in conn.execute("SELECT DISTINCT date FROM picks ORDER BY date").fetchall()]
+        dates = [
+            r[0]
+            for r in conn.execute(
+                "SELECT DISTINCT date FROM picks WHERE COALESCE(session_type, 'morning_final')='morning_final' "
+                "AND COALESCE(is_official_morning, 1)=1 ORDER BY date"
+            ).fetchall()
+        ]
     if count or not dates:
         return {"rebuilt": False, "reason": "already_has_positions" if count else "no_picks"}
 

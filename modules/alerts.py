@@ -47,7 +47,7 @@ def _audit_send(event_type: str, ok: bool, details: str = "") -> None:
         logger.debug("Could not write Telegram audit: %s", exc)
 
 
-def _send(text: str, review_with_grok: bool = True) -> bool:
+def _send(text: str, review_with_grok: bool = True, event_type: str = "telegram_message") -> bool:
     """
     Core Telegram send. Returns True on success.
     In DRY_RUN mode, logs the message and returns True.
@@ -58,12 +58,12 @@ def _send(text: str, review_with_grok: bool = True) -> bool:
 
     if DRY_RUN:
         logger.info(f"[DRY_RUN] Would send Telegram:\n{text}")
-        _audit_send("telegram_message", True, "dry_run")
+        _audit_send(event_type, True, "dry_run")
         return True
 
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         logger.warning("Telegram credentials not configured — skipping alert")
-        _audit_send("telegram_message", False, "missing credentials")
+        _audit_send(event_type, False, "missing credentials")
         return False
 
     if review_with_grok:
@@ -85,7 +85,7 @@ def _send(text: str, review_with_grok: bool = True) -> bool:
             r = requests.post(url, json=payload, timeout=15)
             if r.status_code == 200:
                 logger.info("Telegram message sent successfully")
-                _audit_send("telegram_message", True, "sent")
+                _audit_send(event_type, True, "sent")
                 return True
             elif r.status_code == 429 or r.status_code == 503:
                 # Rate limited — wait and retry
@@ -95,7 +95,7 @@ def _send(text: str, review_with_grok: bool = True) -> bool:
                 continue
             else:
                 logger.error(f"Telegram error {r.status_code}: {r.text[:200]}")
-                _audit_send("telegram_message", False, f"{r.status_code}: {r.text[:200]}")
+                _audit_send(event_type, False, f"{r.status_code}: {r.text[:200]}")
                 return False
         except Exception as e:
             if attempt < max_retries - 1:
@@ -104,14 +104,14 @@ def _send(text: str, review_with_grok: bool = True) -> bool:
                 time.sleep(wait_time)
                 continue
             logger.error("Telegram send failed after %s attempts: %s", max_retries, _safe_error_text(e))
-            _audit_send("telegram_message", False, _safe_error_text(e))
+            _audit_send(event_type, False, _safe_error_text(e))
             return False
     return False
 
 
-def send_raw_alert(text: str, review_with_grok: bool = True) -> bool:
+def send_raw_alert(text: str, review_with_grok: bool = True, event_type: str = "telegram_message") -> bool:
     """Public wrapper for sending a raw Telegram alert."""
-    return _send(text, review_with_grok=review_with_grok)
+    return _send(text, review_with_grok=review_with_grok, event_type=event_type)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -438,16 +438,33 @@ def send_morning_news(report: dict) -> bool:
     return _send("\n".join(lines))
 
 
-def send_morning_final_picks(picks: list, accuracy: dict = None, review_with_grok: bool = True) -> bool:
+def send_morning_final_picks(
+    picks: list,
+    accuracy: dict = None,
+    review_with_grok: bool = True,
+    session_type: str = "morning_final",
+    source_label: str = "official_morning_pipeline",
+) -> bool:
     """Send final morning picks with FULL technical data (RSI, ADX, EMA, prices)."""
     if not picks:
         return True
+
+    is_official = session_type == "morning_final"
+    title = "FINAL MORNING PICKS" if is_official else "LATE INTRADAY MOMENTUM SCAN"
+    note = (
+        "Official morning pipeline output."
+        if is_official
+        else "Late recovery scan only. Not official morning picks and not counted in morning dashboard."
+    )
+    audit_type = "morning_final_picks" if is_official else "late_intraday_picks"
 
     lines = [
         "📊 <b>FINAL MORNING PICKS - " + now_ist().strftime("%d %b %Y") + "</b>",
         "=" * 50,
         "",
     ]
+
+    lines[0] = "📊 <b>" + title + " - " + now_ist().strftime("%d %b %Y") + "</b>"
 
     if accuracy:
         acc   = accuracy.get("accuracy_pct", 0)
@@ -458,6 +475,9 @@ def send_morning_final_picks(picks: list, accuracy: dict = None, review_with_gro
         lines.append("")
 
     lines.append(f"📅 Date: {today_ist_str()}")
+    lines.append("")
+    lines.append(f"Source: {source_label}")
+    lines.append(note)
     lines.append("")
 
     for p in picks:
@@ -519,8 +539,7 @@ def send_morning_final_picks(picks: list, accuracy: dict = None, review_with_gro
     lines.append(f"🕐 Generated: {now_ist().strftime('%H:%M:%S')}")
     lines.append("\n⚠️ <i>Research only. Not a trade recommendation.</i>")
 
-    ok = _send("\n".join(lines), review_with_grok=review_with_grok)
-    _audit_send("morning_final_picks", ok, f"count={len(picks)}")
+    ok = _send("\n".join(lines), review_with_grok=review_with_grok, event_type=audit_type)
     return ok
 
 

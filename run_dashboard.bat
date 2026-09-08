@@ -12,7 +12,7 @@ echo    Ctrl+C to stop
 echo  ============================================================
 echo.
 
-for /f %%i in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "$p=Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -match 'dashboard\\app.py' }; if($p){ '1' } else { '0' }"') do set "DASHBOARD_RUNNING=%%i"
+for /f %%i in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "$p=Get-CimInstance Win32_Process | Where-Object { $_.Name -match 'python' -and $_.CommandLine -match 'dashboard\\app.py' }; if($p){ '1' } else { '0' }"') do set "DASHBOARD_RUNNING=%%i"
 
 if "%DASHBOARD_RUNNING%"=="1" (
     echo [%TIME%] Dashboard is already running. Open http://localhost:5001

@@ -134,8 +134,14 @@ def record_price_validation(result: dict) -> None:
     ensure_research_tables()
     import sqlite3
 
-    now = datetime.datetime.now().isoformat(timespec="seconds")
-    today = datetime.date.today().isoformat()
+    try:
+        from modules.time_utils import now_ist, today_ist_str
+
+        now = now_ist().isoformat(timespec="seconds")
+        today = today_ist_str()
+    except Exception:
+        now = datetime.datetime.now().isoformat(timespec="seconds")
+        today = datetime.date.today().isoformat()
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """INSERT INTO price_validations

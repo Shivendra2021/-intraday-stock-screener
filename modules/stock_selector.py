@@ -454,6 +454,13 @@ def deep_research_stocks(stocks: list[dict], n: int = 5) -> list[dict]:
     # Sort by enhanced score
     detailed.sort(key=lambda x: x.get("score", 0), reverse=True)
     
+    # Contextual Bandit (LinUCB) dynamic selection
+    try:
+        from modules.bandit_selector import rank_candidates_with_bandit
+        detailed = rank_candidates_with_bandit(detailed, top_n=len(detailed))
+    except Exception as exc:
+        logger.warning("Bandit candidate ranking skipped: %s", exc)
+
     # Build final picks with entry/SL/TP
     final = []
     for i, stock in enumerate(detailed[:n], start=1):

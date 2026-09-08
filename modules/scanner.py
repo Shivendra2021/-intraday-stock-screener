@@ -86,7 +86,10 @@ def _load_holidays():
     if _holiday_cache:
         return
     dynamic = _fetch_nse_holidays_dynamic()
-    _holiday_cache = dynamic if dynamic else NSE_HOLIDAYS_STATIC.copy()
+    # Always include the static list; merge dynamic entries if available
+    _holiday_cache = NSE_HOLIDAYS_STATIC.copy()
+    if dynamic:
+        _holiday_cache.update(dynamic)
 
 
 def is_market_holiday(date: datetime.date = None) -> bool:

@@ -43,7 +43,10 @@ def _latest_db_pick_date() -> str | None:
 
         ensure_research_tables()
         with sqlite3.connect(DB_PATH) as conn:
-            row = conn.execute("SELECT MAX(date) FROM picks").fetchone()
+            row = conn.execute(
+                "SELECT MAX(date) FROM picks WHERE COALESCE(session_type, 'morning_final')='morning_final' "
+                "AND COALESCE(is_official_morning, 1)=1"
+            ).fetchone()
         return str(row[0]) if row and row[0] else None
     except Exception as exc:
         logger.debug("Could not read latest DB pick date: %s", exc)
@@ -171,6 +174,8 @@ def _db_picks_for_date(date_s: str) -> list[dict[str, Any]]:
             SELECT id, date, rank, symbol, entry_price, sl_price, target_price, status, result_return
             FROM picks
             WHERE date=?
+              AND COALESCE(session_type, 'morning_final')='morning_final'
+              AND COALESCE(is_official_morning, 1)=1
             ORDER BY rank, id
             """,
             (date_s,),
@@ -183,7 +188,9 @@ def _update_pick_row(pick_id: int, status: str, result_return: float) -> None:
 
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
-            "UPDATE picks SET status=?, result_return=? WHERE id=?",
+            "UPDATE picks SET status=?, result_return=? WHERE id=? "
+            "AND COALESCE(session_type, 'morning_final')='morning_final' "
+            "AND COALESCE(is_official_morning, 1)=1",
             (status, round(float(result_return), 2), pick_id),
         )
         conn.commit()
@@ -306,7 +313,7 @@ def reconcile_daily_outcomes(
             if verdict:
                 lines.append(f"Brain Review: {verdict}")
             lines.append("<i>Research tracking only. No trades placed.</i>")
-            ok = send_raw_alert("\n".join(lines), review_with_grok=False)
+            ok = send_raw_alert("\n".join(lines), review_with_grok=False, event_type="eod_outcome_report")
             if ok:
                 state["last_alert_date"] = target_date
                 state["last_fingerprint"] = fingerprint

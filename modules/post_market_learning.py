@@ -49,7 +49,12 @@ def _classify(entry: float, sl: float, target: float, path: dict) -> tuple[str, 
 def _update_pattern_rate(conn: sqlite3.Connection, pattern_key: str, won: bool) -> None:
     if not pattern_key:
         return
-    today = datetime.date.today().isoformat()
+    try:
+        from modules.time_utils import today_ist_str
+
+        today = today_ist_str()
+    except Exception:
+        today = datetime.date.today().isoformat()
     row = conn.execute(
         "SELECT success_rate, sample_count FROM patterns WHERE pattern_key=?", (pattern_key,)
     ).fetchone()
@@ -96,18 +101,33 @@ def run_post_market_learning(target_date: str | None = None) -> dict:
     from modules.pattern_backtester import refresh_pattern_backtests
 
     ensure_research_tables()
-    date = target_date or datetime.date.today().isoformat()
+    if target_date:
+        date = target_date
+    else:
+        try:
+            from modules.time_utils import today_ist_str
+
+            date = today_ist_str()
+        except Exception:
+            date = datetime.date.today().isoformat()
     learned = 0
     skipped = 0
     outcomes = {"target_hit": 0, "stopped_out": 0, "ambiguous_sl_first": 0, "closed_eod": 0}
-    now = datetime.datetime.now().isoformat(timespec="seconds")
+    try:
+        from modules.time_utils import now_ist
+
+        now = now_ist().replace(tzinfo=None).isoformat(timespec="seconds")
+    except Exception:
+        now = datetime.datetime.now().isoformat(timespec="seconds")
 
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         picks = conn.execute(
             """SELECT * FROM picks
                WHERE date=? AND entry_price IS NOT NULL
-               AND sl_price IS NOT NULL AND target_price IS NOT NULL""",
+               AND sl_price IS NOT NULL AND target_price IS NOT NULL
+               AND COALESCE(session_type, 'morning_final')='morning_final'
+               AND COALESCE(is_official_morning, 1)=1""",
             (date,),
         ).fetchall()
 
@@ -150,7 +170,9 @@ def run_post_market_learning(target_date: str | None = None) -> dict:
                 ),
             )
             conn.execute(
-                "UPDATE picks SET status=?, result_return=? WHERE id=? AND status IN ('pending','open_eod')",
+                "UPDATE picks SET status=?, result_return=? WHERE id=? AND status IN ('pending','open_eod') "
+                "AND COALESCE(session_type, 'morning_final')='morning_final' "
+                "AND COALESCE(is_official_morning, 1)=1",
                 (outcome if outcome != "closed_eod" else "open_eod", round(ret, 4), pick["id"]),
             )
             _update_pattern_rate(conn, pattern_key, won)

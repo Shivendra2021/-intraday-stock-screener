@@ -105,7 +105,7 @@ def _download_with_retry(ticker_sym: str, period: str) -> Optional[pd.DataFrame]
                 )
                 time.sleep(wait)
             else:
-                logger.debug("yfinance error for %s: %s", ticker_sym, exc)
+                logger.exception("yfinance error for %s (attempt %s/%s)", ticker_sym, attempt, _MAX_RETRIES)
                 return None   # 404, connection reset, etc — don't retry
 
     logger.debug("All %s yfinance attempts failed for %s", _MAX_RETRIES, ticker_sym)
@@ -148,7 +148,7 @@ def _jugaad_fallback(symbol: str, period_days: int = 60) -> Optional[pd.DataFram
         logger.debug("jugaad-data not installed, skipping fallback")
         return None
     except Exception as exc:
-        logger.warning("jugaad fallback failed for %s: %s", symbol, exc)
+        logger.exception("jugaad fallback failed for %s", symbol)
         return None
 
 

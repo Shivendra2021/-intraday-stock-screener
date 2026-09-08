@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Stock Analyser V2 — Live Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Inter',sans-serif;background:#060708;color:#e5e7eb;min-height:100vh;background-image:radial-gradient(circle at 12% 8%,rgba(212,175,55,.11),transparent 25%),radial-gradient(circle at 86% 14%,rgba(20,184,166,.10),transparent 24%),linear-gradient(rgba(212,175,55,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(20,184,166,.035) 1px,transparent 1px),linear-gradient(180deg,#0c0f0f 0%,#060708 46%,#090b0d 100%);background-size:100% 100%,100% 100%,34px 34px,34px 34px,100% 100%}
+body::before{content:"";position:fixed;inset:0;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(212,175,55,.06),transparent);opacity:.42;transform:translateX(-100%);animation:marketSweep 9s linear infinite}
+:root{--accent:#d4af37;--green:#14b8a6;--red:#f43f5e;--yellow:#f59e0b;--card:rgba(11,15,17,.86);--border:rgba(148,163,184,.24);--muted:#7c8797}
+.header{position:sticky;top:0;z-index:10;background:rgba(6,7,8,.86);backdrop-filter:blur(20px);padding:18px 32px;border-bottom:1px solid rgba(212,175,55,.24);display:flex;align-items:center;justify-content:space-between;box-shadow:0 16px 44px rgba(0,0,0,.38),inset 0 -1px 0 rgba(255,255,255,.04)}
+.logo{font-size:22px;font-weight:700;color:#f8fafc;letter-spacing:.2px}
+.logo::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:0 0 22px rgba(212,175,55,.95);margin-right:10px;animation:pulse 1.7s infinite}
+.status-bar{display:flex;gap:16px;font-size:13px}
+.badge{padding:4px 12px;border-radius:20px;font-weight:600;font-size:12px}
+.badge.green{background:rgba(20,184,166,.14);color:#2dd4bf;border:1px solid rgba(20,184,166,.34)}
+.badge.red{background:rgba(239,68,68,.15);color:#ef4444;border:1px solid rgba(239,68,68,.3)}
+.badge.yellow{background:rgba(245,158,11,.15);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
+.badge.purple{background:rgba(212,175,55,.12);color:#facc15;border:1px solid rgba(212,175,55,.28)}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;padding:24px 32px}
+.grid-3{grid-template-columns:repeat(3,1fr)}
+.card{background:linear-gradient(180deg,rgba(16,21,24,.92),rgba(8,11,13,.86));border:1px solid var(--border);border-radius:10px;padding:20px;box-shadow:0 22px 64px rgba(0,0,0,.26),inset 0 1px 0 rgba(255,255,255,.045)}
+.card:hover{border-color:rgba(212,175,55,.34)}
+.card h3{font-size:11px;text-transform:uppercase;letter-spacing:1px;color:#64748b;margin-bottom:12px}
+.big-num{font-size:36px;font-weight:700;line-height:1}
+.sub{font-size:12px;color:#64748b;margin-top:6px}
+.section{padding:0 32px 24px}
+.section-title{font-size:14px;font-weight:600;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 16px rgba(212,175,55,.86);animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes marketSweep{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.8px;color:#475569;padding:10px 14px;border-bottom:1px solid var(--border)}
+td{padding:12px 14px;border-bottom:1px solid rgba(31,41,55,.5);font-size:13px}
+tr:hover td{background:rgba(212,175,55,.055)}
+.sym{font-weight:700;color:#facc15;font-size:14px}
+.price{font-weight:600;color:#e2e8f0}
+.up{color:#2dd4bf;font-weight:600}
+.down{color:#f43f5e;font-weight:600}
+.pending{color:#f59e0b}.tp_hit{color:#2dd4bf}.sl_hit{color:#f43f5e}
+.sector-tag{display:inline-block;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:600;background:rgba(212,175,55,.12);color:#facc15;border:1px solid rgba(212,175,55,.25)}
+.refresh-bar{text-align:right;padding:8px 32px;font-size:11px;color:#475569}
+.ai-box{background:linear-gradient(135deg,rgba(212,175,55,.095),rgba(20,184,166,.065));border:1px solid rgba(212,175,55,.24);border-radius:10px;padding:16px;font-size:13px;line-height:1.7;color:#d7e2df;margin-bottom:24px}
+.ai-box .ai-title{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#facc15;margin-bottom:10px}
+.sector-pills{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:20px}
+.pill{padding:6px 16px;border-radius:20px;font-size:13px;font-weight:600;background:rgba(16,185,129,.12);color:#10b981;border:1px solid rgba(16,185,129,.25)}
+.progress{height:6px;background:#1f2937;border-radius:3px;overflow:hidden;margin-top:8px}
+.progress-bar{height:100%;border-radius:3px;background:linear-gradient(90deg,#d4af37,#14b8a6);transition:width .5s ease}
+.mini-stat{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid rgba(31,41,55,.5)}
+.mini-stat:last-child{border-bottom:none}
+.rsi-chip{display:inline-block;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
+.rsi-bull{background:rgba(16,185,129,.15);color:#10b981}
+.rsi-bear{background:rgba(239,68,68,.15);color:#ef4444}
+.rsi-neutral{background:rgba(245,158,11,.15);color:#f59e0b}
+.accuracy-ring{width:116px;height:116px;border-radius:50%;margin:0 auto 16px;display:flex;align-items:center;justify-content:center;background:conic-gradient(var(--green) calc(var(--acc,0)*1%),#1b2024 0);position:relative;box-shadow:0 0 28px rgba(20,184,166,.12);animation:ringGlow 2.8s ease-in-out infinite}
+.accuracy-ring::after{content:"";position:absolute;width:86px;height:86px;border-radius:50%;background:var(--card)}
+.accuracy-ring::before{content:"";position:absolute;inset:-5px;border-radius:50%;border:1px solid rgba(212,175,55,.22);border-top-color:rgba(250,204,21,.95);animation:ringSpin 2.2s linear infinite}
+.accuracy-ring span{position:relative;z-index:1;font-size:24px;font-weight:700;color:#e2e8f0}
+.stat-bars{display:grid;grid-template-columns:1fr;gap:10px;margin:14px 0}
+.stat-bar{height:9px;background:#14191d;border-radius:99px;overflow:hidden;border:1px solid rgba(148,163,184,.12)}
+.stat-fill{height:100%;width:0;border-radius:99px;animation:barLoad 1.2s ease-out forwards;background:linear-gradient(90deg,#d4af37,#14b8a6)}
+.stat-fill.loss{background:linear-gradient(90deg,#7f1d1d,#f43f5e)}
+.live-chip{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;font-size:11px;text-transform:uppercase;letter-spacing:.9px;color:#facc15}
+.live-chip i{width:7px;height:7px;border-radius:50%;background:#facc15;box-shadow:0 0 16px rgba(250,204,21,.9);animation:pulse 1.1s infinite}
+.stat-spark{height:28px;margin-top:12px;background:linear-gradient(90deg,rgba(212,175,55,.08),rgba(20,184,166,.08));clip-path:polygon(0 72%,12% 56%,24% 64%,36% 32%,48% 42%,60% 18%,72% 28%,84% 10%,100% 20%,100% 100%,0 100%);animation:sparkFloat 2.6s ease-in-out infinite}
+.compact-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.compact-table th,.compact-table td{padding:9px 10px;font-size:12px}
+.command-strip{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;padding:16px 32px 8px}
+.command-item{background:rgba(2,6,8,.42);border:1px solid rgba(212,175,55,.18);border-radius:10px;padding:12px;min-height:72px;position:relative;overflow:hidden}
+.command-item::before{content:"";position:absolute;left:0;top:0;width:3px;height:100%;background:linear-gradient(180deg,#d4af37,#14b8a6)}
+.command-label{font-size:10px;color:#64748b;text-transform:uppercase;letter-spacing:.9px;margin-bottom:7px}
+.command-value{font-size:15px;font-weight:700;color:#e5e7eb;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.command-sub{font-size:11px;color:#7c8797;margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.health-grid{display:grid;grid-template-columns:.8fr 1.2fr 1fr;gap:12px}
+.health-score{width:104px;height:104px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:auto;background:conic-gradient(#14b8a6 calc(var(--health,0)*1%),#171c20 0);position:relative}
+.health-score::after{content:"";position:absolute;width:76px;height:76px;border-radius:50%;background:#080b0d}
+.health-score span{position:relative;z-index:1;font-size:22px;font-weight:700}
+.health-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-bottom:1px solid rgba(148,163,184,.13);font-size:12px}
+.health-ok{color:#14b8a6;font-weight:700}.health-warn{color:#f59e0b;font-weight:700}
+.lifecycle-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+.life-card{border:1px solid rgba(148,163,184,.18);border-radius:10px;background:rgba(2,6,8,.28);padding:12px}
+.life-head{display:flex;justify-content:space-between;gap:10px;margin-bottom:12px}
+.life-steps{display:grid;grid-template-columns:repeat(5,1fr);gap:5px}
+.life-step{height:7px;border-radius:99px;background:#1f2937}
+.life-step.done{background:linear-gradient(90deg,#d4af37,#14b8a6);box-shadow:0 0 14px rgba(20,184,166,.16)}
+.life-step.bad{background:#f43f5e;box-shadow:0 0 14px rgba(244,63,94,.18)}
+.breakdown-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:14px}
+.breakdown-card{background:rgba(2,6,8,.30);border:1px solid rgba(212,175,55,.16);border-radius:10px;padding:12px}
+.breakdown-card strong{font-size:22px;color:#e5e7eb}
+.paper-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px}
+.paper-metric{background:linear-gradient(180deg,rgba(212,175,55,.075),rgba(2,6,23,.34));border:1px solid rgba(212,175,55,.2);border-radius:10px;padding:14px;position:relative;overflow:hidden}
+.paper-metric::after{content:"";position:absolute;left:-80%;top:0;width:45%;height:100%;background:linear-gradient(90deg,transparent,rgba(250,204,21,.14),transparent);animation:scan 4.4s infinite}
+.paper-metric .label{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:#64748b;margin-bottom:8px}
+.paper-metric .value{font-size:22px;font-weight:700}
+.chart-shell{height:240px;margin-top:16px;border:1px solid rgba(212,175,55,.28);border-radius:10px;background:linear-gradient(180deg,rgba(5,8,10,.72),rgba(2,6,8,.42));padding:12px;box-shadow:inset 0 0 34px rgba(212,175,55,.045),0 18px 50px rgba(0,0,0,.16);position:relative;overflow:hidden}
+.chart-shell::after{content:"LIVE PAPER EQUITY";position:absolute;right:16px;top:12px;font-size:10px;letter-spacing:1.2px;color:rgba(250,204,21,.62)}
+.equity-pills{display:flex;gap:10px;flex-wrap:wrap;margin-top:12px}
+.equity-pill{padding:7px 11px;border:1px solid rgba(212,175,55,.18);border-radius:8px;background:rgba(2,6,8,.32);font-size:12px;color:#94a3b8}
+.equity-pill strong{color:#e5e7eb;margin-left:6px}
+.range-tabs{display:flex;gap:8px;align-items:center;margin-top:14px}
+.range-tab{border:1px solid rgba(212,175,55,.18);background:rgba(2,6,8,.34);color:#94a3b8;padding:7px 12px;border-radius:8px;font-size:12px;cursor:pointer}
+.range-tab.active{background:rgba(212,175,55,.14);color:#facc15;border-color:rgba(212,175,55,.38)}
+.paper-analytics{display:grid;grid-template-columns:1.2fr .8fr 1fr;gap:12px;margin-top:16px}
+.mini-canvas{width:100%;height:150px;display:block}
+.pick-card{border:1px solid rgba(212,175,55,.16);border-radius:10px;padding:12px;background:rgba(2,6,8,.28);margin-bottom:10px}
+.pick-card .label{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:#64748b;margin-bottom:6px}
+.heatmap{display:grid;grid-template-columns:repeat(10,1fr);gap:6px;margin-top:8px}
+.heat-cell{height:24px;border-radius:6px;border:1px solid rgba(148,163,184,.12);background:rgba(30,41,59,.35)}
+#equity-chart{width:100%;height:100%;display:block}
+@keyframes scan{0%{left:-80%}55%,100%{left:135%}}
+@keyframes ringSpin{to{transform:rotate(360deg)}}
+@keyframes ringGlow{0%,100%{box-shadow:0 0 22px rgba(20,184,166,.10)}50%{box-shadow:0 0 42px rgba(212,175,55,.20)}}
+@keyframes barLoad{from{width:0}to{width:var(--w)}}
+@keyframes sparkFloat{0%,100%{opacity:.52;transform:translateY(1px)}50%{opacity:1;transform:translateY(-2px)}}
+@media(max-width:1100px){.paper-grid,.grid,.paper-analytics,.command-strip,.health-grid,.lifecycle-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:720px){.paper-grid,.grid,.grid-3,.command-strip,.health-grid,.lifecycle-grid,.breakdown-grid{grid-template-columns:1fr!important}.header{padding:16px 18px}.section,.grid,.command-strip{padding-left:18px;padding-right:18px}}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="logo">Stock Analyser V2</div>
+  <div class="status-bar">
+    <span id="mkt-badge" class="badge yellow">Loading...</span>
+    <span id="bot-badge" class="badge purple">BOT</span>
+    <span id="ai-badge" class="badge purple">AI Brain</span>
+    <span style="font-size:12px;color:#475569;align-self:center" id="clock"></span>
+  </div>
+</div>
+
+<div class="refresh-bar">Auto-refresh every 30s | Last: <span id="last-refresh">—</span></div>
+
+<!-- Morning Command Strip -->
+<div class="command-strip">
+  <div class="command-item"><div class="command-label">Market</div><div class="command-value" id="cmd-market">—</div><div class="command-sub" id="cmd-now">Local clock</div></div>
+  <div class="command-item"><div class="command-label">Next Scan</div><div class="command-value" id="cmd-next">—</div><div class="command-sub">Morning final picks</div></div>
+  <div class="command-item"><div class="command-label">Latest Picks</div><div class="command-value" id="cmd-latest">—</div><div class="command-sub" id="cmd-count">Today count</div></div>
+  <div class="command-item"><div class="command-label">Telegram</div><div class="command-value" id="cmd-telegram">—</div><div class="command-sub">Alert channel</div></div>
+  <div class="command-item"><div class="command-label">Grok Brain</div><div class="command-value" id="cmd-grok">—</div><div class="command-sub" id="cmd-grok-model">Model</div></div>
+  <div class="command-item"><div class="command-label">GPT Brain</div><div class="command-value" id="cmd-gpt">—</div><div class="command-sub" id="cmd-gpt-model">Model</div></div>
+</div>
+
+<!-- KPI Cards -->
+<div class="grid" id="kpi-grid">
+  <div class="card"><h3>Universe</h3><div class="big-num" id="k-universe">—</div><div class="sub">Active NSE symbols</div></div>
+  <div class="card"><h3>System Accuracy</h3><div class="big-num" id="k-accuracy" style="color:#10b981">—%</div><div class="sub" id="k-acc-sub">Tracked TP/SL</div></div>
+  <div class="card"><h3>Top 5 Morning Picks</h3><div class="big-num" id="k-picks">—</div><div class="sub" id="k-picks-sub">Today only</div></div>
+  <div class="card"><h3>AI Brain Calls</h3><div class="big-num" id="k-brain">—</div><div class="sub" id="k-brain-sub">Model active</div></div>
+</div>
+
+<!-- Paper Simulation -->
+<div class="section">
+  <div class="section-title"><span class="dot"></span> Demo Cash Account</div>
+  <div class="card">
+    <div class="paper-grid">
+      <div class="paper-metric"><div class="label">Starting Cash</div><div class="value" id="p-start">₹—</div></div>
+      <div class="paper-metric"><div class="label">Cash Surplus</div><div class="value" id="p-cash">₹—</div></div>
+      <div class="paper-metric"><div class="label">Open Invested</div><div class="value" id="p-open">₹—</div></div>
+      <div class="paper-metric"><div class="label">Total Equity</div><div class="value" id="p-equity">₹—</div></div>
+      <div class="paper-metric"><div class="label">Current P&L</div><div class="value" id="p-pnl">₹—</div></div>
+    </div>
+    <div class="chart-shell"><canvas id="equity-chart"></canvas></div>
+    <div class="equity-pills">
+      <div class="equity-pill">Curve Mode <strong>Static</strong></div>
+      <div class="equity-pill">Return <strong id="p-ret">—%</strong></div>
+      <div class="equity-pill">Settled Trades <strong id="p-trades">—</strong></div>
+    </div>
+    <div class="range-tabs">
+      <button class="range-tab active" data-range="all">All-time</button>
+      <button class="range-tab" data-range="7d">7D</button>
+      <button class="range-tab" data-range="today">Today</button>
+    </div>
+    <div class="paper-analytics">
+      <div>
+        <h3>Daily P&L Heatmap</h3>
+        <div class="heatmap" id="paper-heatmap"></div>
+      </div>
+      <div>
+        <h3>Sector Exposure</h3>
+        <canvas id="sector-donut" class="mini-canvas"></canvas>
+      </div>
+      <div>
+        <h3>Best / Worst Pick</h3>
+        <div id="best-worst"></div>
+      </div>
+    </div>
+    <div class="chart-shell" style="height:150px"><canvas id="drawdown-chart"></canvas></div>
+    <div class="grid grid-3" style="padding:16px 0 0;gap:12px">
+      <div>
+        <h3>Open Holdings</h3>
+        <div id="paper-open" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>Recent Paper Trades</h3>
+        <div id="paper-recent" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>Paper Account Rule</h3>
+        <div style="font-size:13px;color:#94a3b8;line-height:1.7">
+          ₹50,000 paper capital is split equally across morning top picks. Closed TP/SL/EOD proceeds return to cash and are reused for future picks.
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sector Trend -->
+<div class="section">
+  <div class="section-title"><span class="dot"></span> Trending Sectors</div>
+  <div class="sector-pills" id="sector-pills"><span style="color:#475569;font-size:13px">Loading sectors…</span></div>
+</div>
+
+<div class="section">
+  <div class="section-title"><span class="dot"></span> Grok Dashboard Brain</div>
+  <div class="card">
+    <div class="ai-box" style="margin-bottom:14px">
+      <div class="ai-title">Brain Briefing</div>
+      <div id="grok-summary">Loading Grok dashboard state...</div>
+    </div>
+    <div class="grid grid-3" style="padding:0;gap:12px">
+      <div>
+        <h3>Brain Pick View</h3>
+        <div id="grok-today-picks" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>Risk / Actions</h3>
+        <div id="grok-actions" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>Next Session Context</h3>
+        <div id="grok-tomorrow-picks" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title"><span class="dot"></span> Today Top Gainer (For Learning)</div>
+  <div class="card">
+    <div class="grid" style="grid-template-columns:2fr 1fr;padding:0;gap:12px">
+      <div>
+        <h3>Name / Return / Sector</h3>
+        <div id="ollama-candidates" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>Scan Summary</h3>
+        <div id="ollama-summary" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title"><span class="dot"></span> Pro Terminal Scanner</div>
+  <div class="card">
+    <div class="grid grid-3" style="padding:0;gap:12px">
+      <div>
+        <h3>Live Terminal Candidates</h3>
+        <div id="terminal-picks" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>Watchlist Pressure</h3>
+        <div id="terminal-watchlist" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+      <div>
+        <h3>AI/Pattern Edge</h3>
+        <div id="terminal-edge" style="font-size:13px;color:#94a3b8">Loading...</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title"><span class="dot"></span> Pick Lifecycle Timeline</div>
+  <div class="card">
+    <div id="lifecycle-grid" class="lifecycle-grid">
+      <div style="color:#64748b;font-size:13px">Loading lifecycle...</div>
+    </div>
+    <div class="sub" style="margin-top:12px">Bars: picked, paper allocated, closed, TP, SL.</div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title"><span class="dot"></span> Data Health Monitor</div>
+  <div class="card">
+    <div class="health-grid">
+      <div>
+        <div class="health-score" id="health-score" style="--health:0"><span>—%</span></div>
+        <div class="live-chip"><i></i><span>Data Pipeline</span></div>
+      </div>
+      <div id="health-checks" style="font-size:13px;color:#94a3b8">Loading...</div>
+      <div id="health-times" style="font-size:13px;color:#94a3b8">Loading...</div>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title"><span class="dot"></span> System Sync / Delay Monitor</div>
+  <div class="card">
+    <div class="health-grid">
+      <div id="sync-main" style="font-size:13px;color:#94a3b8">Loading sync status...</div>
+      <div id="sync-agents" style="font-size:13px;color:#94a3b8">Loading agent freshness...</div>
+      <div id="sync-issues" style="font-size:13px;color:#94a3b8">Checking issues...</div>
+    </div>
+  </div>
+</div>
+
+<!-- Top 5 Morning Picks Table -->
+<div class="section">
+  <div class="section-title"><span class="dot"></span> Top 5 Morning Picks</div>
+  <div class="card">
+    <table class="compact-table">
+      <thead><tr>
+        <th>Name</th><th>Confidence Score</th><th>Sector</th><th>SL</th><th>Entry</th><th>TP</th><th>Status</th>
+      </tr></thead>
+      <tbody id="picks-tbody"><tr><td colspan="7" style="color:#475569;text-align:center;padding:40px">Loading picks…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<div class="section">
+  <div class="section-title"><span class="dot"></span> Past Database Snapshot</div>
+  <div class="card">
+    <div class="compact-grid" style="margin-bottom:14px">
+      <div class="paper-metric"><div class="label">Last Session</div><div class="value" id="past-date">—</div></div>
+      <div class="paper-metric"><div class="label">Session Accuracy</div><div class="value" id="past-accuracy">—%</div></div>
+      <div class="paper-metric"><div class="label">Avg Return</div><div class="value" id="past-return">—%</div></div>
+    </div>
+    <table class="compact-table">
+      <thead><tr>
+        <th>Name</th><th>Confidence</th><th>Sector</th><th>SL</th><th>Entry</th><th>TP</th><th>Result</th>
+      </tr></thead>
+      <tbody id="past-tbody"><tr><td colspan="7" style="color:#475569;text-align:center;padding:32px">Loading past database…</td></tr></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- History + Accuracy -->
+<div class="grid grid-3" style="padding:0 32px 24px">
+  <div class="card" style="grid-column:span 2">
+    <h3>Recent Pick History</h3>
+    <table>
+      <thead><tr><th>Date</th><th>Symbol</th><th>Entry</th><th>Result</th><th>Return</th></tr></thead>
+      <tbody id="history-tbody"><tr><td colspan="5" style="color:#475569">Loading…</td></tr></tbody>
+    </table>
+  </div>
+  <div class="card">
+    <h3>System Stats</h3>
+    <div id="sys-stats" style="font-size:13px;color:#94a3b8">Loading…</div>
+    <div id="accuracy-breakdown" class="breakdown-grid"></div>
+  </div>
+</div>
+
+<script>
+// ── Clock ──
+function tick(){document.getElementById('clock').textContent=new Date().toLocaleTimeString('en-IN')}
+setInterval(tick,1000);tick();
+
+// ── Fetch helpers ──
+async function get(url,timeoutMs=8000){
+  const ctrl=new AbortController();
+  const timer=setTimeout(()=>ctrl.abort(),timeoutMs);
+  try{
+    const sep=url.includes('?')?'&':'?';
+    const liveUrl=`${url}${sep}_=${Date.now()}`;
+    const r=await fetch(liveUrl,{signal:ctrl.signal,cache:'no-store'});
+    return await r.json();
+  }catch(e){
+    return {_failed:true,error:e && e.name==='AbortError'?'Request timed out':String(e)};
+  }finally{
+    clearTimeout(timer);
+  }
+}
+
+function badge(el,text,cls){el.textContent=text;el.className='badge '+cls;}
+function inr(v){return '₹'+Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:2});}
+let latestPaperData=null;
+let paperRange='all';
+
+document.addEventListener('click',e=>{
+  const btn=e.target.closest('.range-tab');
+  if(!btn)return;
+  paperRange=btn.dataset.range||'all';
+  document.querySelectorAll('.range-tab').forEach(x=>x.classList.toggle('active',x===btn));
+  if(latestPaperData)renderPaperAnalytics(latestPaperData);
+});
+
+function inRange(dateText){
+  if(paperRange==='all')return true;
+  if(!dateText)return false;
+  const d=new Date(dateText+'T00:00:00');
+  const now=new Date();
+  if(paperRange==='today')return d.toDateString()===now.toDateString();
+  if(paperRange==='7d')return (now-d)/(86400000)<=7;
+  return true;
+}
+
+function canvasSetup(id){
+  const canvas=document.getElementById(id);
+  if(!canvas)return null;
+  const rect=canvas.getBoundingClientRect();
+  const ratio=window.devicePixelRatio||1;
+  canvas.width=Math.max(1,Math.floor(rect.width*ratio));
+  canvas.height=Math.max(1,Math.floor(rect.height*ratio));
+  const ctx=canvas.getContext('2d');
+  ctx.setTransform(ratio,0,0,ratio,0,0);
+  ctx.clearRect(0,0,rect.width,rect.height);
+  return {canvas,ctx,w:rect.width,h:rect.height};
+}
+
+function drawEquityChart(d){
+  const setup=canvasSetup('equity-chart');
+  if(!setup)return;
+  const {ctx,w,h}=setup;
+  const bg=ctx.createLinearGradient(0,0,0,h);
+  bg.addColorStop(0,'rgba(212,175,55,.05)');
+  bg.addColorStop(1,'rgba(20,184,166,.025)');
+  ctx.fillStyle=bg;
+  ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='rgba(212,175,55,.10)';
+  ctx.lineWidth=1;
+  for(let i=1;i<4;i++){const y=(h/4)*i;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();}
+  ctx.strokeStyle='rgba(20,184,166,.06)';
+  for(let i=1;i<8;i++){const gx=(w/8)*i;ctx.beginPath();ctx.moveTo(gx,0);ctx.lineTo(gx,h);ctx.stroke();}
+  const trades=(d.positions||d.recent_positions||[]).filter(p=>inRange(p.exit_date||p.date)).slice();
+  let equity=Number(d.initial_cash||50000);
+  const pts=[equity];
+  trades.forEach(t=>{equity+=Number(t.realized_pnl||0);pts.push(equity);});
+  if(pts.length<2)pts.push(Number(d.equity||equity));
+  const min=Math.min(...pts)*.995;
+  const max=Math.max(...pts)*1.005;
+  const span=Math.max(1,max-min);
+  const x=i=>pts.length===1?w/2:(w-18)*(i/(pts.length-1))+9;
+  const y=v=>h-18-((v-min)/span)*(h-34);
+  const grad=ctx.createLinearGradient(0,0,w,0);
+  grad.addColorStop(0,'#d4af37');grad.addColorStop(.55,'#facc15');grad.addColorStop(1,'#14b8a6');
+  ctx.beginPath();
+  pts.forEach((p,i)=>{i?ctx.lineTo(x(i),y(p)):ctx.moveTo(x(i),y(p));});
+  ctx.shadowColor='rgba(250,204,21,.55)';
+  ctx.shadowBlur=10;
+  ctx.strokeStyle=grad;ctx.lineWidth=3;ctx.stroke();
+  ctx.shadowBlur=0;
+  ctx.lineTo(x(pts.length-1),h-18);ctx.lineTo(9,h-18);ctx.closePath();
+  const fill=ctx.createLinearGradient(0,0,0,h);
+  fill.addColorStop(0,'rgba(212,175,55,.20)');fill.addColorStop(1,'rgba(20,184,166,0)');
+  ctx.fillStyle=fill;ctx.fill();
+  pts.forEach((p,i)=>{ctx.beginPath();ctx.arc(x(i),y(p),3,0,Math.PI*2);ctx.fillStyle=i===pts.length-1?'#14b8a6':'#d4af37';ctx.fill();});
+  ctx.fillStyle='rgba(245,245,244,.92)';
+  ctx.font='12px Inter';
+  ctx.fillText('Equity Curve',12,18);
+  ctx.fillStyle='rgba(20,184,166,.98)';
+  ctx.fillText(inr(d.equity||0),w-112,18);
+  const ret=Number(d.return_pct||0);
+  ctx.fillStyle=ret>=0?'rgba(20,184,166,.95)':'rgba(244,63,94,.95)';
+  ctx.fillText(`${ret>=0?'+':''}${ret.toFixed(2)}%`,12,h-10);
+}
+
+function drawDonut(items){
+  const setup=canvasSetup('sector-donut');
+  if(!setup)return;
+  const {ctx,w,h}=setup;
+  const total=items.reduce((s,x)=>s+Math.abs(Number(x.pnl||x.invested||0)),0)||1;
+  const colors=['#d4af37','#14b8a6','#facc15','#64748b','#f43f5e'];
+  let start=-Math.PI/2;
+  items.slice(0,5).forEach((x,i)=>{
+    const val=Math.abs(Number(x.pnl||x.invested||0))/total*Math.PI*2;
+    ctx.beginPath();ctx.moveTo(w/2,h/2);ctx.arc(w/2,h/2,Math.min(w,h)/2-8,start,start+val);ctx.closePath();
+    ctx.fillStyle=colors[i%colors.length];ctx.globalAlpha=.86;ctx.fill();start+=val;
+  });
+  ctx.globalAlpha=1;ctx.beginPath();ctx.arc(w/2,h/2,Math.min(w,h)/4,0,Math.PI*2);ctx.fillStyle='#080b0d';ctx.fill();
+  ctx.fillStyle='#e5e7eb';ctx.font='12px Inter';ctx.textAlign='center';ctx.fillText('Sector',w/2,h/2-2);ctx.fillText('Exposure',w/2,h/2+14);ctx.textAlign='left';
+}
+
+function drawDrawdown(curve){
+  const setup=canvasSetup('drawdown-chart');
+  if(!setup)return;
+  const {ctx,w,h}=setup;
+  const pts=(curve||[]).map(x=>Number(x.drawdown_pct||0));
+  if(!pts.length)return;
+  const min=Math.min(-1,...pts), max=1, span=max-min;
+  const x=i=>pts.length===1?w/2:(w-18)*(i/(pts.length-1))+9;
+  const y=v=>h-18-((v-min)/span)*(h-34);
+  ctx.fillStyle='rgba(244,63,94,.055)';ctx.fillRect(0,0,w,h);
+  ctx.strokeStyle='rgba(212,175,55,.10)';ctx.lineWidth=1;
+  for(let i=1;i<4;i++){const yy=(h/4)*i;ctx.beginPath();ctx.moveTo(0,yy);ctx.lineTo(w,yy);ctx.stroke();}
+  ctx.beginPath();pts.forEach((p,i)=>{i?ctx.lineTo(x(i),y(p)):ctx.moveTo(x(i),y(p));});
+  ctx.strokeStyle='#f43f5e';ctx.lineWidth=2;ctx.stroke();
+  ctx.fillStyle='#e5e7eb';ctx.font='12px Inter';ctx.fillText('Drawdown Curve',12,18);
+}
+
+function renderPaperAnalytics(d){
+  drawEquityChart(d);
+  const positions=(d.positions||[]).filter(p=>inRange(p.exit_date||p.date));
+  const daily=(d.daily_pnl||[]).filter(x=>inRange(x.date));
+  const heat=document.getElementById('paper-heatmap');
+  if(heat){
+    heat.innerHTML=daily.length?daily.slice(-30).map(day=>{
+      const pnl=Number(day.pnl||0);
+      const alpha=Math.min(.9,.18+Math.abs(pnl)/3000);
+      const bg=pnl>=0?`rgba(20,184,166,${alpha})`:`rgba(244,63,94,${alpha})`;
+      return `<div class="heat-cell" title="${day.date}: ${inr(pnl)}" style="background:${bg}"></div>`;
+    }).join(''):'<span style="color:#64748b;font-size:12px">No closed days yet</span>';
+  }
+  const sectorMap={};
+  positions.forEach(p=>{
+    const s=p.sector||'Unknown';
+    sectorMap[s]=sectorMap[s]||{sector:s,pnl:0,invested:0,trades:0};
+    sectorMap[s].pnl+=Number(p.realized_pnl||0);sectorMap[s].invested+=Number(p.invested_amount||0);sectorMap[s].trades++;
+  });
+  drawDonut(Object.values(sectorMap));
+  const curve=(d.equity_curve||[]).filter(x=>x.date==='START'||inRange(x.date));
+  drawDrawdown(curve);
+  const closed=positions.filter(p=>String(p.status||'')!=='open');
+  const best=closed.slice().sort((a,b)=>Number(b.return_pct||0)-Number(a.return_pct||0))[0]||d.best_pick;
+  const worst=closed.slice().sort((a,b)=>Number(a.return_pct||0)-Number(b.return_pct||0))[0]||d.worst_pick;
+  const box=document.getElementById('best-worst');
+  if(box){
+    const card=(label,p,cls)=>p?`<div class="pick-card"><div class="label">${label}</div><div><span class="sym">${p.symbol}</span><span class="${cls}" style="float:right">${Number(p.return_pct||0).toFixed(2)}%</span></div><div class="sub">${p.date||''} | ${inr(p.realized_pnl||0)}</div></div>`:`<div class="pick-card"><div class="label">${label}</div><div class="sub">No data</div></div>`;
+    box.innerHTML=card('Best Pick',best,'up')+card('Worst Pick',worst,'down');
+  }
+}
+
+// ── KPIs ──
+async function loadHealth(){
+  const d=await get('/api/health');
+  document.getElementById('k-universe').textContent=(d.universe_count||0).toLocaleString();
+  const acc=d.accuracy||0;
+  const accEl=document.getElementById('k-accuracy');
+  accEl.textContent=acc+'%';
+  accEl.style.color=acc>=60?'#10b981':acc>=40?'#f59e0b':'#ef4444';
+  document.getElementById('k-acc-sub').textContent=`TP: ${d.total_tp||0} | SL: ${d.total_sl||0} | Avg: ${Number(d.avg_return||0).toFixed(2)}%`;
+  badge(document.getElementById('mkt-badge'),d.market_status||'Unknown',
+        (d.market_status||'').includes('Open')?'green':(d.market_status||'').includes('Weekend')?'yellow':'red');
+  badge(document.getElementById('bot-badge'),d.bot_status||'Unknown',
+        (d.bot_status||'').includes('HEALTHY')?'green':'red');
+  // Brain
+  const br=d.brain||{};
+  const brEl=document.getElementById('k-brain');
+  brEl.textContent=(br.daily_calls||0)+' / '+(br.max_daily_calls||200);
+  document.getElementById('k-brain-sub').textContent=
+    (br.grok_configured?'Grok ✅ ':'Grok ❌ ')+(br.gpt_configured?'GPT ✅':'GPT ❌');
+  badge(document.getElementById('ai-badge'),br.last_model_used?'AI Active':'AI Idle',
+        br.last_model_used?'green':'yellow');
+}
+
+async function loadCommandStrip(){
+  const d=await get('/api/command-strip');
+  document.getElementById('cmd-market').textContent=d.market_status||'Unknown';
+  document.getElementById('cmd-now').textContent=`IST ${d.now||'--'}`;
+  document.getElementById('cmd-next').textContent=d.next_pick_scan||'--';
+  document.getElementById('cmd-latest').textContent=d.display_date||d.latest_pick_date||'Never';
+  const morning=d.morning_status||{};
+  document.getElementById('cmd-count').textContent=
+    `${morning.label||'TODAY'} | ${d.today_pick_count||0} stored | ${morning.detail||''}`;
+  document.getElementById('cmd-telegram').textContent=d.telegram||'Missing';
+  document.getElementById('cmd-grok').textContent=d.grok||'Missing';
+  document.getElementById('cmd-gpt').textContent=d.gpt||'Missing';
+  document.getElementById('cmd-grok-model').textContent=d.grok_model||'No model';
+  document.getElementById('cmd-gpt-model').textContent=d.gpt_model||'No model';
+}
+
+async function loadLifecycle(){
+  const d=await get('/api/lifecycle');
+  const picks=d.picks||[];
+  const el=document.getElementById('lifecycle-grid');
+  if(!picks.length){
+    el.innerHTML="<div style=\"color:#64748b;font-size:13px\">Waiting for today's morning analysis. Lifecycle will fill after picks are generated.</div>";
+    return;
+  }
+  el.innerHTML=picks.slice(0,5).map(p=>{
+    const st=String(p.status||'open').toLowerCase();
+    const steps=p.steps||{};
+    const ret=Number(p.result_return||p.return_pct||0);
+    const cls=st==='sl_hit'?'down':(st==='tp_hit'||ret>0?'up':'pending');
+    const bars=[
+      steps.picked,
+      steps.paper_allocated,
+      steps.closed,
+      steps.tp_hit,
+      steps.sl_hit
+    ].map((ok,i)=>`<div class="life-step ${ok?(i===4?'bad':'done'):''}"></div>`).join('');
+    return `<div class="life-card">
+      <div class="life-head"><span class="sym">${p.symbol}</span><span class="${cls}">${st.replace('_',' ')}</span></div>
+      <div class="life-steps">${bars}</div>
+      <div class="sub">Entry ${inr(p.entry_price)} | TP ${inr(p.target_price)} | SL ${inr(p.sl_price)}</div>
+      <div class="mini-stat"><span>Current P&L</span><span class="${ret>=0?'up':'down'}">${ret>=0?'+':''}${ret.toFixed(2)}%</span></div>
+    </div>`;
+  }).join('');
+}
+
+async function loadDataHealth(){
+  const d=await get('/api/data-health');
+  const score=Number(d.score||0);
+  const ring=document.getElementById('health-score');
+  ring.style.setProperty('--health',Math.max(0,Math.min(100,score)));
+  ring.querySelector('span').textContent=score.toFixed(0)+'%';
+  document.getElementById('health-checks').innerHTML=(d.checks||[]).map(c=>{
+    const state=c.state||'check';
+    const label=state==='pending'?'PENDING':(c.ok?'OK':'CHECK');
+    return `<div class="health-row"><span>${c.name}</span><span class="${c.ok?'health-ok':'health-warn'}">${label}</span></div>
+            <div class="sub" style="margin-top:-4px;margin-bottom:4px">${c.detail||''}</div>`;
+  }).join('')||'<div class="health-row"><span>No checks available</span></div>';
+  const q=(d.quality||{}).snapshot||{};
+  const rejects=((d.quality||{}).recent_rejections||[]).slice(0,3);
+  const heavy=d.heavy_jobs||{};
+  const progress=d.scan_progress||{};
+  const active=(heavy.active_jobs||[])[0]||heavy.current_job||{};
+  const ollamaProgress=(progress.ollama_intraday_agent||{}).progress_pct;
+  const patternProgress=(progress.intraday_pattern_agent||{}).progress_pct;
+  const rejectText=rejects.length?rejects.map(r=>`${r.symbol||'--'}: ${safeJsonReasons(r.reasons_json)}`).join('<br>'):'No recent rejected official candidates.';
+  document.getElementById('health-times').innerHTML=`
+    <div class="health-row"><span>Last Universe</span><span>${d.last_universe_update||'--'}</span></div>
+    <div class="health-row"><span>Last Pick</span><span>${d.last_pick_time||'--'}</span></div>
+    <div class="health-row"><span>Last Price Check</span><span>${d.last_validation||'--'}</span></div>
+    <div class="health-row"><span>Last Learning Scan</span><span>${d.last_ollama||'--'}</span></div>
+    <div class="health-row"><span>Heavy Job</span><span>${active.job_name||'idle'}</span></div>
+    <div class="health-row"><span>Ollama Progress</span><span>${ollamaProgress!==undefined?ollamaProgress+'%':'--'}</span></div>
+    <div class="health-row"><span>Pattern Progress</span><span>${patternProgress!==undefined?patternProgress+'%':'--'}</span></div>
+    <div class="health-row"><span>Quality Gate</span><span>${q.overall_score!==undefined?Number(q.overall_score).toFixed(0)+'%':'--'}</span></div>
+    <div class="sub">${rejectText}</div>
+    <div class="sub">Use this panel first if picks are missing or alerts stop.</div>`;
+}
+
+function safeJsonReasons(raw){
+  try{
+    const parsed=JSON.parse(raw||'[]');
+    return Array.isArray(parsed)?parsed.slice(0,2).join(', '):String(parsed);
+  }catch(e){
+    return raw||'rejected';
+  }
+}
+
+async function loadSyncStatus(){
+  const d=await get('/api/sync-status',5000);
+  const db=d.db||{};
+  const tg=d.telegram||{};
+  const agents=d.agents||{};
+  const fresh=d.freshness||{};
+  const pipe=d.morning_pipeline||{};
+  const heavy=d.heavy_jobs||{};
+  const active=(heavy.active_jobs||[])[0]||heavy.current_job||{};
+  const ok=d.status==='ok';
+  const tradingExpected=d.trading_expected!==false;
+  const tgLabel=tg.morning_final_today?'TODAY':(tradingExpected?'MISSING':'NOT EXPECTED');
+  const tgClass=tg.morning_final_today||!tradingExpected?'health-ok':'health-warn';
+  document.getElementById('sync-main').innerHTML=`
+    <div class="health-row"><span>Status</span><span class="${ok?'health-ok':'health-warn'}">${ok?'OK':'CHECK'}</span></div>
+    <div class="health-row"><span>Market</span><span>${d.market_status||'--'}</span></div>
+    <div class="health-row"><span>Morning Stage</span><span>${pipe.stage||'--'} / ${pipe.status||'--'}</span></div>
+    <div class="health-row"><span>Today DB Picks</span><span>${db.today_picks??0}</span></div>
+    <div class="health-row"><span>Latest Pick Date</span><span>${db.latest_pick_date||'--'}</span></div>
+    <div class="sub">${pipe.detail||db.morning_detail||'Morning status unavailable'}</div>`;
+  document.getElementById('sync-agents').innerHTML=`
+    <div class="health-row"><span>Telegram Final</span><span class="${tgClass}">${tgLabel}</span></div>
+    <div class="health-row"><span>Grok Context</span><span>${(agents.grok||{}).latest_picks_date||'--'}</span></div>
+    <div class="health-row"><span>Terminal Updated</span><span>${(agents.terminal||{}).updated_at||'--'}</span></div>
+    <div class="health-row"><span>Ollama Updated</span><span>${(agents.ollama||{}).updated_at||'--'}</span></div>
+    <div class="health-row"><span>Heavy Job</span><span>${active.job_name||'idle'}</span></div>
+    <div class="sub">Bot log age: ${fresh.bot_log_age_min??'--'} min | Generated: ${d.generated_at||'--'}</div>`;
+  const issues=d.issues||[];
+  document.getElementById('sync-issues').innerHTML=issues.length?issues.map(x=>
+    `<div class="mini-stat"><span class="health-warn">${x}</span></div>`
+  ).join(''):'<div class="mini-stat"><span class="health-ok">Bot, DB, Telegram, and dashboard are in sync.</span></div>';
+}
+
+async function loadAccuracyBreakdown(){
+  const d=await get('/api/accuracy-breakdown');
+  const t=d.today||{}, s=d.seven_day||{}, m=d.thirty_day||{};
+  const card=(label,x)=>`<div class="breakdown-card">
+    <div class="command-label">${label}</div>
+    <strong>${Number(x.accuracy||0).toFixed(1)}%</strong>
+    <div class="sub">TP ${x.tp_count??x.tp??0} | SL ${x.sl_count??x.sl??0}</div>
+    <div class="sub">Avg return ${Number(x.avg_return||0).toFixed(2)}%</div>
+  </div>`;
+  document.getElementById('accuracy-breakdown').innerHTML=
+    card('Today',t)+card('7 Day',s)+card('30 Day',m);
+}
+
+async function loadPaper(){
+  const d=await get('/api/paper');
+  latestPaperData=d;
+  document.getElementById('p-start').textContent=inr(d.initial_cash);
+  document.getElementById('p-cash').textContent=inr(d.cash_balance);
+  document.getElementById('p-open').textContent=inr(d.open_invested);
+  document.getElementById('p-equity').textContent=inr(d.equity);
+  document.getElementById('p-ret').textContent=(Number(d.return_pct||0)>=0?'+':'')+Number(d.return_pct||0).toFixed(2)+'%';
+  document.getElementById('p-trades').textContent=(d.recent_positions||[]).length;
+  const pnl=Number(d.realized_pnl||0);
+  const pnlEl=document.getElementById('p-pnl');
+  pnlEl.textContent=(pnl>=0?'+':'')+inr(pnl);
+  pnlEl.style.color=pnl>=0?'#10b981':'#ef4444';
+  renderPaperAnalytics(d);
+
+  const open=d.open_positions||[];
+  document.getElementById('paper-open').innerHTML=open.length?open.slice(0,5).map(p=>{
+    return `<div class="mini-stat"><span class="sym">${p.symbol}</span><span>${inr(p.invested_amount)} | Qty ${Number(p.quantity||0).toFixed(2)}</span></div>`;
+  }).join(''):'<div class="mini-stat"><span>No open paper holdings</span></div>';
+
+  const recent=d.recent_positions||[];
+  document.getElementById('paper-recent').innerHTML=recent.length?recent.slice(0,6).map(p=>{
+    const ret=Number(p.return_pct||0);
+    const cls=ret>=0?'up':'down';
+    return `<div class="mini-stat"><span class="sym">${p.symbol}</span><span class="${cls}">${p.status} | ${ret>=0?'+':''}${ret.toFixed(2)}%</span></div>`;
+  }).join(''):'<div class="mini-stat"><span>No paper trades yet</span></div>';
+}
+
+// ── Sectors ──
+async function loadSectors(){
+  const d=await get('/api/sectors');
+  const el=document.getElementById('sector-pills');
+  const sectors=d.top_sectors||[];
+  if(!sectors.length){el.innerHTML='<span style="color:#475569">No sector data yet</span>';return;}
+  el.innerHTML=sectors.map((s,i)=>`<span class="pill">${i===0?'🥇':i===1?'🥈':'🥉'} ${s}</span>`).join('');
+}
+
+async function loadGrokDashboard(){
+  const d=await get('/api/grok-dashboard');
+  const ai=d.ai||{};
+  const today=new Date().toLocaleDateString('en-CA',{timeZone:'Asia/Kolkata'});
+  const contextDate=d.latest_picks_date||'--';
+  const isToday=contextDate===today;
+  const summary=[
+    ai.market_note||'Grok dashboard state is building from local market data.',
+    ai.dashboard_summary||'',
+    isToday ? (ai.pick_view||'') : `No fresh morning picks for today. Brain context below is from ${contextDate}.`,
+    ai.sector_view||''
+  ].filter(Boolean).join('<br>');
+  document.getElementById('grok-summary').innerHTML=
+    `${summary}<div class="sub">Updated: ${d.updated_at||'--'} | Pick context: ${contextDate} | AI: ${ai.ok?'Grok reviewed':(ai.reason||'local snapshot')}</div>`;
+
+  const picks=(d.next_session_picks||[]).slice(0,5);
+  document.getElementById('grok-today-picks').innerHTML=picks.length?picks.map(p=>{
+    const entry=Number(p.entry_price||0).toFixed(2);
+    const ret=Number(p.result_return||0).toFixed(2);
+    return `<div class="mini-stat"><span class="sym">${p.symbol}</span><span>${p.status||'pending'} | ${ret}%</span></div>`;
+  }).join('')+(!isToday?`<div class="sub">Previous-session context only. Today's morning pick table stays blank until fresh analysis.</div>`:''):'<div class="mini-stat"><span>No brain pick context yet</span></div>';
+
+  const risks=(ai.risk_flags||[]).slice(0,4);
+  const actions=(ai.action_items||[]).slice(0,4);
+  document.getElementById('grok-actions').innerHTML=[
+    ...risks.map(x=>`<div class="mini-stat"><span>Risk</span><span class="down">${x}</span></div>`),
+    ...actions.map(x=>`<div class="mini-stat"><span>Action</span><span>${x}</span></div>`)
+  ].join('') || '<div class="mini-stat"><span>No risk flags</span></div>';
+
+  document.getElementById('grok-tomorrow-picks').innerHTML=picks.length?picks.map(p=>{
+    const conf=Number(p.confidence||0).toFixed(0);
+    return `<div class="mini-stat"><span class="sym">${p.symbol}</span><span>Conf ${conf}</span></div>`;
+  }).join(''):'<div class="mini-stat"><span>Waiting for next session context</span></div>';
+}
+
+async function loadOllamaAgent(){
+  const d=await get('/api/ollama-agent',5000);
+  if(d._failed||d.error){
+    document.getElementById('ollama-summary').innerHTML=
+      `<div class="mini-stat"><span>Status</span><span class="health-warn">${d.error||'Unavailable'}</span></div>
+       <div class="sub">Other dashboard panels will continue refreshing while the learning agent catches up.</div>`;
+    document.getElementById('ollama-candidates').innerHTML='<div class="mini-stat"><span>Using last stored scan when available.</span></div>';
+    return;
+  }
+  const scan=d.scan||{};
+  const study=d.study||{};
+  document.getElementById('ollama-summary').innerHTML=
+    `<div class="mini-stat"><span>Date</span><span>${scan.date||'--'}</span></div>
+     <div class="mini-stat"><span>Time Scanned</span><span>${scan.scan_time||d.updated_at||'--'}</span></div>
+     <div class="mini-stat"><span>Scanned</span><span>${scan.symbols_scanned||0}</span></div>
+     <div class="mini-stat"><span>Winners</span><span class="up">${scan.winner_count||0}</span></div>
+     <div class="sub">${study.summary||study.winner_profile||'Learning summary is building from NSE scan data.'}</div>`;
+
+  const candidates=(scan.top_candidates||[]).slice(0,6);
+  document.getElementById('ollama-candidates').innerHTML=candidates.length?candidates.map(c=>{
+    const ret=Number(c.return_pct||c.open_to_close_pct||c.open_to_high_pct||0).toFixed(2);
+    return `<div class="mini-stat"><span class="sym">${c.symbol}</span><span><span class="up">+${ret}%</span> | ${c.sector||'Unknown'}</span></div>`;
+  }).join(''):'<div class="mini-stat"><span>No candidates yet</span></div>';
+}
+
+async function loadTerminal(){
+  const d=await get('/api/terminal');
+  const picks=(d.today_picks||[]).slice(0,5);
+  document.getElementById('terminal-picks').innerHTML=picks.length?picks.map(p=>{
+    const sc=Number(p.terminal_score||p.score||0).toFixed(0);
+    const rr=p.risk_reward||'--';
+    return `<div class="mini-stat"><span class="sym">${p.symbol}</span><span>Score ${sc} | RR ${rr}</span></div>`;
+  }).join(''):'<div class="mini-stat"><span>No terminal picks yet</span></div>';
+
+  const watch=(d.intraday_watchlist||[]).slice(0,6);
+  document.getElementById('terminal-watchlist').innerHTML=watch.length?watch.map(w=>{
+    const sc=Number(w.confidence_score||w.score||0).toFixed(0);
+    return `<div class="mini-stat"><span class="sym">${w.symbol}</span><span>Conf ${sc}</span></div>`;
+  }).join(''):'<div class="mini-stat"><span>Waiting for market scan</span></div>';
+
+  const edge=[
+    ...(d.hot_sectors||[]).slice(0,4).map(s=>`Hot sector: ${s}`),
+    ...(d.ollama_top_symbols||[]).slice(0,4).map(s=>`Ollama: ${s}`)
+  ];
+  document.getElementById('terminal-edge').innerHTML=edge.length?edge.map(x=>
+    `<div class="mini-stat"><span>${x}</span></div>`
+  ).join(''):'<div class="mini-stat"><span>No edge data yet</span></div>';
+}
+
+// ── Picks ──
+function rsiChip(v){
+  if(v===null||v===undefined||v==='')return '—';
+  const n=parseFloat(v);
+  const cls=n>=55&&n<=70?'rsi-bull':n>70?'rsi-bear':'rsi-neutral';
+  return `<span class="rsi-chip ${cls}">${n.toFixed(1)}</span>`;
+}
+
+async function loadPicks(){
+  const d=await get('/api/picks');
+  const picks=(d.picks||[]).slice(0,5);
+  const morning=d.morning_status||{};
+  document.getElementById('k-picks').textContent=picks.length;
+  document.getElementById('k-picks-sub').textContent=`${d.date||''} | ${morning.label||'TODAY'} | max 5`;
+  const tbody=document.getElementById('picks-tbody');
+  if(!picks.length){
+    const detail=morning.detail||"Blank until today's morning analysis stores picks.";
+    const color=morning.state==='missed'||morning.state==='sent_no_db'?'#f59e0b':'#475569';
+    tbody.innerHTML=`<tr><td colspan="7" style="color:${color};text-align:center;padding:40px">${detail}</td></tr>`;
+    return;
+  }
+  tbody.innerHTML=picks.map(p=>{
+    const st=p.status||'pending';
+    const conf=Number(p.confidence||0).toFixed(0);
+    return `<tr>
+      <td><span class="sym">${p.symbol}</span></td>
+      <td class="up">${conf}</td>
+      <td><span class="sector-tag">${p.sector||'Unknown'}</span></td>
+      <td class="down">₹${(p.sl_price||0).toFixed(2)}</td>
+      <td class="price">₹${(p.entry_price||0).toFixed(2)}</td>
+      <td class="up">₹${(p.target_price||0).toFixed(2)}</td>
+      <td><span class="${st}">${st.replace('_',' ').toUpperCase()}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+async function loadPastSession(){
+  const d=await get('/api/past-session');
+  const summary=d.summary||{};
+  const picks=d.picks||[];
+  document.getElementById('past-date').textContent=d.date||'—';
+  document.getElementById('past-accuracy').textContent=Number(summary.accuracy||0).toFixed(1)+'%';
+  document.getElementById('past-return').textContent=(Number(summary.avg_return||0)>=0?'+':'')+Number(summary.avg_return||0).toFixed(2)+'%';
+  const tbody=document.getElementById('past-tbody');
+  if(!picks.length){
+    tbody.innerHTML='<tr><td colspan="7" style="color:#475569;text-align:center;padding:32px">No past database picks found.</td></tr>';
+    return;
+  }
+  tbody.innerHTML=picks.slice(0,10).map(p=>{
+    const st=p.status||'pending';
+    const ret=p.result_return===null||p.result_return===undefined?'—':`${Number(p.result_return)>=0?'+':''}${Number(p.result_return).toFixed(2)}%`;
+    const retCls=Number(p.result_return||0)>=0?'up':'down';
+    return `<tr>
+      <td><span class="sym">${p.symbol}</span></td>
+      <td>${Number(p.confidence||0).toFixed(0)}</td>
+      <td><span class="sector-tag">${p.sector||'Unknown'}</span></td>
+      <td class="down">₹${Number(p.sl_price||0).toFixed(2)}</td>
+      <td class="price">₹${Number(p.entry_price||0).toFixed(2)}</td>
+      <td class="up">₹${Number(p.target_price||0).toFixed(2)}</td>
+      <td><span class="${st}">${st.replace('_',' ')}</span> <span class="${retCls}">${ret}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── History ──
+async function loadHistory(){
+  const d=await get('/api/history');
+  const picks=(d.picks||[]).slice(0,15);
+  document.getElementById('history-tbody').innerHTML=picks.length?picks.map(p=>{
+    const ret=parseFloat(p.result_return||0);
+    const retStr=ret?`<span class="${ret>0?'up':'down'}">${ret>0?'+':''}${ret.toFixed(2)}%</span>`:'—';
+    return `<tr>
+      <td style="color:#475569;font-size:12px">${p.date}</td>
+      <td><span class="sym" style="font-size:13px">${p.symbol}</span></td>
+      <td style="font-size:12px">₹${(p.entry_price||0).toFixed(0)}</td>
+      <td><span class="${p.status||''}">${(p.status||'pending').replace('_',' ')}</span></td>
+      <td>${retStr}</td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="5" style="color:#475569">No history yet</td></tr>';
+
+  // Sys stats
+  const acc=Number(d.overall_accuracy||0);
+  const tp=Number(d.overall_tp||0);
+  const sl=Number(d.overall_sl||0);
+  const closed=Math.max(1,tp+sl);
+  const tpPct=Math.round((tp/closed)*100);
+  const slPct=Math.round((sl/closed)*100);
+  document.getElementById('sys-stats').innerHTML=`
+    <div class="accuracy-ring" style="--acc:${Math.max(0,Math.min(100,acc))}"><span>${acc.toFixed(0)}%</span></div>
+    <div class="stat-bars">
+      <div>
+        <div class="mini-stat"><span>TP Momentum</span><span class="up">${tpPct}%</span></div>
+        <div class="stat-bar"><div class="stat-fill" style="--w:${tpPct}%"></div></div>
+      </div>
+      <div>
+        <div class="mini-stat"><span>SL Pressure</span><span class="down">${slPct}%</span></div>
+        <div class="stat-bar"><div class="stat-fill loss" style="--w:${slPct}%"></div></div>
+      </div>
+    </div>
+    <div class="stat-spark"></div>
+    <div class="mini-stat"><span>Total Closed</span><span style="color:#e2e8f0">${d.total_closed||0}</span></div>
+    <div class="mini-stat"><span>TP Hits</span><span class="up">${d.overall_tp||0}</span></div>
+    <div class="mini-stat"><span>SL Hits</span><span class="down">${d.overall_sl||0}</span></div>
+    <div class="mini-stat"><span>Overall Accuracy</span><span style="color:#6366f1;font-weight:700">${acc.toFixed(1)}%</span></div>
+    <div class="live-chip"><i></i><span>Live Accuracy Engine</span></div>
+  `;
+}
+
+// ── Master refresh ──
+let criticalRefreshRunning=false;
+let backgroundRefreshRunning=false;
+
+async function guarded(name,fn){
+  try{await fn();}catch(e){console.error(name,e);}
+}
+
+async function refreshCritical(){
+  if(criticalRefreshRunning)return;
+  criticalRefreshRunning=true;
+  try{
+  await Promise.allSettled([
+    ['health',loadHealth],['command',loadCommandStrip],['paper',loadPaper],
+    ['picks',loadPicks],['past',loadPastSession],['history',loadHistory],
+    ['accuracy',loadAccuracyBreakdown],['lifecycle',loadLifecycle],['data-health',loadDataHealth]
+  ].map(([name,fn])=>guarded(name,fn)));
+  document.getElementById('last-refresh').textContent=new Date().toLocaleTimeString('en-IN');
+  }finally{
+  criticalRefreshRunning=false;
+  }
+}
+
+async function refreshBackground(){
+  if(backgroundRefreshRunning)return;
+  backgroundRefreshRunning=true;
+  try{
+  await Promise.allSettled([
+    ['sync-status',loadSyncStatus],['grok',loadGrokDashboard],['ollama',loadOllamaAgent],
+    ['terminal',loadTerminal],['sectors',loadSectors]
+  ].map(([name,fn])=>guarded(name,fn)));
+  }finally{
+  backgroundRefreshRunning=false;
+  }
+}
+
+refreshCritical().then(refreshBackground);
+setInterval(refreshCritical,15000);
+setInterval(refreshBackground,120000);
+</script>
+</body>
+</html>

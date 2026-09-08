@@ -132,6 +132,54 @@ def ensure_research_tables() -> None:
             )"""
         )
         conn.execute(
+            """CREATE TABLE IF NOT EXISTS candidate_audit (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               date TEXT,
+               stage TEXT,
+               symbol TEXT,
+               accepted INTEGER DEFAULT 0,
+               score REAL,
+               adjusted_score REAL,
+               confidence_delta REAL DEFAULT 0,
+               data_quality_score REAL,
+               reliability_score REAL,
+               similarity_score REAL,
+               agreement_score REAL,
+               reasons_json TEXT,
+               snapshot_json TEXT,
+               created_at TEXT
+            )"""
+        )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS data_quality_snapshots (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               date TEXT,
+               stage TEXT,
+               universe_count INTEGER,
+               active_symbols INTEGER,
+               price_validation_score REAL,
+               provider_reliability_score REAL,
+               terminal_freshness_score REAL,
+               overall_score REAL,
+               status TEXT,
+               details_json TEXT,
+               created_at TEXT
+            )"""
+        )
+        conn.execute(
+            """CREATE TABLE IF NOT EXISTS provider_reliability (
+               id INTEGER PRIMARY KEY AUTOINCREMENT,
+               date TEXT,
+               provider TEXT,
+               ok_count INTEGER DEFAULT 0,
+               fail_count INTEGER DEFAULT 0,
+               score REAL DEFAULT 0,
+               last_error TEXT,
+               updated_at TEXT,
+               UNIQUE(date, provider)
+            )"""
+        )
+        conn.execute(
             """CREATE TABLE IF NOT EXISTS grok_dashboard_snapshots (
                id INTEGER PRIMARY KEY AUTOINCREMENT,
                date TEXT,
@@ -254,6 +302,15 @@ def ensure_research_tables() -> None:
             _add_column(conn, "picks", "price_validation_status", "TEXT")
             _add_column(conn, "picks", "edge_status", "TEXT")
             _add_column(conn, "picks", "grok_review", "TEXT")
+            _add_column(conn, "picks", "session_type", "TEXT DEFAULT 'morning_final'")
+            _add_column(conn, "picks", "is_official_morning", "INTEGER DEFAULT 1")
+            _add_column(conn, "picks", "source_label", "TEXT")
+            _add_column(conn, "picks", "data_quality_score", "REAL")
+            _add_column(conn, "picks", "provider_reliability_score", "REAL")
+            _add_column(conn, "picks", "similarity_score", "REAL")
+            _add_column(conn, "picks", "agreement_score", "REAL")
+            _add_column(conn, "picks", "confidence_delta", "REAL DEFAULT 0")
+            _add_column(conn, "picks", "quality_reasons", "TEXT")
 
         conn.commit()
     finally:

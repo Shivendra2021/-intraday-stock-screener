@@ -1,27 +1,18 @@
-# Create/update the Windows Task Scheduler entry for MarketMind Bot.
-# Run from this project folder in PowerShell.
+# Create/update the Windows Task Scheduler entry for Stock Analyser dashboard.
 
 $ErrorActionPreference = "Stop"
 
-$taskName = "MarketMind Bot"
+$taskName = "Stock Analyser Dashboard"
 $projectRoot = $PSScriptRoot
 $pythonPath = Join-Path $projectRoot ".venv\Scripts\python.exe"
-$launcherPath = Join-Path $projectRoot "tools\start_main_once.ps1"
-$time = "07:30"
-try {
-    $configTime = Select-String -Path (Join-Path $projectRoot "config.py") -Pattern 'PREMARKET_BOT_START_TIME\s*=.*"(?<time>\d{2}:\d{2})"' | Select-Object -First 1
-    if ($configTime -and $configTime.Matches[0].Groups["time"].Value) {
-        $time = $configTime.Matches[0].Groups["time"].Value
-    }
-} catch {
-    $time = "07:30"
-}
+$launcherPath = Join-Path $projectRoot "tools\start_dashboard_once.ps1"
+$time = "07:31"
 
 if (-not (Test-Path -LiteralPath $pythonPath)) {
-    throw "Project venv Python not found: $pythonPath. Run setup_and_verify.py before creating the task."
+    throw "Project venv Python not found: $pythonPath."
 }
 if (-not (Test-Path -LiteralPath $launcherPath)) {
-    throw "Scheduled launcher not found: $launcherPath"
+    throw "Dashboard launcher not found: $launcherPath"
 }
 
 $existing = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
@@ -46,7 +37,6 @@ $settings = New-ScheduledTaskSettingsSet `
     -AllowStartIfOnBatteries `
     -DontStopIfGoingOnBatteries `
     -StartWhenAvailable `
-    -RunOnlyIfNetworkAvailable `
     -ExecutionTimeLimit ([TimeSpan]::Zero) `
     -MultipleInstances IgnoreNew `
     -RestartCount 3 `
@@ -58,11 +48,10 @@ Register-ScheduledTask `
     -Trigger $trigger `
     -Principal $principal `
     -Settings $settings `
-    -Description "MarketMind Pro Bot - daily unattended startup using project venv" | Out-Null
+    -Description "Stock Analyser V2 Dashboard - daily unattended startup" | Out-Null
 
 Write-Host "Task created successfully."
 Write-Host "Task name: $taskName"
 Write-Host "Schedule: daily at $time"
 Write-Host "Command: powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$launcherPath`""
 Write-Host "Working directory: $projectRoot"
-Write-Host "Log file: $(Join-Path $projectRoot 'logs\bot.log')"

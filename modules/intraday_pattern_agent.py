@@ -773,7 +773,7 @@ def _send_alert(alert: dict[str, Any]) -> None:
     from modules.alerts import send_raw_alert
 
     _store_alert(alert)
-    send_raw_alert(_format_alert(alert), review_with_grok=False)
+    send_raw_alert(_format_alert(alert), review_with_grok=False, event_type="intraday_pattern_alert")
 
 
 def _learn_from_movers(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -864,9 +864,30 @@ def _kill_switch_alerts(rows: list[dict[str, Any]], heatmap: dict[str, dict[str,
 
 
 def run_pattern_cycle(max_symbols: int | None = None, send_alerts: bool = True) -> dict[str, Any]:
+    from modules.heavy_job_coordinator import acquire_heavy_job, rotating_batch
+
     _init_tables()
-    max_symbols = max_symbols or int(_cfg("INTRADAY_PATTERN_MAX_SYMBOLS_PER_CYCLE", 450))
-    rows = _fetch_realtime_batch(_universe(max_symbols))
+    max_symbols = max_symbols or int(_cfg("PATTERN_ROTATING_BATCH_SIZE", _cfg("INTRADAY_PATTERN_MAX_SYMBOLS_PER_CYCLE", 450)))
+
+    with acquire_heavy_job("intraday_pattern_cycle", priority=3, stale_after_seconds=900) as lease:
+        if not lease.acquired:
+            report = {
+                "timestamp": _now_ist().isoformat(timespec="seconds"),
+                "phase": timing_state().phase,
+                "scanned": 0,
+                "skipped": True,
+                "skip_reason": lease.reason,
+                "watchlist": [],
+                "alerts": [],
+                "learned": {},
+            }
+            logger.info("Intraday pattern cycle skipped: %s", lease.reason)
+            return report
+
+        full_universe = _universe()
+        batch, scan_progress = rotating_batch("intraday_pattern_agent", full_universe, max_symbols)
+        rows = _fetch_realtime_batch(batch)
+
     context = market_context()
     heatmap = sector_heatmap(rows)
     _store_heatmap(heatmap)
@@ -879,7 +900,7 @@ def run_pattern_cycle(max_symbols: int | None = None, send_alerts: bool = True) 
     if send_alerts:
         from modules.alerts import send_raw_alert
         for msg in kill_alerts:
-            send_raw_alert(f"<b>RISK KILL SWITCH</b>\n{msg}", review_with_grok=False)
+            send_raw_alert(f"<b>RISK KILL SWITCH</b>\n{msg}", review_with_grok=False, event_type="risk_kill_switch")
 
     if not context.get("market_red_kill") and state.allow_new_entries:
         for row in rows:
@@ -903,6 +924,8 @@ def run_pattern_cycle(max_symbols: int | None = None, send_alerts: bool = True) 
         "timestamp": _now_ist().isoformat(timespec="seconds"),
         "phase": state.phase,
         "scanned": len(rows),
+        "total_universe": len(full_universe),
+        "scan_progress": scan_progress,
         "market": context,
         "hot_sectors": [s for s, h in heatmap.items() if h.get("is_hot")],
         "watchlist": sorted(watchlist, key=lambda x: x["confidence_score"], reverse=True)[:25],
@@ -958,7 +981,7 @@ def start_intraday_pattern_agent(interval_minutes: int | None = None) -> dict[st
                     continue
 
                 state = timing_state()
-                if is_market_open() or state.phase in {"PRE_MARKET", "MARKET_CLOSED"}:
+                if is_market_open() or state.phase == "PRE_MARKET":
                     run_pattern_cycle(send_alerts=True)
                 if state.phase == "MARKET_CLOSED":
                     _send_daily_report_once()
@@ -1007,7 +1030,7 @@ def _send_daily_report_once() -> None:
         f"7%+ movers learned: {learned.get('winner_count', 0)}\n"
         f"Patterns stored: {learned.get('pattern_count', 0)}"
     )
-    send_raw_alert(msg, review_with_grok=False)
+    send_raw_alert(msg, review_with_grok=False, event_type="intraday_pattern_daily_report")
     _last_daily_report_sent = today
 
 

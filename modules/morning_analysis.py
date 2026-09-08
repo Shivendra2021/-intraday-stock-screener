@@ -16,6 +16,15 @@ import yfinance as yf
 logger = logging.getLogger(__name__)
 
 
+def _now_str() -> str:
+    try:
+        from modules.time_utils import now_ist
+
+        return now_ist().strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
 def get_system_health(fast: bool = False) -> dict:
     """
     Check system health - database, logs, connectivity.
@@ -54,7 +63,18 @@ def get_system_health(fast: bool = False) -> dict:
                 active_count = cursor.fetchone()[0]
                 cursor.execute("SELECT COUNT(*) FROM stock_universe WHERE is_active = 0")
                 inactive_count = cursor.fetchone()[0]
-                cursor.execute("SELECT COUNT(*) FROM picks WHERE date = ?", (datetime.date.today().isoformat(),))
+                try:
+                    from modules.time_utils import today_ist_str
+
+                    today = today_ist_str()
+                except Exception:
+                    today = datetime.date.today().isoformat()
+                cursor.execute(
+                    "SELECT COUNT(*) FROM picks WHERE date = ? "
+                    "AND COALESCE(session_type, 'morning_final')='morning_final' "
+                    "AND COALESCE(is_official_morning, 1)=1",
+                    (today,),
+                )
                 today_picks = cursor.fetchone()[0]
                 health["checks"]["database"] = (
                     f"OK ({active_count} active, {inactive_count} inactive, {today_picks} picks today)"
@@ -84,7 +104,13 @@ def get_system_health(fast: bool = False) -> dict:
         log_path = "logs/bot.log"
         if os.path.exists(log_path):
             mtime = os.path.getmtime(log_path)
-            age = datetime.datetime.now() - datetime.datetime.fromtimestamp(mtime)
+            try:
+                from modules.time_utils import now_ist
+
+                now = now_ist().replace(tzinfo=None)
+            except Exception:
+                now = datetime.datetime.now()
+            age = now - datetime.datetime.fromtimestamp(mtime)
             health["checks"]["last_run"] = f"{age.days}d {age.seconds//3600}h ago"
     except Exception as e:
         health["checks"]["last_run"] = "Unknown"
@@ -250,7 +276,7 @@ def generate_morning_report(fast: bool = False) -> dict:
     logger.info("Generating morning report...")
 
     report = {
-        "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "timestamp": _now_str(),
         "system_health": get_system_health(fast=fast),
         "news": get_market_news(),
         "sector_trends": analyze_sector_trends(fast=fast),
@@ -265,7 +291,13 @@ def generate_morning_report_cached(max_age_seconds: int = 600) -> dict:
     path = "data/morning_report_cache.json"
     try:
         if os.path.exists(path):
-            age = datetime.datetime.now().timestamp() - os.path.getmtime(path)
+            try:
+                from modules.time_utils import now_ist
+
+                now_ts = now_ist().timestamp()
+            except Exception:
+                now_ts = datetime.datetime.now().timestamp()
+            age = now_ts - os.path.getmtime(path)
             if age <= max_age_seconds:
                 with open(path, "r", encoding="utf-8") as fp:
                     return json.load(fp)

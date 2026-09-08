@@ -19,6 +19,32 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import DB_PATH, DRY_RUN
 
 
+def today_str():
+    try:
+        from modules.time_utils import today_ist_str
+        return today_ist_str()
+    except Exception:
+        return datetime.date.today().isoformat()
+
+
+def market_status():
+    try:
+        from modules.scanner import is_market_holiday, is_market_open
+        from modules.time_utils import today_ist
+        today = today_ist()
+        if today.weekday() >= 5:
+            return "Weekend"
+        if is_market_holiday(today):
+            return "Holiday"
+        return "Open" if is_market_open() else "Closed"
+    except Exception:
+        return "Unknown"
+
+
+def is_trading_day(status=None):
+    return (status or market_status()) not in {"Weekend", "Holiday"}
+
+
 def section(title):
     print(f"\n{'='*55}")
     print(f"  {title}")
@@ -27,14 +53,17 @@ def section(title):
 
 def get_todays_picks():
     """Get today's picks."""
-    today = datetime.date.today().isoformat()
+    today = today_str()
     try:
         with sqlite3.connect(DB_PATH) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(
                 """SELECT symbol, entry_price, sl_price, target_price, 
                    confidence, status 
-                   FROM picks WHERE date=? ORDER BY rank""",
+                   FROM picks WHERE date=?
+                   AND COALESCE(session_type, 'morning_final')='morning_final'
+                   AND COALESCE(is_official_morning, 1)=1
+                   ORDER BY rank""",
                 (today,)
             ).fetchall()
         return [dict(r) for r in rows]
@@ -91,9 +120,12 @@ def get_health():
             ).fetchone()[0]
 
             # Today's picks
-            today = datetime.date.today().isoformat()
+            today = today_str()
             stats["today_picks"] = conn.execute(
-                "SELECT COUNT(*) FROM picks WHERE date=?", (today,)
+                "SELECT COUNT(*) FROM picks WHERE date=? "
+                "AND COALESCE(session_type, 'morning_final')='morning_final' "
+                "AND COALESCE(is_official_morning, 1)=1",
+                (today,)
             ).fetchone()[0]
 
             # Overall accuracy
@@ -106,7 +138,8 @@ def get_health():
 
             # Last activity
             last_pick = conn.execute(
-                "SELECT date FROM picks ORDER BY id DESC LIMIT 1"
+                "SELECT date FROM picks WHERE COALESCE(session_type, 'morning_final')='morning_final' "
+                "AND COALESCE(is_official_morning, 1)=1 ORDER BY id DESC LIMIT 1"
             ).fetchone()
             stats["last_pick"] = last_pick[0] if last_pick else "Never"
 
@@ -120,8 +153,15 @@ def main():
     print(f"\n{'='*55}")
     print("  MARKETMIND PRO - QUICK STATUS")
     print(f"{'='*55}")
-    print(f"  {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    try:
+        from modules.time_utils import now_ist
+        now_label = now_ist().strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        now_label = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    print(f"  {now_label}")
     print(f"  Mode: {'DRY_RUN (TEST)' if DRY_RUN else 'ACTIVE'}")
+    status_now = market_status()
+    print(f"  Market: {status_now}")
 
     # Today's Picks
     section("TODAY'S PICKS")
@@ -137,19 +177,25 @@ def main():
             print(f"{i:<4} {p['symbol']:<12} {entry:>8.2f} {p['sl_price']:>8.2f} "
                   f"{target:>8.2f} {upside:>6.1f}% {p['status']}")
     else:
-        print("  No picks generated today yet.")
+        if is_trading_day(status_now):
+            print("  No official morning picks generated today yet.")
+        else:
+            print(f"  {status_now}; official morning picks are not expected today.")
 
     # Current Gainers
     section("CURRENT TOP MOVERS")
-    print("  Scanning top 50 stocks...\n")
-    gainers = get_current_gainers()
-    if gainers:
-        print(f"{'#':<4} {'Symbol':<12} {'Gain %':>8} {'Price':>10}")
-        print(f"{'-'*34}")
-        for i, g in enumerate(gainers, 1):
-            print(f"{i:<4} {g['symbol']:<12} +{g['gain_pct']:>7.2f}% {g['price']:>10.2f}")
+    if not is_trading_day(status_now):
+        print(f"  {status_now}; live top-mover scan skipped.")
     else:
-        print("  No gainers found.")
+        print("  Scanning top 50 stocks...\n")
+        gainers = get_current_gainers()
+        if gainers:
+            print(f"{'#':<4} {'Symbol':<12} {'Gain %':>8} {'Price':>10}")
+            print(f"{'-'*34}")
+            for i, g in enumerate(gainers, 1):
+                print(f"{i:<4} {g['symbol']:<12} +{g['gain_pct']:>7.2f}% {g['price']:>10.2f}")
+        else:
+            print("  No gainers found.")
 
     # Health
     section("BOT HEALTH")

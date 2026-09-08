@@ -19,11 +19,21 @@ _agent_running = False
 
 
 def _now() -> str:
-    return dt.datetime.now().isoformat(timespec="seconds")
+    try:
+        from modules.time_utils import now_ist
+
+        return now_ist().isoformat(timespec="seconds")
+    except Exception:
+        return dt.datetime.now().isoformat(timespec="seconds")
 
 
 def _today() -> str:
-    return dt.date.today().isoformat()
+    try:
+        from modules.time_utils import today_ist_str
+
+        return today_ist_str()
+    except Exception:
+        return dt.date.today().isoformat()
 
 
 def _connect() -> sqlite3.Connection:
@@ -57,7 +67,12 @@ def _market_status() -> str:
     try:
         from modules.scanner import is_market_holiday, is_market_open
 
-        today = dt.date.today()
+        try:
+            from modules.time_utils import today_ist
+
+            today = today_ist()
+        except Exception:
+            today = dt.date.today()
         if today.weekday() >= 5:
             return "Weekend"
         if is_market_holiday(today):
@@ -74,14 +89,18 @@ def _latest_picks(conn: sqlite3.Connection) -> tuple[str | None, list[dict[str, 
         "signal_reasons, status, result_return, validated_price, "
         "price_validation_status, edge_status, grok_review"
     )
-    rows = _q(conn, f"SELECT {fields} FROM picks WHERE date=? ORDER BY rank", (today,))
+    official_filter = (
+        "COALESCE(session_type, 'morning_final')='morning_final' "
+        "AND COALESCE(is_official_morning, 1)=1"
+    )
+    rows = _q(conn, f"SELECT {fields} FROM picks WHERE date=? AND {official_filter} ORDER BY rank", (today,))
     if rows:
         return today, rows
 
-    latest_date = _one(conn, "SELECT MAX(date) FROM picks", default=None)
+    latest_date = _one(conn, f"SELECT MAX(date) FROM picks WHERE {official_filter}", default=None)
     if not latest_date:
         return None, []
-    return latest_date, _q(conn, f"SELECT {fields} FROM picks WHERE date=? ORDER BY rank", (latest_date,))
+    return latest_date, _q(conn, f"SELECT {fields} FROM picks WHERE date=? AND {official_filter} ORDER BY rank", (latest_date,))
 
 
 def _accuracy(conn: sqlite3.Connection) -> dict[str, Any]:
@@ -363,7 +382,17 @@ def refresh_dashboard_state(use_ai: bool = True, force_ai: bool = False) -> dict
     existing = _load_existing()
     payload = build_dashboard_payload()
     if use_ai and (force_ai or _ai_due(existing)):
-        payload["ai"] = _ask_grok_for_brief(payload)
+        try:
+            from modules.heavy_job_coordinator import acquire_heavy_job
+
+            with acquire_heavy_job("grok_dashboard_ai", priority=3, stale_after_seconds=300) as lease:
+                if lease.acquired:
+                    payload["ai"] = _ask_grok_for_brief(payload)
+                else:
+                    payload["ai"] = existing.get("ai") or _fallback_brief(payload, f"AI skipped: {lease.reason}")
+        except Exception as exc:
+            logger.debug("Dashboard AI coordinator failed: %s", exc)
+            payload["ai"] = existing.get("ai") or _fallback_brief(payload, "AI refresh skipped")
     else:
         payload["ai"] = existing.get("ai") or _fallback_brief(payload, "AI refresh not due")
     _save_state(payload)

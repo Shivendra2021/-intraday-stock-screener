@@ -19,7 +19,7 @@ from modules.scanner import get_universe, is_market_holiday, is_market_open
 ERRORS = []
 
 
-def test(name, condition, detail=""):
+def check(name, condition, detail=""):
     if condition:
         print(f"  PASS: {name}")
     else:
@@ -35,25 +35,25 @@ def run():
     universe = get_universe()
     print(f"\n  Fetched {len(universe)} symbols\n")
 
-    test("Universe is a list",      isinstance(universe, list))
-    test("Universe has 100+ stocks", len(universe) >= 100,
-         f"got {len(universe)}")
-    test("No duplicate symbols",    len(universe) == len(set(universe)))
-    test("All symbols are strings", all(isinstance(s, str) for s in universe))
-    test("All symbols non-empty",   all(len(s.strip()) > 0 for s in universe))
-    test("Contains RELIANCE",       "RELIANCE" in universe)
-    test("Contains TCS",            "TCS" in universe)
+    check("Universe is a list",      isinstance(universe, list))
+    check("Universe has 100+ stocks", len(universe) >= 100,
+          f"got {len(universe)}")
+    check("No duplicate symbols",    len(universe) == len(set(universe)))
+    check("All symbols are strings", all(isinstance(s, str) for s in universe))
+    check("All symbols non-empty",   all(len(s.strip()) > 0 for s in universe))
+    check("Contains RELIANCE",       "RELIANCE" in universe)
+    check("Contains TCS",            "TCS" in universe)
 
     # Holiday check — 15 Aug 2024 is Independence Day (NSE holiday)
     independence_day = datetime.date(2024, 8, 15)
-    test("Independence Day is holiday",
-         is_market_holiday(independence_day),
-         f"date={independence_day}")
+    check("Independence Day is holiday",
+          is_market_holiday(independence_day),
+          f"date={independence_day}")
 
     # Weekend check
     saturday = datetime.date(2025, 1, 4)   # known Saturday
-    test("Saturday is not a trading day",
-         is_market_holiday(saturday) or saturday.weekday() >= 5)
+    check("Saturday is not a trading day",
+          is_market_holiday(saturday) or saturday.weekday() >= 5)
 
     print(f"\n  {'All tests passed!' if not ERRORS else f'{len(ERRORS)} test(s) failed!'}")
     if ERRORS:

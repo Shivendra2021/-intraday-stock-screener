@@ -60,7 +60,12 @@ def _calculate_levels(stock: dict) -> dict | None:
     }
 
 
-def _write_picks_to_db(picks: list):
+def _write_picks_to_db(
+    picks: list,
+    session_type: str = "morning_final",
+    is_official_morning: bool = True,
+    source_label: str = "official_morning_pipeline",
+):
     """Insert picks into the picks table."""
     from config import DB_PATH
     from modules.db_migrations import ensure_research_tables
@@ -71,22 +76,31 @@ def _write_picks_to_db(picks: list):
 
     with sqlite3.connect(DB_PATH) as conn:
         # Clear today's pending picks first (avoid duplicates on re-run)
-        conn.execute("DELETE FROM picks WHERE date=? AND status='pending'", (today,))
+        conn.execute(
+            "DELETE FROM picks WHERE date=? AND status='pending' AND COALESCE(session_type, 'morning_final')=?",
+            (today, session_type),
+        )
         for i, p in enumerate(picks, start=1):
             conn.execute(
                 """INSERT INTO picks
                    (date, rank, symbol, entry_price, sl_price, target_price,
                     confidence, signal_reasons, status, created_at, pattern_key,
-                    validated_price, price_validation_status, edge_status, grok_review)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?)""",
+                    validated_price, price_validation_status, edge_status, grok_review,
+                    session_type, is_official_morning, source_label, data_quality_score,
+                    provider_reliability_score, similarity_score, agreement_score,
+                    confidence_delta, quality_reasons)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (today, i, p["symbol"], p["entry_price"], p["sl_price"],
                  p["target_price"], p["score"], p.get("signal_reasons", ""), now,
                  p.get("pattern_key", ""), p.get("validated_price"),
                  p.get("price_validation_status", ""), p.get("edge_status", ""),
-                 p.get("grok_review", ""))
+                 p.get("grok_review", ""), session_type, 1 if is_official_morning else 0,
+                 source_label, p.get("data_quality_score"), p.get("provider_reliability_score"),
+                 p.get("similarity_score"), p.get("agreement_score"), p.get("confidence_delta", 0),
+                 p.get("quality_reasons", ""))
             )
         conn.commit()
-    logger.info(f"Wrote {len(picks)} picks to DB for {today}")
+    logger.info("Wrote %s picks to DB for %s session=%s official=%s", len(picks), today, session_type, is_official_morning)
 
 
 def _attach_price_validation(candidates: list[dict]) -> tuple[list[dict], list[dict]]:
@@ -204,8 +218,10 @@ def run_picker(analyzed: list = None) -> list:
     """
     from config import TOP_N_PICKS
     from modules.db_migrations import ensure_research_tables
+    from modules.quality_gates import audit_candidate, data_quality_snapshot, enrich_candidate
 
     ensure_research_tables()
+    data_quality = data_quality_snapshot("picker_start")
 
     if analyzed is None:
         from modules.analyzer import analyze_all
@@ -218,6 +234,8 @@ def run_picker(analyzed: list = None) -> list:
     # Take top 20 by score
     candidates = analyzed[:20]
     logger.info(f"Picker evaluating {len(candidates)} candidates")
+    for stock in candidates:
+        audit_candidate("candidate_pool", stock, True, "entered_top20_picker_pool")
 
     # Apply risk-reward filter
     valid = []
@@ -225,6 +243,9 @@ def run_picker(analyzed: list = None) -> list:
         result = _calculate_levels(stock)
         if result:
             valid.append(result)
+            audit_candidate("risk_reward", result, True, "rr_passed")
+        else:
+            audit_candidate("risk_reward", stock, False, "rr_below_minimum_or_invalid_levels")
 
     if not valid:
         logger.warning("No picks passed risk-reward filter")
@@ -232,6 +253,10 @@ def run_picker(analyzed: list = None) -> list:
 
     # Cross-check price from Yahoo + NSE + broker if configured.
     valid, price_rejected = _attach_price_validation(valid)
+    for item in valid:
+        audit_candidate("price_validation", item, True, "price_validation_passed")
+    for item in price_rejected:
+        audit_candidate("price_validation", item, False, item.get("reject_reason", "price_validation_failed"))
     if not valid:
         logger.warning("No picks passed cross-source price validation: %s", len(price_rejected))
         return []
@@ -240,6 +265,10 @@ def run_picker(analyzed: list = None) -> list:
     from modules.pattern_backtester import filter_candidates_by_edge
     valid, edge_rejected = filter_candidates_by_edge(valid)
     rejected = price_rejected + edge_rejected
+    for item in valid:
+        audit_candidate("pattern_edge", item, True, "proven_edge_passed")
+    for item in edge_rejected:
+        audit_candidate("pattern_edge", item, False, item.get("edge_reject_reason", "proven_edge_failed"))
     if not valid:
         logger.warning("No picks passed proven-edge pattern gate: %s rejected", len(rejected))
         return []
@@ -259,11 +288,22 @@ def run_picker(analyzed: list = None) -> list:
         logger.debug("Terminal ranking skipped in picker: %s", exc)
         valid.sort(key=lambda x: x["score"], reverse=True)
 
+    enriched_valid = []
+    for item in valid:
+        enriched = enrich_candidate(item, data_quality=data_quality)
+        enriched_valid.append(enriched)
+        audit_candidate("quality_scoring", enriched, True, enriched.get("quality_reasons", "quality_scored"))
+    valid = sorted(enriched_valid, key=lambda x: x.get("score", 0), reverse=True)
+
     # Take top N
     top_picks = valid[:TOP_N_PICKS]
+    selected_symbols = {p.get("symbol") for p in top_picks}
+    for item in valid[TOP_N_PICKS:]:
+        audit_candidate("final_selection", item, False, "ranked_below_top5_after_quality_scoring")
 
     for i, pick in enumerate(top_picks, start=1):
         pick["rank"] = i
+        audit_candidate("final_selection", pick, True, f"selected_rank_{i}")
 
     # Write to DB
     _write_picks_to_db(top_picks)
@@ -279,7 +319,9 @@ def get_todays_picks() -> list:
     with sqlite3.connect(DB_PATH) as conn:
         conn.row_factory = sqlite3.Row
         rows = conn.execute(
-            "SELECT * FROM picks WHERE date=? ORDER BY rank", (today,)
+            "SELECT * FROM picks WHERE date=? AND COALESCE(session_type, 'morning_final')='morning_final' "
+            "AND COALESCE(is_official_morning, 1)=1 ORDER BY rank",
+            (today,),
         ).fetchall()
     return [dict(r) for r in rows]
 

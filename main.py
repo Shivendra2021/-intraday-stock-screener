@@ -78,6 +78,24 @@ def _append_decision_log(stage: str, payload: dict) -> None:
         logger.warning("Failed to write decision log for %s: %s", stage, exc)
 
 
+def _write_morning_stage(stage: str, status: str, detail: str = "", extra: dict | None = None) -> None:
+    """Persist the current official morning pipeline stage for dashboard/debug."""
+    os.makedirs("data", exist_ok=True)
+    record = {
+        "date": today_ist_str(),
+        "updated_at": now_ist().isoformat(timespec="seconds"),
+        "stage": stage,
+        "status": status,
+        "detail": detail,
+        "extra": extra or {},
+    }
+    try:
+        with open(os.path.join("data", "morning_pipeline_state.json"), "w", encoding="utf-8") as fp:
+            json.dump(record, fp, ensure_ascii=False, indent=2, default=str)
+    except Exception as exc:
+        logger.debug("Could not write morning stage state: %s", exc)
+
+
 def _today_pick_count() -> int:
     """Return today's stored pick count from SQLite, if the DB is available."""
     try:
@@ -89,7 +107,12 @@ def _today_pick_count() -> int:
         today = today_ist_str()
         conn = sqlite3.connect(DB_PATH)
         try:
-            row = conn.execute("SELECT COUNT(*) FROM picks WHERE date=?", (today,)).fetchone()
+            row = conn.execute(
+                "SELECT COUNT(*) FROM picks WHERE date=? "
+                "AND COALESCE(session_type, 'morning_final')='morning_final' "
+                "AND COALESCE(is_official_morning, 1)=1",
+                (today,),
+            ).fetchone()
         finally:
             conn.close()
         return int(row[0] or 0) if row else 0
@@ -120,6 +143,7 @@ def _morning_decision_logged_today() -> bool:
                     str(record.get("timestamp", "")).startswith(today)
                     and record.get("stage") == "final_picks"
                     and int(record.get("final_count") or 0) > 0
+                    and record.get("session_type", "morning_final") == "morning_final"
                 ):
                     return True
     except Exception as exc:
@@ -131,6 +155,24 @@ def _morning_decision_logged_today() -> bool:
 def _morning_already_done_today() -> bool:
     """Check both durable places used by the morning flow."""
     return _today_pick_count() > 0 or _morning_decision_logged_today()
+
+
+def _morning_session_type() -> tuple[str, bool, str]:
+    """Classify a run so late recovery scans cannot look like official morning picks."""
+    try:
+        from config import MORNING_CATCHUP_END
+
+        catchup_end = datetime.time(*[int(x) for x in MORNING_CATCHUP_END.split(":", 1)])
+    except Exception:
+        catchup_end = datetime.time(10, 30)
+
+    if now_ist().time() <= catchup_end:
+        return "morning_final", True, "official_morning_pipeline"
+    return "late_intraday_recovery", False, "late_intraday_recovery_after_morning_window"
+
+
+def _is_official_morning_window() -> bool:
+    return _morning_session_type()[1]
 
 
 def _telegram_event_success_today(event_type: str) -> bool:
@@ -235,13 +277,16 @@ def run_morning_session():
         logger.info("Not a trading day, skipping")
         return
     
-    logger.info("=== MORNING SESSION STARTED ===")
+    session_type, is_official_morning, source_label = _morning_session_type()
+    logger.info("=== MORNING SESSION STARTED session=%s official=%s ===", session_type, is_official_morning)
+    _write_morning_stage("started", "running", f"session={session_type}", {"official": is_official_morning})
     
     # Get learned context from continuous learning
     from modules.continuous_learning import get_morning_context
     context = get_morning_context()
     
     logger.info(f"Morning context: {context.get('insights_summary', {})}")
+    _write_morning_stage("context", "done", "Loaded learned context", {"summary": context.get("insights_summary", {})})
     
     # Stage 1: Universe scan (08:00-08:40)
     from modules.universe_scanner import get_last_scan_diagnostics, scan_universe_parallel
@@ -257,6 +302,7 @@ def run_morning_session():
 
     if not candidates:
         logger.warning("Fallback scan empty")
+        _write_morning_stage("universe_scan", "failed", "No candidates from scanner or fallback")
         try:
             from modules.alerts import send_no_picks
             send_no_picks(
@@ -275,6 +321,7 @@ def run_morning_session():
         logger.debug("Terminal ranking skipped for candidates: %s", exc)
     
     logger.info(f"Universe scan: {len(candidates)} candidates")
+    _write_morning_stage("universe_scan", "done", f"{len(candidates)} candidates selected")
     _append_decision_log("universe_scan", {
         "candidate_count": len(candidates),
         "candidates": candidates,
@@ -293,6 +340,7 @@ def run_morning_session():
         logger.debug("Terminal ranking skipped for draft picks: %s", exc)
     
     logger.info(f"Deep research: {len(draft)} draft picks")
+    _write_morning_stage("deep_research", "done", f"{len(draft)} draft picks")
     _append_decision_log("deep_research", {
         "draft_count": len(draft),
         "draft_picks": draft,
@@ -318,6 +366,21 @@ def run_morning_session():
             pick["score"] = pick.get("terminal_score", pick.get("score", 0))
     except Exception as exc:
         logger.debug("Terminal ranking skipped for final picks: %s", exc)
+
+    try:
+        from modules.quality_gates import audit_candidate, data_quality_snapshot, enrich_candidate
+
+        quality = data_quality_snapshot("morning_final_before_store")
+        enriched_final = []
+        for pick in final:
+            enriched = enrich_candidate(pick, data_quality=quality)
+            enriched_final.append(enriched)
+            audit_candidate("morning_final_quality", enriched, True, enriched.get("quality_reasons", "quality_scored"))
+        final = sorted(enriched_final, key=lambda row: row.get("score", 0), reverse=True)[:5]
+        for i, pick in enumerate(final, start=1):
+            pick["rank"] = i
+    except Exception as exc:
+        logger.warning("Morning final quality scoring skipped: %s", exc)
     
     _daily_picks = final
     try:
@@ -329,43 +392,56 @@ def run_morning_session():
         logger.debug("Rejection audit skipped: %s", exc)
     
     logger.info(f"Dual-brain debate: {len(final)} picks, both_agreed={agreed}")
+    _write_morning_stage("dual_brain", "done", f"{len(final)} picks locked", {"both_agreed": agreed})
     _append_decision_log("final_picks", {
         "final_count": len(final),
         "both_agreed": agreed,
         "final_picks": final,
         "reject_audit": reject_audit,
+        "session_type": session_type,
+        "is_official_morning": is_official_morning,
+        "source_label": source_label,
     })
 
     try:
         from modules.picker import _write_picks_to_db
 
-        _write_picks_to_db(final)
+        _write_picks_to_db(
+            final,
+            session_type=session_type,
+            is_official_morning=is_official_morning,
+            source_label=source_label,
+        )
+        _write_morning_stage("persist", "done", f"{len(final)} picks stored", {"session_type": session_type})
     except Exception as exc:
         logger.error("Failed to persist final picks before Telegram send: %s", exc)
+        _write_morning_stage("persist", "failed", str(exc))
     
     # Send to Telegram (09:10)
-    sent = _send_telegram(final, agreed)
+    sent = _send_telegram(final, agreed, session_type=session_type, source_label=source_label)
     if not sent:
         logger.error("Morning final picks were generated but Telegram delivery failed")
+        _write_morning_stage("telegram", "failed", "Telegram delivery failed", {"session_type": session_type})
+    else:
+        _write_morning_stage("telegram", "done", "Telegram delivery complete", {"session_type": session_type})
     
     # Initialize tracking
     try:
         from modules.stock_tracker import init_tracking
-        init_tracking(final)
+        if is_official_morning:
+            init_tracking(final)
     except Exception as e:
         logger.debug(f"Tracking init: {e}")
 
-    try:
-        from modules.paper_portfolio import allocate_today
-        result = allocate_today()
-        logger.info("Paper portfolio allocation: %s", result)
-    except Exception as e:
-        logger.debug("Paper portfolio allocation skipped: %s", e)
-    
     logger.info("=== MORNING SESSION COMPLETE ===")
 
 
-def _send_telegram(picks: list[dict], agreed: bool) -> bool:
+def _send_telegram(
+    picks: list[dict],
+    agreed: bool,
+    session_type: str = "morning_final",
+    source_label: str = "official_morning_pipeline",
+) -> bool:
     """Send final picks to Telegram."""
     try:
         from modules.alerts import send_morning_final_picks, send_raw_alert
@@ -380,8 +456,17 @@ def _send_telegram(picks: list[dict], agreed: bool) -> bool:
             f"🧠 Model: {brain_status.get('grok_model', 'N/A')}"
         )
         
-        header_ok = send_raw_alert(header, review_with_grok=False)
-        picks_ok = send_morning_final_picks(picks, None, review_with_grok=False)
+        title = "FINAL PICKS" if session_type == "morning_final" else "LATE INTRADAY RECOVERY PICKS"
+        header = header.replace("FINAL PICKS", title) + f"\nSource: {source_label}"
+
+        header_ok = send_raw_alert(header, review_with_grok=False, event_type=f"{session_type}_header")
+        picks_ok = send_morning_final_picks(
+            picks,
+            None,
+            review_with_grok=False,
+            session_type=session_type,
+            source_label=source_label,
+        )
         
         ok = bool(header_ok and picks_ok)
         if not ok and picks:
@@ -394,9 +479,16 @@ def _send_telegram(picks: list[dict], agreed: bool) -> bool:
                     f"TP {float(pick.get('target_price') or 0):.2f}"
                 )
             compact.append("<i>Research only. Not a trade recommendation.</i>")
-            ok = send_raw_alert("\n".join(compact), review_with_grok=False)
+            ok = send_raw_alert("\n".join(compact), review_with_grok=False, event_type=f"{session_type}_fallback")
 
         logger.info("Sent %s picks to Telegram: %s", len(picks), ok)
+        if ok and session_type == "morning_final":
+            try:
+                from modules.dashboard_sync import sync_after_morning_telegram
+
+                sync_after_morning_telegram(picks)
+            except Exception as exc:
+                logger.warning("Dashboard sync after Telegram failed: %s", exc)
         return ok
     except Exception as e:
         logger.error(f"Telegram send: {e}")
@@ -425,7 +517,7 @@ def job_find_winners():
             for w in winners[:10]:
                 lines.append(f"• {w['symbol']}: +{w['return_pct']:.1f}% Vol:{w['volume_ratio']:.1f}x")
             
-            send_raw_alert("\n".join(lines))
+            send_raw_alert("\n".join(lines), event_type="intraday_winners")
             
             # Run pattern learning
             from modules.pattern_learner import run_self_learning
@@ -457,7 +549,7 @@ def job_after_market_learning():
         for p in result.get("patterns", [])[:5]:
             lines.append(f"• {p.get('pattern_key')}: conf {p.get('confidence', 0):.0%}, avg {p.get('avg_return_pct', 0):.1f}%")
         lines.append("\n<i>Research only. Learned similarities feed the next scan.</i>")
-        send_raw_alert("\n".join(lines))
+        send_raw_alert("\n".join(lines), event_type="after_market_learning")
     except Exception as e:
         logger.error("After-market learning failed: %s", e)
 
@@ -493,6 +585,30 @@ def job_health_check():
         logger.debug(f"Health check: {e}")
 
 
+def job_price_validation_warmup():
+    """Refresh quote validation before official morning picks are finalized."""
+    if not _is_trading_day():
+        return
+
+    logger.info("=== JOB: Price Validation Warmup ===")
+    symbols = ["RELIANCE", "TCS", "HDFCBANK", "INFY", "ICICIBANK"]
+    try:
+        from modules.price_validation import validate_price
+
+        results = [validate_price(symbol) for symbol in symbols]
+        passed = sum(1 for item in results if item.get("status") == "passed")
+        _write_morning_stage(
+            "price_validation",
+            "done" if passed else "check",
+            f"Validated {passed}/{len(results)} liquid reference symbols",
+            {"symbols": symbols},
+        )
+        logger.info("Price validation warmup complete: %s/%s passed", passed, len(results))
+    except Exception as exc:
+        logger.error("Price validation warmup failed: %s", exc)
+        _write_morning_stage("price_validation", "failed", str(exc))
+
+
 def job_morning_delivery_guard():
     """Guarantee that generated morning top-5 picks reach Telegram."""
     if not _is_trading_day():
@@ -524,6 +640,7 @@ def job_morning_delivery_guard():
                 "<b>MORNING PICKS DELIVERY WARNING</b>\n"
                 "No stored top-5 picks found after the catch-up window. Check scanner/provider logs.",
                 review_with_grok=False,
+                event_type="morning_delivery_warning",
             )
     except Exception as e:
         logger.error("Morning delivery guard failed: %s", e)
@@ -657,7 +774,16 @@ def main():
             start_ollama_intraday_agent(interval_minutes=OLLAMA_AGENT_INTERVAL_MINUTES)
     except Exception as exc:
         logger.error("Ollama intraday agent failed to start: %s", exc)
-    
+
+    try:
+        from config import TERMINAL_UPDATER_ENABLED, TERMINAL_UPDATER_INTERVAL_SECONDS
+        if TERMINAL_UPDATER_ENABLED:
+            from modules.terminal_updater import start_terminal_updater
+
+            start_terminal_updater(interval_seconds=TERMINAL_UPDATER_INTERVAL_SECONDS)
+    except Exception as exc:
+        logger.error("Live terminal updater failed to start: %s", exc)
+
     # Create scheduler for timed jobs
     from apscheduler.schedulers.blocking import BlockingScheduler
     from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED
@@ -694,13 +820,15 @@ def main():
             kwargs["misfire_grace_time"] = misfire_grace_time
         scheduler.add_job(job, "cron", **kwargs)
 
-    # Morning session
-    _add_cron(run_morning_session, MORNING_FINAL_PICKS, "morning", misfire_grace_time=5400)
-    _add_cron(job_morning_delivery_guard, "09:25", "morning_delivery_guard_0925", misfire_grace_time=3600)
-    _add_cron(job_morning_delivery_guard, "10:00", "morning_delivery_guard_1000", misfire_grace_time=3600)
+    # Official pre-market pipeline. This job starts before market open and sends
+    # final picks after scan/research/debate complete, not after stocks already move.
+    _add_cron(run_morning_session, MORNING_UNIVERSE_SCAN_START, "premarket_morning_pipeline", misfire_grace_time=5400)
+    _add_cron(job_morning_delivery_guard, MORNING_FINAL_PICKS, "morning_delivery_guard_final", misfire_grace_time=1800)
+    _add_cron(job_morning_delivery_guard, "09:10", "morning_delivery_guard_0910", misfire_grace_time=1200)
     
     # Intraday
-    _add_cron(job_health_check, "08:00", "health")
+    _add_cron(job_health_check, "07:45", "premarket_health")
+    _add_cron(job_price_validation_warmup, "08:35", "price_validation_warmup", misfire_grace_time=1800)
     _add_cron(job_preclose, PRECLOSE_SCAN_TIME, "preclose")
     _add_cron(job_find_winners, MARKET_LEARNER_START, "winners")
     _add_cron(job_after_market_learning, AFTER_MARKET_LEARNING_TIME, "after_market_learning")
@@ -716,7 +844,7 @@ def main():
     # Banner
     print("\n" + "#" * 60)
     print("  MarketMind Pro v2.0 — Dual-Session System")
-    print("  Session 1: Morning Pipeline (08:00-09:10)")
+    print(f"  Session 1: Pre-Market Pipeline ({MORNING_UNIVERSE_SCAN_START}-{MORNING_FINAL_PICKS})")
     print("  Session 2: Continuous Learning (ALWAYS RUNNING)")
     print("#" * 60 + "\n")
     
@@ -725,6 +853,7 @@ def main():
     if STARTUP_ANALYSIS_ON_LAUNCH:
         if not _is_trading_day():
             logger.info("Startup morning check: not a trading day, skipping")
+            _write_morning_stage("startup", "skipped", "Not a trading day")
         else:
             now = datetime.datetime.now().time()
             start = datetime.time(*_parse_hhmm(MORNING_UNIVERSE_SCAN_START))
@@ -734,6 +863,7 @@ def main():
 
             if already_done:
                 logger.info("Startup morning check: today's picks already exist, skipping")
+                _write_morning_stage("startup", "done", "Official morning picks already exist")
                 if not _telegram_event_success_today("morning_final_picks"):
                     picks = _load_todays_picks() or _daily_picks
                     if picks:
@@ -751,6 +881,7 @@ def main():
                 run_morning_session()
             elif now < start:
                 logger.info("Startup morning check: before morning window; scheduler will run at %s", MORNING_FINAL_PICKS)
+                _write_morning_stage("waiting", "pending", f"Pre-market pipeline starts at {MORNING_UNIVERSE_SCAN_START}")
             else:
                 logger.warning(
                     "Startup morning check: missed catch-up window (%s-%s) and no picks found; "
@@ -758,6 +889,16 @@ def main():
                     MORNING_UNIVERSE_SCAN_START,
                     MORNING_CATCHUP_END,
                 )
+                _write_morning_stage("missed", "missed", f"No official picks after catch-up window {MORNING_CATCHUP_END}")
+
+    try:
+        from config import AUTOMATION_SUPERVISOR_ENABLED, AUTOMATION_SUPERVISOR_INTERVAL_SECONDS
+        if AUTOMATION_SUPERVISOR_ENABLED:
+            from modules.automation_supervisor import start_automation_supervisor
+
+            start_automation_supervisor(interval_seconds=AUTOMATION_SUPERVISOR_INTERVAL_SECONDS)
+    except Exception as exc:
+        logger.error("Automation supervisor failed to start: %s", exc)
     
     try:
         scheduler.start()

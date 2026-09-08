@@ -241,7 +241,12 @@ def terminal_snapshot(limit: int = 20) -> dict[str, Any]:
     """Return a compact market-terminal snapshot for dashboard/API use."""
     from config import DB_PATH
 
-    today = dt.date.today().isoformat()
+    try:
+        from modules.time_utils import today_ist_str
+
+        today = today_ist_str()
+    except Exception:
+        today = dt.date.today().isoformat()
     picks: list[dict[str, Any]] = []
     try:
         with sqlite3.connect(DB_PATH) as conn:
@@ -249,7 +254,11 @@ def terminal_snapshot(limit: int = 20) -> dict[str, Any]:
             rows = conn.execute(
                 """SELECT symbol, rank, entry_price, sl_price, target_price, confidence AS score,
                           signal_reasons, status, created_at
-                   FROM picks WHERE date=? ORDER BY rank""",
+                   FROM picks
+                  WHERE date=?
+                    AND COALESCE(session_type, 'morning_final')='morning_final'
+                    AND COALESCE(is_official_morning, 1)=1
+                  ORDER BY rank""",
                 (today,),
             ).fetchall()
         picks = [dict(row) for row in rows]
