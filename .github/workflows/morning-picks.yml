@@ -2,11 +2,11 @@ name: Morning Picks
 
 on:
   workflow_dispatch:
-  schedule:
-    # 08:55, 09:10 and 09:25 Asia/Kolkata, expressed in UTC for GitHub Actions.
-    - cron: "25 3 * * 1-5"
-    - cron: "40 3 * * 1-5"
-    - cron: "55 3 * * 1-5"
+  # Automated schedule disabled by user request:
+  # schedule:
+  #   - cron: "25 3 * * 1-5"
+  #   - cron: "40 3 * * 1-5"
+  #   - cron: "55 3 * * 1-5"
 
 concurrency:
   group: morning-picks

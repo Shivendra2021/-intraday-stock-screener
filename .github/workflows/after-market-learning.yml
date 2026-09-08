@@ -2,9 +2,9 @@ name: After Market Learning
 
 on:
   workflow_dispatch:
-  schedule:
-    # 16:05 Asia/Kolkata, expressed in UTC for GitHub Actions.
-    - cron: "35 10 * * 1-5"
+  # Automated schedule disabled by user request:
+  # schedule:
+  #   - cron: "35 10 * * 1-5"
 
 concurrency:
   group: after-market-learning
