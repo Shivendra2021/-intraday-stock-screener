@@ -1182,10 +1182,10 @@ def api_api_limits():
         },
         {
             "id": "groq_deepseek",
-            "name": "Groq Cloud (DeepSeek-R1 / Llama 3.3)",
-            "short_name": "Groq DeepSeek-R1",
+            "name": "Groq Cloud (Reasoning Engine)",
+            "short_name": "Groq AI Brain",
             "category": "Fast Reasoning Fallback",
-            "model": "llama-3.3-70b-versatile",
+            "model": "groq/compound-mini",
             "limit": 14400,
             "used": groq_used,
             "remaining": max(0, 14400 - groq_used),
@@ -1250,6 +1250,8 @@ def api_api_limits():
         "all_healthy": True
     })
 
+
+@app.route("/api/system/status")
 def api_system_status():
     """Return current system power / operational status."""
     try:
