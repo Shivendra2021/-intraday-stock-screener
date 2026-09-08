@@ -1096,6 +1096,60 @@ def api_morning():
         return jsonify({"error": str(e)})
 
 
+@app.route("/api/market-pulse")
+def api_market_pulse():
+    """Real-time indices, categorized top movers with reasons, trending sectors, and war/macro news."""
+    from flask import request
+    try:
+        force = request.args.get("refresh") in ("1", "true", "yes")
+        from modules.market_pulse import get_full_market_pulse
+        return jsonify(get_full_market_pulse(force_refresh=force))
+    except Exception as e:
+        app.logger.error("Market pulse error: %s", e)
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/picks-history-json")
+def api_picks_history_json():
+    """Return daily top picks history stored in JSON format."""
+    try:
+        from modules.picker import load_picks_history_json, get_system_accuracy_stats
+        history = load_picks_history_json()
+        stats = get_system_accuracy_stats()
+        return jsonify({"history": history, "count": len(history), "system_accuracy": stats})
+    except Exception as e:
+        app.logger.error("Picks history JSON error: %s", e)
+        return jsonify({"error": str(e), "history": []}), 500
+
+
+@app.route("/api/system/status")
+def api_system_status():
+    """Return current system power / operational status."""
+    try:
+        from modules.market_pulse import get_system_power_state
+        return jsonify(get_system_power_state())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/system/toggle", methods=["GET", "POST"])
+def api_system_toggle():
+    """Toggle system power state between active and standby."""
+    from flask import request
+    try:
+        from modules.market_pulse import toggle_system_power
+        action = request.args.get("action") or (request.json or {}).get("action") if request.is_json else None
+        enable = None
+        if action == "on":
+            enable = True
+        elif action == "off":
+            enable = False
+        updated = toggle_system_power(enable)
+        return jsonify(updated)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == "__main__":
     import io, sys
     from waitress import serve

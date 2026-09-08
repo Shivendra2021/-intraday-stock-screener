@@ -52,7 +52,7 @@ PATTERN_LEARNER_RUN_TIME = "16:00"
 AFTER_MARKET_LEARNING_TIME = os.getenv("AFTER_MARKET_LEARNING_TIME", "15:50")
 
 # ── Pick Selection ─────────────────────────────────────────────────────────────
-TOP_N_PICKS              = 5
+TOP_N_PICKS              = 3
 MIN_SCORE_THRESHOLD      = 55
 MIN_TARGET_MOVE_PCT      = 5.0
 MAX_TARGET_MOVE_PCT      = 8.0
@@ -66,6 +66,7 @@ MIN_PRICE_FILTER         = 50
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 DB_PATH                  = "data/history.db"
+DAILY_PICKS_JSON_PATH    = "data/daily_picks_history.json"
 LOG_PATH                 = "logs/bot.log"
 OUTPUT_DIR               = "output/"
 

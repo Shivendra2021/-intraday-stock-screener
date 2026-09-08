@@ -328,14 +328,15 @@ def run_morning_session():
     })
     
     # Stage 2: Deep research (08:40-08:55)
+    from config import TOP_N_PICKS
     from modules.stock_selector import deep_research_stocks
-    draft = deep_research_stocks(candidates, n=5)
+    draft = deep_research_stocks(candidates, n=TOP_N_PICKS)
     
     if not draft:
-        draft = candidates[:5]
+        draft = candidates[:TOP_N_PICKS]
     try:
         from modules.market_terminal import rank_candidates
-        draft = rank_candidates(draft, limit=5)
+        draft = rank_candidates(draft, limit=TOP_N_PICKS)
     except Exception as exc:
         logger.debug("Terminal ranking skipped for draft picks: %s", exc)
     
@@ -351,16 +352,16 @@ def run_morning_session():
     ctx_str = f"Sectors: {set(s.get('sector') for s in draft)}, learned: {context}"
     final, agreed = debate_picks(draft, ctx_str)
     if not final:
-        final = draft[:5]
-    elif len(final) < 5:
+        final = draft[:TOP_N_PICKS]
+    elif len(final) < TOP_N_PICKS:
         existing = {p.get("symbol") for p in final}
-        final.extend([p for p in draft if p.get("symbol") not in existing][: 5 - len(final)])
-    if len(final) < 5:
+        final.extend([p for p in draft if p.get("symbol") not in existing][: TOP_N_PICKS - len(final)])
+    if len(final) < TOP_N_PICKS:
         existing = {p.get("symbol") for p in final}
-        final.extend([p for p in ranked_candidates if p.get("symbol") not in existing][: 5 - len(final)])
+        final.extend([p for p in ranked_candidates if p.get("symbol") not in existing][: TOP_N_PICKS - len(final)])
     try:
         from modules.market_terminal import rank_candidates
-        final = rank_candidates(final, limit=5)
+        final = rank_candidates(final, limit=TOP_N_PICKS)
         for i, pick in enumerate(final, start=1):
             pick["rank"] = i
             pick["score"] = pick.get("terminal_score", pick.get("score", 0))
@@ -376,7 +377,7 @@ def run_morning_session():
             enriched = enrich_candidate(pick, data_quality=quality)
             enriched_final.append(enriched)
             audit_candidate("morning_final_quality", enriched, True, enriched.get("quality_reasons", "quality_scored"))
-        final = sorted(enriched_final, key=lambda row: row.get("score", 0), reverse=True)[:5]
+        final = sorted(enriched_final, key=lambda row: row.get("score", 0), reverse=True)[:TOP_N_PICKS]
         for i, pick in enumerate(final, start=1):
             pick["rank"] = i
     except Exception as exc:
@@ -470,8 +471,8 @@ def _send_telegram(
         
         ok = bool(header_ok and picks_ok)
         if not ok and picks:
-            compact = ["<b>MARKETMIND PRO - FINAL TOP 5 PICKS</b>"]
-            for pick in picks[:5]:
+            compact = [f"<b>MARKETMIND PRO - FINAL TOP {TOP_N_PICKS} PICKS</b>"]
+            for pick in picks[:TOP_N_PICKS]:
                 compact.append(
                     f"{pick.get('rank', '')}. <b>{pick.get('symbol')}</b> "
                     f"Entry {float(pick.get('entry_price') or pick.get('price') or 0):.2f} | "
