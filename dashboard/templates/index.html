@@ -2446,52 +2446,72 @@
     }
 
     // ── System Power Toggle (ON / OFF) ──
+    // ── System Power Toggle (ON / OFF) ──
     async function toggleSystemPower() {
       const btn = document.getElementById('system-power-btn');
       const label = document.getElementById('power-label-text');
-      
-      try {
-        const res = await fetch('/api/system/toggle', { method: 'POST' });
-        const data = await res.json();
+      const isCurrentlyActive = btn.classList.contains('is-active');
 
-        if (data.enabled) {
+      label.innerHTML = `<i class="fa-solid fa-spinner fa-spin" style="margin-right: 4px;"></i> ${isCurrentlyActive ? 'Stopping...' : 'Starting...'}`;
+      btn.style.pointerEvents = 'none';
+      btn.style.opacity = '0.7';
+
+      try {
+        const res = await fetch('/api/system/toggle', { 
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: isCurrentlyActive ? 'off' : 'on' })
+        });
+        const data = await res.json();
+        const isRunning = (data.running !== undefined) ? data.running : (data.enabled !== undefined ? data.enabled : false);
+
+        if (isRunning) {
           btn.className = 'system-power-toggle is-active';
-          label.textContent = 'System Active';
-          showToast('System operational: automated scanning and alerts active', 'fa-circle-check');
+          label.innerHTML = '<i class="fa-solid fa-play" style="margin-right: 4px; font-size: 10px;"></i> System ON';
+          btn.title = `System core (main.py) running in background (PID ${data.pid || ''}). Click to turn OFF.`;
+          showToast(data.message || `System running in background properly (PID ${data.pid || ''})!`, 'fa-circle-check');
         } else {
           btn.className = 'system-power-toggle is-standby';
-          label.textContent = 'System Standby';
-          showToast('System paused: active scans on standby', 'fa-pause');
+          label.innerHTML = '<i class="fa-solid fa-power-off" style="margin-right: 4px; font-size: 10px;"></i> System OFF';
+          btn.title = 'System core stopped. Click to turn ON in background.';
+          showToast(data.message || 'System stopped and placed on standby', 'fa-pause');
         }
-        updateFooterStatus(data.enabled);
+        updateFooterStatus(isRunning, data.pid);
       } catch (err) {
         console.error('Error toggling system power:', err);
-        showToast('Error syncing system power state', 'fa-triangle-exclamation');
+        showToast('Error communicating with system background process', 'fa-triangle-exclamation');
+        checkSystemPowerStatus();
+      } finally {
+        btn.style.pointerEvents = 'auto';
+        btn.style.opacity = '1';
       }
     }
 
     async function checkSystemPowerStatus() {
       try {
-        const res = await fetch('/api/system/status');
+        const res = await fetch('/api/system/status?_t=' + Date.now());
         if (!res.ok) return;
         const data = await res.json();
         const btn = document.getElementById('system-power-btn');
         const label = document.getElementById('power-label-text');
+        const isRunning = (data.running !== undefined) ? data.running : (data.enabled !== undefined ? data.enabled : false);
         
-        if (data.enabled) {
+        if (isRunning) {
           btn.className = 'system-power-toggle is-active';
-          label.textContent = 'System Active';
+          label.innerHTML = '<i class="fa-solid fa-play" style="margin-right: 4px; font-size: 10px;"></i> System ON';
+          btn.title = `System core running in background (PID ${data.pid || ''}). Click to turn OFF.`;
         } else {
           btn.className = 'system-power-toggle is-standby';
-          label.textContent = 'System Standby';
+          label.innerHTML = '<i class="fa-solid fa-power-off" style="margin-right: 4px; font-size: 10px;"></i> System OFF';
+          btn.title = 'System stopped. Click to turn ON in background.';
         }
-        updateFooterStatus(data.enabled);
+        updateFooterStatus(isRunning, data.pid);
       } catch (err) {
         console.debug('System power check:', err);
       }
     }
 
-    function updateFooterStatus(isEnabled) {
+    function updateFooterStatus(isEnabled, pid) {
       const dot = document.getElementById('footer-status-dot');
       const text = document.getElementById('footer-status-text');
       const time = document.getElementById('footer-sync-time');
@@ -2499,10 +2519,10 @@
       if (dot && text) {
         if (isEnabled) {
           dot.style.backgroundColor = 'var(--accent-emerald)';
-          text.textContent = 'Core Operational';
+          text.textContent = pid ? `Core Active (PID ${pid})` : 'Core Operational';
         } else {
           dot.style.backgroundColor = 'var(--accent-amber)';
-          text.textContent = 'Standby Mode';
+          text.textContent = 'Standby Mode (Stopped)';
         }
       }
       if (time) {

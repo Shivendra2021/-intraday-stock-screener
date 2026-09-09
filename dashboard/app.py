@@ -1253,28 +1253,55 @@ def api_api_limits():
 
 @app.route("/api/system/status")
 def api_system_status():
-    """Return current system power / operational status."""
+    """Return current system power / background process status."""
     try:
-        from modules.market_pulse import get_system_power_state
-        return jsonify(get_system_power_state())
+        from modules.bot_process import get_bot_status
+        return jsonify(get_bot_status())
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/system/toggle", methods=["GET", "POST"])
 def api_system_toggle():
-    """Toggle system power state between active and standby."""
+    """Toggle background bot execution between active and standby."""
     from flask import request
     try:
-        from modules.market_pulse import toggle_system_power
-        action = request.args.get("action") or (request.json or {}).get("action") if request.is_json else None
+        from modules.bot_process import toggle_bot
+        action = request.args.get("action")
+        if not action and request.is_json and request.json:
+            action = request.json.get("action")
         enable = None
-        if action == "on":
+        if action in ("on", "start", "1", "true"):
             enable = True
-        elif action == "off":
+        elif action in ("off", "stop", "0", "false"):
             enable = False
-        updated = toggle_system_power(enable)
-        return jsonify(updated)
+        res = toggle_bot(enable)
+        # also return enabled boolean matching frontend
+        if "enabled" not in res and "state" in res:
+            res["enabled"] = res["state"].get("enabled", False)
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/system/start", methods=["POST"])
+def api_system_start():
+    """Explicitly start main.py in the background."""
+    try:
+        from modules.bot_process import start_bot
+        res = start_bot()
+        return jsonify(res)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/system/stop", methods=["POST"])
+def api_system_stop():
+    """Explicitly stop main.py in the background."""
+    try:
+        from modules.bot_process import stop_bot
+        res = stop_bot()
+        return jsonify(res)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 

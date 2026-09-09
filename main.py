@@ -48,6 +48,27 @@ logging.basicConfig(
 logging.getLogger("yfinance").setLevel(logging.CRITICAL)
 logger = logging.getLogger("main")
 
+# Record bot process PID for dashboard control
+def _save_bot_pid():
+    try:
+        os.makedirs("data", exist_ok=True)
+        with open(os.path.join("data", "bot.pid"), "w", encoding="utf-8") as f:
+            f.write(str(os.getpid()))
+    except Exception:
+        pass
+
+def _remove_bot_pid():
+    try:
+        pid_f = os.path.join("data", "bot.pid")
+        if os.path.exists(pid_f):
+            os.remove(pid_f)
+    except Exception:
+        pass
+
+import atexit
+_save_bot_pid()
+atexit.register(_remove_bot_pid)
+
 _daily_picks: list[dict] = []
 _runtime_lock = None
 
