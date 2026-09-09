@@ -92,39 +92,45 @@ def get_market_indices(force_refresh: bool = False) -> list[dict[str, Any]]:
     try:
         import yfinance as yf
         tickers = [m["symbol"] for m in symbol_map]
-        df = yf.download(tickers, period="5d", interval="15m", progress=False)
+        df_daily = yf.download(tickers, period="5d", interval="1d", progress=False)
 
         for m in symbol_map:
             sym = m["symbol"]
             try:
-                if isinstance(df.columns, tuple) or hasattr(df.columns, "levels"):
-                    closes = df["Close"][sym].dropna()
-                    highs = df["High"][sym].dropna()
-                    lows = df["Low"][sym].dropna()
+                if isinstance(df_daily.columns, tuple) or hasattr(df_daily.columns, "levels"):
+                    daily_closes = df_daily["Close"][sym].dropna()
+                    daily_highs  = df_daily["High"][sym].dropna()
+                    daily_lows   = df_daily["Low"][sym].dropna()
                 else:
-                    closes = df["Close"].dropna()
-                    highs = df["High"].dropna()
-                    lows = df["Low"].dropna()
+                    daily_closes = df_daily["Close"].dropna()
+                    daily_highs  = df_daily["High"].dropna()
+                    daily_lows   = df_daily["Low"].dropna()
 
-                if len(closes) >= 2:
-                    current_price = float(closes.iloc[-1])
-                    prev_close = float(closes.iloc[-2])
+                if len(daily_closes) >= 2:
+                    current_price = float(daily_closes.iloc[-1])
+                    prev_close = float(daily_closes.iloc[-2])
                     change_pts = current_price - prev_close
                     change_pct = (change_pts / prev_close) * 100 if prev_close else 0.0
-                    day_high = float(highs.max()) if not highs.empty else current_price
-                    day_low = float(lows.min()) if not lows.empty else current_price
-                    # Get 12 sample points for sparkline
-                    step = max(1, len(closes) // 12)
-                    sparkline = [round(float(val), 2) for val in closes.iloc[::step].tail(12)]
+                    day_high = float(daily_highs.iloc[-1])
+                    day_low = float(daily_lows.iloc[-1])
+                    sparkline = [round(float(val), 2) for val in daily_closes.tail(5)]
+                elif len(daily_closes) == 1:
+                    current_price = float(daily_closes.iloc[-1])
+                    prev_close = current_price
+                    change_pts = 0.0
+                    change_pct = 0.0
+                    day_high = float(daily_highs.iloc[-1])
+                    day_low = float(daily_lows.iloc[-1])
+                    sparkline = [day_low, (day_low + current_price) / 2, day_high, current_price]
                 else:
-                    raise ValueError("Insufficient points")
+                    raise ValueError("Insufficient daily data")
             except Exception as e:
                 logger.debug("Failed detailed history for %s: %s, using fallback", sym, e)
                 # Sensible baseline data if yfinance is temporarily ratelimited
                 defaults = {
-                    "^NSEI": {"price": 23635.10, "prev": 23779.15, "high": 23758.95, "low": 23580.40},
-                    "^NSEBANK": {"price": 56777.55, "prev": 57088.30, "high": 57150.20, "low": 56620.10},
-                    "^BSESN": {"price": 75577.60, "prev": 76132.80, "high": 76180.50, "low": 75430.20},
+                    "^NSEI": {"price": 23431.50, "prev": 23635.10, "high": 23758.95, "low": 23400.40},
+                    "^NSEBANK": {"price": 56295.55, "prev": 56777.55, "high": 57150.20, "low": 56220.10},
+                    "^BSESN": {"price": 74764.23, "prev": 75577.60, "high": 76180.50, "low": 74680.20},
                 }.get(sym, {"price": 20000, "prev": 19950, "high": 20050, "low": 19900})
                 current_price = defaults["price"]
                 change_pts = current_price - defaults["prev"]
