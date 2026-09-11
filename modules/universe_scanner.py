@@ -39,6 +39,16 @@ WORKER_COUNT = 16
 LAST_SCAN_DIAGNOSTICS: dict[str, Any] = {}
 
 
+def _get_nse_symbol(symbol: str) -> str:
+    """Normalize symbol to have .NS suffix for NSE."""
+    if not symbol:
+        return ""
+    clean = symbol.strip().upper().replace(".BO", "")
+    if not clean.endswith(".NS"):
+        clean = f"{clean}.NS"
+    return clean
+
+
 def _quick_analyze_symbol(symbol: str) -> dict[str, Any] | None:
     result, _reason = _quick_analyze_symbol_with_reason(symbol)
     return result
@@ -51,7 +61,6 @@ def _quick_analyze_symbol_with_reason(symbol: str) -> tuple[dict[str, Any] | Non
     """
     try:
         from modules.fetch import fetch_ohlcv
-        from modules.scanner import _get_nse_symbol
         
         # Ensure .NS suffix
         nse_sym = _get_nse_symbol(symbol)
@@ -78,7 +87,7 @@ def _quick_analyze_symbol_with_reason(symbol: str) -> tuple[dict[str, Any] | Non
             return None, "volume_below_filter"
         
         # Calculate metrics
-        price_change_pct = ((current_price - price_5d_ago) / price_5d_ago) * 100
+        price_change_pct = ((current_price - price_5d_ago) / price_5d_ago * 100) if price_5d_ago > 0 else 0.0
         
         # Volume ratio vs 5-day average
         vol_ratio = float(volume.iloc[-1] / avg_volume) if avg_volume > 0 else 1.0
@@ -86,7 +95,7 @@ def _quick_analyze_symbol_with_reason(symbol: str) -> tuple[dict[str, Any] | Non
         # Gap up from previous close
         if len(df) >= 2:
             prev_close = float(df["close"].iloc[-2])
-            gap_up = ((current_price - prev_close) / prev_close) * 100
+            gap_up = ((current_price - prev_close) / prev_close * 100) if prev_close > 0 else 0.0
         else:
             gap_up = 0.0
         
@@ -155,8 +164,9 @@ def get_full_universe() -> list[str]:
     except Exception:
         pass
     
-    # Fallback: Nifty500 + Extended
-    return _EXTENDED_UNIVERSE
+    # Fallback: Filtered Small & Midcap list from extended universe
+    from config import LARGECAP_EXCLUDE_LIST
+    return [s for s in _EXTENDED_UNIVERSE if s.upper() not in LARGECAP_EXCLUDE_LIST]
 
 
 _EXTENDED_UNIVERSE = [

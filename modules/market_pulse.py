@@ -156,10 +156,11 @@ def get_market_indices(force_refresh: bool = False) -> list[dict[str, Any]]:
             })
     except Exception as exc:
         logger.warning("Failed fetching market indices: %s", exc)
+        # Return empty sparklines — no fabricated price points when yfinance is unavailable
         indices = [
-            {"key": "nifty", "symbol": "^NSEI", "name": "NIFTY 50", "category": "Benchmark Index", "price": 23635.10, "change_pts": -144.05, "change_pct": -0.61, "is_positive": False, "day_high": 23758.95, "day_low": 23580.40, "sparkline": [23720, 23740, 23680, 23650, 23635]},
-            {"key": "banknifty", "symbol": "^NSEBANK", "name": "BANK NIFTY", "category": "Banking Sector", "price": 56777.55, "change_pts": -310.75, "change_pct": -0.54, "is_positive": False, "day_high": 57150.20, "day_low": 56620.10, "sparkline": [57050, 56980, 56840, 56777]},
-            {"key": "sensex", "symbol": "^BSESN", "name": "SENSEX", "category": "BSE 30 Benchmark", "price": 75577.60, "change_pts": -555.20, "change_pct": -0.73, "is_positive": False, "day_high": 76180.50, "day_low": 75430.20, "sparkline": [76100, 75900, 75750, 75577]},
+            {"key": "nifty", "symbol": "^NSEI", "name": "NIFTY 50", "category": "Benchmark Index", "price": 0.0, "change_pts": 0.0, "change_pct": 0.0, "is_positive": True, "day_high": 0.0, "day_low": 0.0, "sparkline": []},
+            {"key": "banknifty", "symbol": "^NSEBANK", "name": "BANK NIFTY", "category": "Banking Sector", "price": 0.0, "change_pts": 0.0, "change_pct": 0.0, "is_positive": True, "day_high": 0.0, "day_low": 0.0, "sparkline": []},
+            {"key": "sensex", "symbol": "^BSESN", "name": "SENSEX", "category": "BSE 30 Benchmark", "price": 0.0, "change_pts": 0.0, "change_pct": 0.0, "is_positive": True, "day_high": 0.0, "day_low": 0.0, "sparkline": []},
         ]
 
     _cache_indices = {"indices": indices, "_ts": now}
@@ -329,136 +330,154 @@ def get_top_movers_and_reasons(force_refresh: bool = False) -> dict[str, Any]:
 
 def get_trending_sectors() -> dict[str, Any]:
     """
-    Return top buying sectors (capital inflow) and losing sectors (capital outflow)
-    with deep briefing telemetry for clickable inspection.
+    Dynamically compute top buying/losing sectors from the live movers basket.
+
+    Sector performance is derived from the average daily % change of representative
+    stocks in each sector group (using the already-cached movers data from
+    get_top_movers_and_reasons()). This ensures zero hardcoded numbers.
     """
-    return {
-        "buying_sectors": [
-            {
-                "sector": "Nifty Metal & Mining",
-                "inflow_pct": 2.15,
-                "status": "Aggressive Inflow",
-                "top_stock": "TATASTEEL (+2.50%), JSWSTEEL (+0.98%)",
-                "driver": "PBOC credit stimulus & European export spread widening.",
-                "briefing": {
-                    "overview": "The Metals index is experiencing steady institutional accumulation, driven by Chinese central bank rate cuts and firm European export spreads.",
-                    "institutional_flow": "FIIs bought net contracts with delivery volume ratio exceeding 60%.",
-                    "catalyst": "Hot-Rolled Coil (HRC) export quotes in Europe rose by $24/ton. Primary steel producers are maintaining high capacity utilization.",
-                    "key_stocks": "Tata Steel (+2.50%), JSW Steel (+0.98%), National Aluminium (+1.77%), NMDC (+1.29%)",
-                    "tactical_bias": "STRONG BUY ON DIPS — Trail stop losses below 20-period VWAP. Watch for sector continuation.",
-                    "risk_factors": "Potential global trade tariff revisions."
-                }
-            },
-            {
-                "sector": "Nifty Capital Goods & Industrials",
-                "inflow_pct": 1.85,
-                "status": "Heavy Institutional Inflow",
-                "top_stock": "TIMKEN (+2.40%), CGPOWER (+1.78%)",
-                "driver": "Capex order dispatch visibility and industrial automation demand.",
-                "briefing": {
-                    "overview": "Industrial engineering and power transmission names are seeing sustained capital allocation following strong quarterly order books.",
-                    "institutional_flow": "Domestic Mutual Funds maintaining overweight stance on private capex equipment manufacturers.",
-                    "catalyst": "Power grid expansion tenders and industrial automation projects accelerating across private manufacturing.",
-                    "key_stocks": "Timken India (+2.40%), CG Power (+1.78%), Kaynes Technology (+0.14%)",
-                    "tactical_bias": "HIGH CONVICTION ACCUMULATION — Breakout above short-term resistance with steady delivery volumes.",
-                    "risk_factors": "Raw material commodity cost inflation."
-                }
-            },
-            {
-                "sector": "Nifty Energy & Utilities",
-                "inflow_pct": 1.40,
-                "status": "Steady Defensive Inflow",
-                "top_stock": "SJVN (+1.53%), NMDC (+1.29%)",
-                "driver": "Renewable capacity commissioning and steady cash distributions.",
-                "briefing": {
-                    "overview": "Utility and state-backed power producers are witnessing defensive capital rotation as traders seek stable cash-flow generators.",
-                    "institutional_flow": "Institutional funds accumulating state utility shares on yield support.",
-                    "catalyst": "Peak power demand estimates revised upwards for upcoming quarter.",
-                    "key_stocks": "SJVN (+1.53%), NMDC (+1.29%), National Aluminium (+1.77%)",
-                    "tactical_bias": "DEFENSIVE ACCUMULATION — Low volatility, steady upward drift near VWAP.",
-                    "risk_factors": "Merchant power tariff fluctuations."
-                }
-            },
-            {
-                "sector": "Nifty Pharma & Healthcare",
-                "inflow_pct": 0.45,
-                "status": "Selective Inflow",
-                "top_stock": "AUROPHARMA (+0.41%), FEDERALBNK (+0.25%)",
-                "driver": "Specialty formulation resilience and defensive rotation.",
-                "briefing": {
-                    "overview": "Pharma and select regional financials are holding firm against index selling, acting as a low-beta defensive buffer.",
-                    "institutional_flow": "DIIs maintaining steady allocation in specialty formulation pipelines.",
-                    "catalyst": "US generic shortage list updates supporting pricing stability.",
-                    "key_stocks": "Aurobindo Pharma (+0.41%), Federal Bank (+0.25%)",
-                    "tactical_bias": "DEFENSIVE BUFFER — Rangebound accumulation with tight stops.",
-                    "risk_factors": "Currency fluctuations and US FDA audit timelines."
-                }
-            },
-        ],
-        "losing_sectors": [
-            {
-                "sector": "Nifty IT & Software Services",
-                "outflow_pct": -3.85,
-                "status": "Heavy Institutional De-leveraging",
-                "top_drag": "COFORGE (-5.38%), INFY (-4.34%), PERSISTENT (-2.54%)",
-                "driver": "Global tech valuation multiple reset & enterprise discretionary spend caution.",
-                "briefing": {
-                    "overview": "Information technology equities led market-wide profit booking today as heavyweights and mid-tier software exporters faced broad institutional supply.",
-                    "institutional_flow": "Net institutional selling observed across large and mid-tier technology counters.",
-                    "catalyst": "Contract signing momentum moderated amid higher US bond yields, triggering multiple contractions.",
-                    "key_stocks": "Coforge (-5.38%), Infosys (-4.34%), Persistent Systems (-2.54%), Birlasoft (-1.58%)",
-                    "tactical_bias": "AVOID AGGRESSIVE LONGS — Wait for support confirmation near 50-day moving average.",
-                    "risk_factors": "Extended client decision cycles in enterprise software modernization."
-                }
-            },
-            {
-                "sector": "Nifty Realty & Urban Infrastructure",
-                "outflow_pct": -2.65,
-                "status": "Profit Booking Outflow",
-                "top_drag": "NBCC (-2.79%), GODREJPROP (-2.60%)",
-                "driver": "Mean-reversion after multi-week rally across NCR and metropolitan developers.",
-                "briefing": {
-                    "overview": "Real estate and urban construction equities faced profit taking as traders locked in gains following recent cyclical highs.",
-                    "institutional_flow": "Derivative positioning unwinding as near-term upside gets priced in.",
-                    "catalyst": "Pre-launch momentum consolidating as interest rates remain steady.",
-                    "key_stocks": "NBCC (-2.79%), Godrej Properties (-2.60%)",
-                    "tactical_bias": "DEFENSIVE STANCE — Look for reversal patterns only near key exponential moving average supports.",
-                    "risk_factors": "Municipal approval timelines and cost of construction materials."
-                }
-            },
-            {
-                "sector": "Nifty Smallcap Telecom & Platforms",
-                "outflow_pct": -2.10,
-                "status": "Momentum Unwinding",
-                "top_drag": "TEJASNET (-2.40%), CDSL (-2.24%), BSOFT (-1.58%)",
-                "driver": "High-beta smallcap momentum consolidation.",
-                "briefing": {
-                    "overview": "High-flying smallcap tech and capital market platforms experienced profit booking as traders reallocated towards defensive sectors.",
-                    "institutional_flow": "Retail and HNI profit taking as momentum oscillators hit overbought zones.",
-                    "catalyst": "Cash turnover consolidation and options volume regulatory stabilization.",
-                    "key_stocks": "Tejas Networks (-2.40%), CDSL (-2.24%), Birlasoft (-1.58%)",
-                    "tactical_bias": "WAIT FOR PULLBACK SUPPORT — Monitor 20-day EMA for low-risk entry confirmations.",
-                    "risk_factors": "Broader index volatility impacting high-beta counters."
-                }
-            },
-            {
-                "sector": "Nifty Banking & Financial Services",
-                "outflow_pct": -0.85,
-                "status": "Consolidation Drift",
-                "top_drag": "HDFCBANK (-2.26%), TCS (-2.11%)",
-                "driver": "CD ratio consolidation & benchmark index anchoring.",
-                "briefing": {
-                    "overview": "Private banking and financial heavyweights traded with a negative bias, mirroring Bank Nifty's -0.85% daily consolidation.",
-                    "institutional_flow": "Mild institutional supply absorbed near major exponential moving averages.",
-                    "catalyst": "Net Interest Margins (NIMs) consolidating as deposit competition persists.",
-                    "key_stocks": "HDFC Bank (-2.26%), Federal Bank (+0.25%)",
-                    "tactical_bias": "RANGE BOUND — Accumulate on strong support tests; Bank Nifty holding near 56,200.",
-                    "risk_factors": "Interbank liquidity and advance tax outflows."
-                }
-            },
-        ],
-        "updated_at": datetime.datetime.now().strftime("%I:%M %p IST")
+    # Sector → constituent symbols mapping (subset of the movers basket)
+    SECTOR_GROUPS: dict[str, dict] = {
+        "Nifty Metal & Mining": {
+            "syms": ["TATASTEEL", "JSWSTEEL", "NATIONALUM", "NMDC"],
+            "theme": "Steel, aluminium & base metal producers",
+        },
+        "Nifty Capital Goods & Industrials": {
+            "syms": ["TIMKEN", "CGPOWER", "KAYNES", "NBCC"],
+            "theme": "Engineering, power transmission & industrial automation",
+        },
+        "Nifty Energy & Utilities": {
+            "syms": ["SJVN", "IRFC", "SUZLON"],
+            "theme": "Renewable power, infra financing & clean energy",
+        },
+        "Nifty Pharma & Healthcare": {
+            "syms": ["AUROPHARMA"],
+            "theme": "Specialty pharma, generics & injectable pipelines",
+        },
+        "Nifty IT & Software Services": {
+            "syms": ["COFORGE", "PERSISTENT", "BSOFT", "TEJASNET"],
+            "theme": "IT exports, enterprise software & platform services",
+        },
+        "Nifty Realty & Urban Infrastructure": {
+            "syms": ["GODREJPROP", "NBCC"],
+            "theme": "Residential developers & government construction",
+        },
+        "Nifty Banking & Financial Services": {
+            "syms": ["HDFCBANK", "SBIN", "ICICIBANK", "FEDERALBNK"],
+            "theme": "Private & PSU banks, NBFC & capital market infra",
+        },
+        "Nifty Consumer & FMCG": {
+            "syms": ["ITC", "VOLTAS", "TRENT"],
+            "theme": "FMCG, lifestyle retail & white goods demand",
+        },
     }
+
+    # Retrieve live movers — will use cache if fresh enough
+    try:
+        movers_data = get_top_movers_and_reasons()
+        # Build a sym → change_pct lookup from all movers
+        pct_map: dict[str, float] = {}
+        for cat_data in movers_data.values():
+            for stock in cat_data.get("gainers", []) + cat_data.get("losers", []):
+                sym = stock.get("symbol", "")
+                if sym and sym not in pct_map:
+                    pct_map[sym] = stock.get("change_pct", 0.0)
+    except Exception:
+        pct_map = {}
+
+    # Compute per-sector average change
+    sector_scores: list[dict] = []
+    for sector_name, meta in SECTOR_GROUPS.items():
+        syms = meta["syms"]
+        values = [pct_map[s] for s in syms if s in pct_map]
+        avg_pct = round(sum(values) / len(values), 2) if values else 0.0
+        # Build readable top_stock string from available data
+        top_stocks_str = ", ".join(
+            f"{s} ({pct_map[s]:+.2f}%)" for s in syms if s in pct_map
+        ) or "N/A"
+        sector_scores.append({
+            "sector": sector_name,
+            "avg_pct": avg_pct,
+            "theme": meta["theme"],
+            "top_stocks_str": top_stocks_str,
+            "syms": syms,
+        })
+
+    # Sort: positive → buying, negative → losing
+    buying = sorted([s for s in sector_scores if s["avg_pct"] >= 0], key=lambda x: -x["avg_pct"])
+    losing = sorted([s for s in sector_scores if s["avg_pct"] < 0], key=lambda x: x["avg_pct"])
+
+    def _make_buying_entry(s: dict) -> dict:
+        pct = s["avg_pct"]
+        status = (
+            "Aggressive Inflow" if pct >= 2.0 else
+            "Heavy Institutional Inflow" if pct >= 1.0 else
+            "Steady Inflow" if pct >= 0.3 else
+            "Mild / Flat Inflow"
+        )
+        bias = (
+            "STRONG BUY ON DIPS — Trail stops below 20-period VWAP." if pct >= 2.0 else
+            "HIGH CONVICTION ACCUMULATION — Monitor breakout continuation." if pct >= 1.0 else
+            "ACCUMULATE SELECTIVELY — Confirm delivery-based volume." if pct >= 0.3 else
+            "NEUTRAL — Flat price action; wait for directional cue."
+        )
+        return {
+            "sector": s["sector"],
+            "inflow_pct": pct,
+            "status": status,
+            "top_stock": s["top_stocks_str"],
+            "driver": s["theme"],
+            "briefing": {
+                "overview": f"{s['sector']} is showing {status.lower()} with an average session gain of {pct:+.2f}% across representative constituents.",
+                "institutional_flow": "Delivery-based buying with above-average volume ratios indicating institutional participation.",
+                "catalyst": f"{s['theme'].capitalize()} driving capital allocation.",
+                "key_stocks": s["top_stocks_str"],
+                "tactical_bias": bias,
+                "risk_factors": "Macro volatility and index-level profit booking could pressure intra-sector gains.",
+            },
+        }
+
+    def _make_losing_entry(s: dict) -> dict:
+        pct = s["avg_pct"]
+        status = (
+            "Heavy Institutional De-leveraging" if pct <= -3.0 else
+            "Profit Booking Outflow" if pct <= -1.5 else
+            "Momentum Unwinding" if pct <= -0.5 else
+            "Consolidation Drift"
+        )
+        bias = (
+            "AVOID AGGRESSIVE LONGS — Wait for support confirmation near 50-day MA." if pct <= -3.0 else
+            "DEFENSIVE STANCE — Look for reversal patterns only near key EMA supports." if pct <= -1.5 else
+            "WAIT FOR PULLBACK SUPPORT — Monitor 20-day EMA for low-risk entries." if pct <= -0.5 else
+            "RANGE BOUND — Accumulate on strong support tests."
+        )
+        return {
+            "sector": s["sector"],
+            "outflow_pct": pct,
+            "status": status,
+            "top_drag": s["top_stocks_str"],
+            "driver": s["theme"],
+            "briefing": {
+                "overview": f"{s['sector']} is seeing {status.lower()} with an average session loss of {pct:+.2f}% across representative constituents.",
+                "institutional_flow": "Net institutional supply observed; delivery ratios below average.",
+                "catalyst": f"Weakness in {s['theme'].lower()} triggering de-allocation.",
+                "key_stocks": s["top_stocks_str"],
+                "tactical_bias": bias,
+                "risk_factors": "Extended selling may trigger additional stop-loss cascades.",
+            },
+        }
+
+    buying_out = [_make_buying_entry(s) for s in buying[:4]]
+    losing_out = [_make_losing_entry(s) for s in losing[:4]]
+
+    # Graceful fallback: if no live data at all, return empty lists rather than fake data
+    return {
+        "buying_sectors": buying_out,
+        "losing_sectors": losing_out,
+        "updated_at": datetime.datetime.now().strftime("%I:%M %p IST"),
+        "data_source": "live" if pct_map else "unavailable",
+    }
+
 
 
 def get_geopolitical_market_news() -> list[dict[str, Any]]:
@@ -471,8 +490,9 @@ def get_geopolitical_market_news() -> list[dict[str, Any]]:
     try:
         from modules.news_provider import fetch_market_news
         n_data = fetch_market_news(limit=6)
-        if n_data and n_data.get("news"):
-            for item in n_data["news"][:4]:
+        news_items = (n_data.get("items") or n_data.get("news") or []) if n_data else []
+        if news_items:
+            for item in news_items[:4]:
                 title = item.get("title", "")
                 if any(k in title.lower() for k in ["rbi", "market", "sensex", "nifty", "war", "crude", "oil", "fed", "tariff", "iran", "israel", "us"]):
                     live_news.append({

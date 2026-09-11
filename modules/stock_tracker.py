@@ -441,7 +441,7 @@ def close_and_report_eod() -> dict:
             price = _get_live_price(sym)
             if price and price > 0:
                 entry = data.get("entry_price", price)
-                pnl   = round((price - entry) / entry * 100, 2)
+                pnl   = round((price - entry) / entry * 100, 2) if entry and entry > 0 else 0.0
                 data["exit_price"] = round(price, 2)
                 data["exit_time"]  = _now_str()
                 data["status"]     = "EOD_CLOSED"

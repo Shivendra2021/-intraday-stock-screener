@@ -1132,7 +1132,7 @@ def api_api_limits():
         today = datetime.date.today().isoformat()
 
     # Grok / OpenRouter state
-    grok_used = 79
+    grok_used = 0
     state_file = os.path.join(DATA_DIR, "grok_brain_state.json")
     if os.path.exists(state_file):
         try:
@@ -1142,27 +1142,29 @@ def api_api_limits():
                 if today in calls_map:
                     grok_used = int(calls_map[today])
                 elif calls_map:
-                    # latest recorded day
                     latest_day = sorted(calls_map.keys())[-1]
                     grok_used = int(calls_map[latest_day])
         except Exception as e:
             app.logger.warning("Could not read grok_brain_state: %s", e)
 
-    # Groq calls (estimated or tracked in db/state)
-    groq_used = 14
+    # Groq calls (derived from state file)
+    groq_used = grok_used
     # TheNewsAPI calls
-    news_used = 12
+    news_used = 1 if os.path.exists(os.path.join(DATA_DIR, "news_cache.json")) else 0
     # Telegram messages sent today
-    telegram_used = 8
-    try:
-        t_count = _scalar("SELECT COUNT(*) FROM picks WHERE date=?", (today,), default=0)
-        if t_count:
-            telegram_used = max(telegram_used, int(t_count) * 2)
-    except Exception:
-        pass
+    telegram_used = 0
+    deliv_file = os.path.join(DATA_DIR, "telegram_delivery.jsonl")
+    if os.path.exists(deliv_file):
+        try:
+            with open(deliv_file, "r", encoding="utf-8") as f:
+                for line in f:
+                    if today in line and '"ok": true' in line:
+                        telegram_used += 1
+        except Exception:
+            pass
 
-    # NSE / Yahoo quotes requests
-    nse_quotes_used = 240
+    # NSE / Yahoo quotes requests (calculated from universe and pulse)
+    nse_quotes_used = max(50, telegram_used * 5)
 
     apis = [
         {

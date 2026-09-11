@@ -87,6 +87,24 @@ def _send(text: str, review_with_grok: bool = True, event_type: str = "telegram_
                 logger.info("Telegram message sent successfully")
                 _audit_send(event_type, True, "sent")
                 return True
+            elif r.status_code == 400 and ("parse" in r.text.lower() or "entity" in r.text.lower()):
+                # HTML entity error - sanitize by stripping HTML tags and retry as clean text
+                logger.warning("Telegram HTML parse error (%s), retrying as clean text...", r.text[:80])
+                import re
+                clean_text = re.sub(r"<[^>]+>", "", text)
+                plain_payload = {
+                    "chat_id": TELEGRAM_CHAT_ID,
+                    "text": clean_text,
+                }
+                r_plain = requests.post(url, json=plain_payload, timeout=15)
+                if r_plain.status_code == 200:
+                    logger.info("Telegram message sent successfully with plain text fallback")
+                    _audit_send(event_type, True, "sent_plain_fallback")
+                    return True
+                else:
+                    logger.error("Telegram fallback error %s: %s", r_plain.status_code, r_plain.text[:200])
+                    _audit_send(event_type, False, f"{r_plain.status_code}: {r_plain.text[:200]}")
+                    return False
             elif r.status_code == 429 or r.status_code == 503:
                 # Rate limited — wait and retry
                 wait_time = 2 ** attempt  # exponential backoff: 1s, 2s, 4s

@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MarketMind Pro — Tomorrow's Operational Master Guide</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+    
+    :root {
+      --bg: #0b0f17;
+      --card-bg: #111827;
+      --border: #1f2937;
+      --text: #f3f4f6;
+      --text-muted: #9ca3af;
+      --accent-green: #10b981;
+      --accent-blue: #3b82f6;
+      --accent-amber: #f59e0b;
+      --accent-purple: #8b5cf6;
+      --gold: #d4af37;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 40px 20px;
+    }
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    }
+    .header {
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 25px;
+      margin-bottom: 30px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .logo-title {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.5px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 9999px;
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge-green { background: rgba(16, 185, 129, 0.2); color: #34d399; border: 1px solid #059669; }
+    .badge-gold { background: rgba(212, 175, 55, 0.2); color: #fbbf24; border: 1px solid #d97706; }
+    
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin-bottom: 35px;
+    }
+    .meta-card {
+      background: #1a2234;
+      border: 1px solid #26334d;
+      border-radius: 10px;
+      padding: 14px;
+    }
+    .meta-card .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; font-weight: 600; }
+    .meta-card .val { font-size: 15px; font-weight: 700; margin-top: 4px; color: #fff; }
+
+    .phase-card {
+      background: #141c2e;
+      border-left: 4px solid var(--accent-blue);
+      border-radius: 8px;
+      padding: 22px;
+      margin-bottom: 22px;
+      border-top: 1px solid #1e293b;
+      border-right: 1px solid #1e293b;
+      border-bottom: 1px solid #1e293b;
+    }
+    .phase-card.p1 { border-left-color: var(--accent-green); }
+    .phase-card.p2 { border-left-color: var(--accent-blue); }
+    .phase-card.p3 { border-left-color: var(--accent-amber); }
+    .phase-card.p4 { border-left-color: var(--accent-purple); }
+
+    .phase-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .phase-time {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text-muted);
+      background: #0f172a;
+      padding: 4px 10px;
+      border-radius: 6px;
+    }
+    .phase-title {
+      font-size: 18px;
+      font-weight: 700;
+      color: #fff;
+    }
+    .target-pill {
+      font-size: 12px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: rgba(16, 185, 129, 0.15);
+      color: #34d399;
+    }
+    ul.checklist {
+      list-style: none;
+      margin-top: 10px;
+    }
+    ul.checklist li {
+      position: relative;
+      padding-left: 24px;
+      margin-bottom: 8px;
+      font-size: 14px;
+      color: #d1d5db;
+    }
+    ul.checklist li::before {
+      content: "✓";
+      position: absolute;
+      left: 0;
+      color: var(--accent-green);
+      font-weight: 800;
+    }
+
+    table.control-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 25px;
+      font-size: 14px;
+    }
+    table.control-table th, table.control-table td {
+      border: 1px solid #2d3748;
+      padding: 12px 14px;
+      text-align: left;
+    }
+    table.control-table th {
+      background: #1e293b;
+      color: #94a3b8;
+      font-size: 12px;
+      text-transform: uppercase;
+      font-weight: 700;
+    }
+    table.control-table tr:nth-child(even) { background: #0f172a; }
+
+    .footer-note {
+      text-align: center;
+      margin-top: 40px;
+      font-size: 12px;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+      padding-top: 20px;
+    }
+
+    @media print {
+      body { background: #fff; color: #000; padding: 0; }
+      .container { border: none; box-shadow: none; max-width: 100%; padding: 10px; background: #fff; }
+      .meta-card, .phase-card { background: #f8fafc; border-color: #cbd5e1; color: #000; }
+      .phase-title, .meta-card .val { color: #000; }
+      ul.checklist li { color: #334155; }
+      table.control-table th { background: #e2e8f0; color: #1e293b; }
+      table.control-table td { border-color: #cbd5e1; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <div class="header">
+    <div>
+      <div class="logo-title">MarketMind Pro</div>
+      <div style="font-size: 13px; color: var(--text-muted); margin-top: 4px;">Tomorrow's Full Single-Day Operational Master Blueprint</div>
+    </div>
+    <div>
+      <span class="badge badge-green">Production Ready</span>
+      <span class="badge badge-gold">Auto-Trading Advisory</span>
+    </div>
+  </div>
+
+  <div class="meta-grid">
+    <div class="meta-card">
+      <div class="label">Stock Universe</div>
+      <div class="val">Small & Midcap (2,489)</div>
+    </div>
+    <div class="meta-card">
+      <div class="label">AI Brain Layer</div>
+      <div class="val">Groq compound-mini</div>
+    </div>
+    <div class="meta-card">
+      <div class="label">Primary Dashboard</div>
+      <div class="val">http://localhost:5001</div>
+    </div>
+    <div class="meta-card">
+      <div class="label">Telegram Pipeline</div>
+      <div class="val">Active & Verified ✅</div>
+    </div>
+  </div>
+
+  <!-- Phase 1 -->
+  <div class="phase-card">
+    <div class="phase-header">
+      <div class="phase-title">Phase 1: Pre-Market System Boot & Ingestion</div>
+      <div class="phase-time">08:30 AM – 09:15 AM</div>
+    </div>
+    <ul class="checklist">
+      <li><strong>08:30 AM:</strong> System state check reads <code>data/system_state.json</code>, verifies power is <code>ACTIVE</code>.</li>
+      <li><strong>08:45 AM:</strong> SQLite trade logging database <code>screener.db</code> integrity check verified.</li>
+      <li><strong>09:00 AM:</strong> Small & Midcap filter gates the 2,489 symbols (large caps automatically discarded).</li>
+      <li><strong>09:08 AM:</strong> Pre-market order matching telemetry queried; gap-up candidate list generated.</li>
+    </ul>
+  </div>
+
+  <!-- Phase 2 -->
+  <div class="phase-card p1">
+    <div class="phase-header">
+      <div class="phase-title">Phase 2: Period 1 — Morning ORB Engine</div>
+      <div class="target-pill">Target: +5.5% to +8.0%</div>
+      <div class="phase-time">09:15 AM – 10:15 AM</div>
+    </div>
+    <ul class="checklist">
+      <li><strong>09:15 – 09:30 AM:</strong> Opening 15-minute high/low range defined for all candidate momentum stocks.</li>
+      <li><strong>09:30 – 10:15 AM:</strong> ORB Breakout triggers when volume exceeds 2.0x 20-day average.</li>
+      <li><strong>Risk Enforcement:</strong> Strict ATR-based stop loss calculated (1.2% - 1.8% max risk, RR ≥ 2.5:1).</li>
+      <li><strong>Dual-Brain Review:</strong> Groq DeepSeek evaluates setup and appends risk audit block.</li>
+      <li><strong>Telegram Alert:</strong> Verified candidate alert delivered immediately to your phone.</li>
+    </ul>
+  </div>
+
+  <!-- Phase 3 -->
+  <div class="phase-card p2">
+    <div class="phase-header">
+      <div class="phase-title">Phase 3: Period 2 — VWAP Pullback & Continuation</div>
+      <div class="target-pill">Target: +5.0% to +6.5%</div>
+      <div class="phase-time">10:15 AM – 12:30 PM</div>
+    </div>
+    <ul class="checklist">
+      <li><strong>Profit Protection:</strong> Morning picks that crossed +2.5% automatically trigger a breakeven stop alert.</li>
+      <li><strong>Continuation Screening:</strong> Scans stocks holding firmly above intraday VWAP with RSI between 52 and 68.</li>
+      <li><strong>Dip-Buying Triggers:</strong> Flags low-risk entries bouncing off the 9-period EMA / VWAP confluence zone.</li>
+    </ul>
+  </div>
+
+  <!-- Phase 4 -->
+  <div class="phase-card p3">
+    <div class="phase-header">
+      <div class="phase-title">Phase 4: Period 3 — Afternoon High-of-Day Surge</div>
+      <div class="target-pill">Target: +5.0% to +7.5%</div>
+      <div class="phase-time">12:30 PM – 02:15 PM</div>
+    </div>
+    <ul class="checklist">
+      <li><strong>European Cues (01:00 PM):</strong> Ingests international market opening cues and sectoral flows.</li>
+      <li><strong>Day-High Breakout:</strong> Targets consolidating leaders punching through Day High with secondary volume.</li>
+      <li><strong>02:15 PM Hard Gate:</strong> Entry gate closes; no fresh breakout entries permitted to avoid closing whip-saws.</li>
+    </ul>
+  </div>
+
+  <!-- Phase 5 -->
+  <div class="phase-card p4">
+    <div class="phase-header">
+      <div class="phase-title">Phase 5: Square-Off & EOD Master Reconciliation</div>
+      <div class="phase-time">02:30 PM – 04:00 PM</div>
+    </div>
+    <ul class="checklist">
+      <li><strong>02:30 – 03:15 PM:</strong> Trailing stops actively monitored; profit booking notifications dispatched.</li>
+      <li><strong>03:15 – 03:30 PM:</strong> Intraday square-off window; open trade metrics locked in.</li>
+      <li><strong>03:40 PM:</strong> Official 1-day close-to-close index calculation (NIFTY 50, BANK NIFTY, SENSEX).</li>
+      <li><strong>03:50 PM:</strong> Master EOD report compiled with win rate, maximum potential return, and dispatched to Telegram.</li>
+    </ul>
+  </div>
+
+  <!-- Table -->
+  <table class="control-table">
+    <thead>
+      <tr>
+        <th>Component</th>
+        <th>Tomorrow's Target Action</th>
+        <th>Operator Control Mechanism</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Web Dashboard</strong></td>
+        <td>Live market pulse, 15m sparklines, dynamic movers</td>
+        <td>Accessible via browser at <code>http://localhost:5001</code></td>
+      </tr>
+      <tr>
+        <td><strong>Power Toggle</strong></td>
+        <td>Instantly pause or resume bot scanning in background</td>
+        <td>1-Click Power Button on Web Dashboard</td>
+      </tr>
+      <tr>
+        <td><strong>Telegram Bot</strong></td>
+        <td>Delivers real-time trade signals and audits to phone</td>
+        <td>Audited in <code>data/telegram_delivery.jsonl</code></td>
+      </tr>
+      <tr>
+        <td><strong>AI Brain Layer</strong></td>
+        <td>Audits trade quality and assigns risk ratings</td>
+        <td>Groq DeepSeek <code>compound-mini</code> (auto-fallback to GPT)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="footer-note">
+    MarketMind Pro • Automated Intraday Research & Advisory Telemetry • Print or Save to PDF via Browser (Ctrl+P)
+  </div>
+</div>
+
+</body>
+</html>

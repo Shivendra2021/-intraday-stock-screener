@@ -102,6 +102,10 @@ def _score_stock(sym: str) -> Optional[dict]:
     Returns None if data unavailable or stock fails minimum criteria.
     """
     from modules.fetch import fetch_ohlcv
+    from modules.scanner import is_small_or_midcap
+
+    if not is_small_or_midcap(sym):
+        return None
 
     try:
         df = fetch_ohlcv(sym, period="3mo")

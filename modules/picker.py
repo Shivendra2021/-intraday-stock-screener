@@ -51,7 +51,7 @@ def _calculate_levels(stock: dict) -> dict | None:
     if rr < MIN_RISK_REWARD:
         return None
 
-    upside_pct = (target_price - price) / price * 100
+    upside_pct = ((target_price - price) / price * 100) if price and price > 0 else 0.0
 
     return {
         **stock,
@@ -125,28 +125,34 @@ def get_system_accuracy_stats() -> dict:
             tp = conn.execute("SELECT COUNT(*) FROM picks WHERE status='tp_hit'").fetchone()[0] or 0
             sl = conn.execute("SELECT COUNT(*) FROM picks WHERE status='sl_hit'").fetchone()[0] or 0
             closed = tp + sl
-            win_rate = (tp / closed * 100) if closed > 0 else 81.3
-            avg_ret = conn.execute("SELECT AVG(result_return) FROM picks WHERE result_return IS NOT NULL").fetchone()[0] or 5.4
+            win_rate = (tp / closed * 100) if closed > 0 else 0.0
+            avg_row = conn.execute("SELECT AVG(result_return) FROM picks WHERE result_return IS NOT NULL").fetchone()
+            avg_ret = avg_row[0] if (avg_row and avg_row[0] is not None) else 0.0
+            label = f"{round(win_rate, 1)}% System Accuracy" if closed > 0 else "0 Closed Trades"
+            sublabel = f"{tp} TP Hit / {sl} SL Hit" if closed > 0 else "Awaiting Market Execution"
             return {
                 "win_rate": round(win_rate, 1),
                 "tp_count": tp,
                 "sl_count": sl,
                 "total_closed": closed,
                 "avg_return": round(float(avg_ret), 2),
-                "label": f"{round(win_rate, 1)}% System Accuracy",
-                "sublabel": f"{tp} TP Hit / {sl} SL Hit",
+                "label": label,
+                "sublabel": sublabel,
             }
     except Exception as exc:
         logger.debug("Could not compute system accuracy: %s", exc)
         return {
-            "win_rate": 81.3,
-            "tp_count": 13,
-            "sl_count": 3,
-            "total_closed": 16,
-            "avg_return": 5.4,
-            "label": "81.3% System Accuracy",
-            "sublabel": "13 TP Hit / 3 SL Hit",
+            "win_rate": 0.0,
+            "tp_count": 0,
+            "sl_count": 0,
+            "total_closed": 0,
+            "avg_return": 0.0,
+            "label": "0 Closed Trades",
+            "sublabel": "Awaiting Market Execution",
         }
+
+
+get_historical_accuracy = get_system_accuracy_stats
 
 
 def save_picks_to_history_json(picks: list, date_str: str | None = None, timestamp_str: str | None = None) -> None:

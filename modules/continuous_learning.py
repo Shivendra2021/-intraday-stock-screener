@@ -153,7 +153,8 @@ def analyze_stock_batch(symbols: list[str], batch_size: int = 50) -> dict[str, A
                 
                 # Quick metrics
                 price = float(close.iloc[-1])
-                change_1m = ((price - float(close.iloc[0])) / float(close.iloc[0])) * 100
+                first_close = float(close.iloc[0])
+                change_1m = ((price - first_close) / first_close * 100) if first_close > 0 else 0.0
                 vol_ratio = float(volume.iloc[-1]) / volume.mean() if volume.mean() > 0 else 1.0
                 
                 results[sym] = {
