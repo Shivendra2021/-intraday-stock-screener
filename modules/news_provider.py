@@ -22,18 +22,22 @@ def _from_thenewsapi(limit: int) -> list[dict[str, Any]]:
 
     if not THENEWSAPI_KEY:
         return []
-    response = requests.get(
-        "https://api.thenewsapi.com/v1/news/all",
-        params={
-            "api_token": THENEWSAPI_KEY,
-            "search": "Indian stock market NSE",
-            "language": "en",
-            "limit": min(limit, 25),
-        },
-        timeout=8,
-    )
-    if response.status_code != 200:
-        logger.debug("TheNewsAPI returned HTTP %s", response.status_code)
+    try:
+        response = requests.get(
+            "https://api.thenewsapi.com/v1/news/all",
+            params={
+                "api_token": THENEWSAPI_KEY,
+                "search": "Indian stock market NSE",
+                "language": "en",
+                "limit": min(limit, 25),
+            },
+            timeout=8,
+        )
+        if response.status_code != 200:
+            logger.debug("TheNewsAPI returned HTTP %s", response.status_code)
+            return []
+    except Exception as e:
+        logger.debug("TheNewsAPI request failed: %s", e)
         return []
     rows = []
     for article in response.json().get("data", [])[:limit]:

@@ -1531,14 +1531,14 @@
       <div class="header-greeting">
         <h2>Welcome, Arin 
           <span class="greeting-pill" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); font-weight: 700;">
-            <i class="fa-solid fa-bullseye"></i> Overall Accuracy: <span id="header-accuracy-rate">81.2%</span> Win Rate
+            <i class="fa-solid fa-bullseye"></i> Overall Accuracy: <span id="header-accuracy-rate">--%</span> Win Rate
           </span>
-          <a href="#api-telemetry" class="greeting-pill" style="text-decoration: none; background: rgba(139, 92, 246, 0.15); color: var(--accent-violet-light); border-color: rgba(139, 92, 246, 0.35); cursor: pointer;" title="Grok 79/200 • Groq 14/14.4k • News 12/50">
-            <i class="fa-solid fa-server"></i> APIs: 5 Online (Grok 79/200)
+          <a href="#api-telemetry" class="greeting-pill" style="text-decoration: none; background: rgba(139, 92, 246, 0.15); color: var(--accent-violet-light); border-color: rgba(139, 92, 246, 0.35); cursor: pointer;" title="API Limits Status">
+            <i class="fa-solid fa-server"></i> APIs: Online
           </a>
           <span class="greeting-pill"><i class="fa-solid fa-shield-halved"></i> Pro Telemetry</span>
         </h2>
-        <p>Real-time autonomous screening, dual-brain validation & reinforcement intelligence • 13 TP / 3 SL Historic Wins</p>
+        <p>Real-time autonomous screening, dual-brain validation & reinforcement intelligence</p>
       </div>
 
       <div class="header-controls">
@@ -1816,7 +1816,7 @@
     let currentCapTab = 'all_highest';
     let marketPulseData = null;
     let apiLimitsData = null;
-    let systemAccuracyStats = { win_rate: 81.2, tp_count: 13, sl_count: 3, label: '81.2% System Accuracy', sublabel: '13 TP Hit / 3 SL Hit' };
+    let systemAccuracyStats = { win_rate: 0, tp_count: 0, sl_count: 0, label: '--% System Accuracy', sublabel: '0 TP Hit / 0 SL Hit' };
 
     // ── Real-time Live Clock ──
     function updateLiveClock() {
@@ -2089,9 +2089,9 @@
                 <div class="accuracy-api-row">
                   <span class="accuracy-api-info"><i class="fa-solid fa-microchip" style="color: #10b981;"></i> Groq DeepSeek:</span>
                   <div class="accuracy-api-usage">
-                    <span style="color: #ffffff;">${groqUsage.used} / 14.4k</span>
+                    <span style="color: #ffffff;">${groqUsage.used} / ${groqUsage.limit}</span>
                     <div class="accuracy-api-bar-track">
-                      <div class="accuracy-api-bar-fill" style="width: ${Math.min(100, Math.max(6, groqUsage.pct * 10))}%; background: #10b981;"></div>
+                      <div class="accuracy-api-bar-fill" style="width: ${Math.min(100, Math.max(6, groqUsage.pct))}%; background: #10b981;"></div>
                     </div>
                   </div>
                 </div>
@@ -2107,7 +2107,7 @@
               </div>
 
               <div class="index-range-bar" style="border-top: 1px solid rgba(16, 185, 129, 0.2); margin-top: 8px; padding-top: 8px; display: flex; align-items: center; justify-content: space-between;">
-                <span style="color: #34d399; font-size: 11px;"><i class="fa-solid fa-circle-check"></i> TP: 13 | SL: 3</span>
+                <span style="color: #34d399; font-size: 11px;"><i class="fa-solid fa-circle-check"></i> TP: ${systemAccuracyStats.tp_count} | SL: ${systemAccuracyStats.sl_count}</span>
                 <a href="#api-telemetry" class="btn-api-details" title="View detailed API quotas and rate limits">
                   <i class="fa-solid fa-sliders"></i> API Quotas
                 </a>
