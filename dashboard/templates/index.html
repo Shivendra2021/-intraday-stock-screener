@@ -2048,9 +2048,9 @@
           }).join('');
 
           // 4th Card: Overall System Accuracy + API Usage & Limits
-          const grokUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'openrouter_grok') || {used: 79, limit: 200, pct: 39.5}) : {used: 79, limit: 200, pct: 39.5};
-          const groqUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'groq_deepseek') || {used: 14, limit: 14400, pct: 0.1}) : {used: 14, limit: 14400, pct: 0.1};
-          const newsUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'thenewsapi') || {used: 12, limit: 50, pct: 24.0}) : {used: 12, limit: 50, pct: 24.0};
+          const grokUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'openrouter_grok') || {used: 0, limit: 0, pct: 0.0}) : {used: 0, limit: 0, pct: 0.0};
+          const groqUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'groq_deepseek') || {used: 0, limit: 0, pct: 0.0}) : {used: 0, limit: 0, pct: 0.0};
+          const newsUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'thenewsapi') || {used: 0, limit: 0, pct: 0.0}) : {used: 0, limit: 0, pct: 0.0};
 
           const accuracyCardHtml = `
             <div class="index-card" style="border-color: rgba(16, 185, 129, 0.35); background: linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(12, 14, 24, 0.8));">
@@ -2061,18 +2061,18 @@
                 </div>
                 <div class="index-badge badge-pos" style="background: rgba(16, 185, 129, 0.2); border-color: rgba(16, 185, 129, 0.4);">
                   <i class="fa-solid fa-bullseye"></i>
-                  ${systemAccuracyStats.win_rate || '81.2'}%
+                  ${systemAccuracyStats.win_rate || '0.0'}%
                 </div>
               </div>
               <div class="index-price-row">
-                <span class="index-current-price" style="color: #34d399;">${systemAccuracyStats.win_rate || '81.2'}%</span>
+                <span class="index-current-price" style="color: #34d399;">${systemAccuracyStats.win_rate || '0.0'}%</span>
                 <span class="index-change-pts" style="color: #38bdf8;">
-                  ${systemAccuracyStats.sublabel || '13 TP Hit • 3 SL Hit'}
+                  ${systemAccuracyStats.sublabel || '0 TP Hit • 0 SL Hit'}
                 </span>
               </div>
               <div class="sparkline-container" style="display: flex; align-items: center; justify-content: space-between; padding: 4px 0; height: auto;">
-                <div style="font-size: 11px; color: var(--text-secondary);">Avg Profit: <strong style="color: #34d399;">+5.05%</strong></div>
-                <div style="font-size: 11px; color: var(--text-secondary);">Total Closed: <strong style="color: #ffffff;">${systemAccuracyStats.total_closed || 16}</strong></div>
+                <div style="font-size: 11px; color: var(--text-secondary);">Avg Profit: <strong style="color: #34d399;">+0.00%</strong></div>
+                <div style="font-size: 11px; color: var(--text-secondary);">Total Closed: <strong style="color: #ffffff;">${systemAccuracyStats.total_closed || 0}</strong></div>
               </div>
               
               <!-- Real-time API Quota & Usage Meter Embedded in Accuracy Card -->
@@ -2355,7 +2355,7 @@
         if (summaryEl) {
           summaryEl.innerHTML = `
             <span style="color: var(--accent-cyan); font-weight: 600;">
-              <i class="fa-solid fa-bullseye"></i> System Accuracy: <strong>${systemAccuracyStats.win_rate}% Win Rate</strong> (${systemAccuracyStats.sublabel || '13 TP / 3 SL'}) • Strict Top 3 Quota
+              <i class="fa-solid fa-bullseye"></i> System Accuracy: <strong>${systemAccuracyStats.win_rate}% Win Rate</strong> (${systemAccuracyStats.sublabel || '0 TP / 0 SL'}) • Strict Top 3 Quota
             </span>
           `;
         }
@@ -2400,9 +2400,9 @@
                   <span class="accuracy-main-badge">
                     <i class="fa-solid fa-shield-halved"></i> ${systemAccuracyStats.win_rate}% Accuracy
                   </span>
-                  <span class="accuracy-subtext">${systemAccuracyStats.sublabel || '13 TP Hit / 3 SL Hit'}</span>
+                  <span class="accuracy-subtext">${systemAccuracyStats.sublabel || '0 TP Hit / 0 SL Hit'}</span>
                   <span class="accuracy-subtext" style="color: var(--accent-cyan); margin-top: 3px; font-size: 10px;">
-                    <i class="fa-solid fa-server"></i> Grok: 79/200 • Groq: 14/14.4k
+                    <i class="fa-solid fa-server"></i> Tracked Realtime
                   </span>
                 </div>
               </td>

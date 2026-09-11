@@ -82,7 +82,7 @@ def scan_top_performers(num_stocks: int = 100) -> list:
     try:
         universe = get_universe()
         scan_list = universe[:num_stocks]
-    except:
+    except Exception:
         scan_list = ["INFY", "TCS", "HDFCBANK", "BAJAJ-AUTO", "M&M", "SUNPHARMA", "TATASTEEL", "HINDUNILVR", "ITC"]
 
     gainers = []

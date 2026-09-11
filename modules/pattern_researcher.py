@@ -127,7 +127,7 @@ def scan_sector_momentum(sector: str) -> list:
             data = check_results_momentum(sym)
             if data and data.get("current_price", 0) > 0:
                 results.append(data)
-        except:
+        except Exception:
             continue
 
     results.sort(key=lambda x: x.get("change_pct", 0), reverse=True)
@@ -146,7 +146,7 @@ def find_results_day_stocks(top_n: int = 20) -> list:
         try:
             sector_stocks = scan_sector_momentum(sector)
             all_stocks.extend(sector_stocks)
-        except:
+        except Exception:
             continue
 
     all_stocks.sort(key=lambda x: x.get("change_pct", 0), reverse=True)
@@ -173,7 +173,7 @@ def find_weekly_highs(top_n: int = 20) -> list:
                         dist_to_high = ((high - current) / high) * 100
                         data["dist_to_52w_high"] = round(dist_to_high, 2)
                         results.append(data)
-        except:
+        except Exception:
             continue
 
     results.sort(key=lambda x: x.get("dist_to_52w_high", 100))
@@ -194,7 +194,7 @@ def find_news_momentum_stocks(top_n: int = 20) -> list:
                 data = check_results_momentum(sym)
                 if data and data.get("recommendation") in ["buy", "strongBuy"]:
                     results.append(data)
-        except:
+        except Exception:
             continue
 
     results.sort(key=lambda x: x.get("change_pct", 0), reverse=True)
