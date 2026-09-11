@@ -3,47 +3,213 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Intraday Stock Screener - Single Day Operational Report</title>
+    <title>Intraday Stock Screener - Single Day Report</title>
     <style>
-        :root {
-            --bg-color: #0b0f19;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --accent-blue: #3b82f6;
-            --accent-green: #10b981;
-            --card-bg: #1e293b;
-            --border-color: #334155;
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
         }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg-color); color: var(--text-main); line-height: 1.6; margin: 0; padding: 40px; }
-        h1, h2, h3 { color: #ffffff; font-weight: 600; }
-        .header { text-align: center; padding-bottom: 20px; border-bottom: 1px solid var(--border-color); margin-bottom: 40px; }
-        .timeline { position: relative; max-width: 900px; margin: 0 auto; }
-        .timeline::after { content: ''; position: absolute; width: 4px; background-color: var(--border-color); top: 0; bottom: 0; left: 20px; margin-left: -2px; }
-        .container { padding: 10px 40px; position: relative; background-color: inherit; width: calc(100% - 80px); }
-        .container::after { content: ''; position: absolute; width: 16px; height: 16px; right: -8px; background-color: var(--card-bg); border: 4px solid var(--accent-blue); top: 15px; border-radius: 50%; z-index: 1; left: 12px; }
-        .content { padding: 20px; background-color: var(--card-bg); position: relative; border-radius: 8px; border: 1px solid var(--border-color); }
-        .time-badge { display: inline-block; padding: 4px 12px; background: rgba(59, 130, 246, 0.2); color: #60a5fa; border-radius: 20px; font-weight: bold; font-size: 0.9em; margin-bottom: 10px; }
-        .phase-title { margin-top: 0; color: #e2e8f0; }
-        .alert-box { background: rgba(16, 185, MTI5LCAwLjEpOyBib3JkZXItbGVmdDogNHB4IHNvbGlkIHZhcigtLWFjY2VudC1ncmVlbik7IHBhZGRpbmc6IDEwcHggMTVweDsgbWFyZ2luOiAxNXB4IDA7IGZvbnQtZmFtaWx5OiBtb25vc3BhY2U7IGJvcmRlci1yYWRpdXM6IDRweDsgfQ
-        .architecture-table { d2lkdGg6IDEwMCU7IGJvcmRlci1jb2xsYXBzZTogY29sbGFwc2U7IG1hcmdpbjogMjBweCAwOyBiYWNrZ3JvdW5kOiB2YXIoLS1jYXJkLWJnKTsgfQ
-        .architecture-table dGgsIC5hcmNoaXRlY3R1cmUtdGFibGUgdGQgeyBib3JkZXI6IDFweCBzb2xpZCB2YXIoLS1ib3JkZXItY29sb3IpOyBwYWRkaW5nOiAxMnB4OyB0ZXh0LWFsaWduOiBsZWZ0OyB9
-        .architecture-table dGggeyBiYWNrZ3JvdW5kLWNvbG9yOiByZ2JhKDI1NSwgMjU1LCAyNTUsIDAuMDUpOyBjb2xvcjogIzYwYTVmYTsgfQ
-
-        @media cHJpbnQgeyBib2R5IHsgYmFja2dyb3VuZC1jb2xvcjogd2hpdGU7IGNvbG9yOiBibGFjazsgfSAuY29udGVudCwgLmFyY2hpdGVjdHVyZS10YWJsZSB7IGJhY2tncm91bmQtY29sb3I6ICNmOGY5ZmE7IGJvcmRlcjogMXB4IHNvbGlkICNkZWUyZTY7IH0gaDEsIGgyLCBoMywgLnBoYXNlLXRpdGxlIHsgY29sb3I6IGJsYWNrOyB9IC50aW1lbGluZTo6YWZ0ZXIgeyBiYWNrZ3JvdW5kLWNvbG9yOiAjZGVlMmU2OyB9IC5hbGVydC1ib3ggeyBiYWNrZ3JvdW5kOiAjZTZmNGVhOyBib3JkZXItbGVmdC1jb2xvcjogIzM0YTg1MzsgY29sb3I6ICMwMDA7IH0gfQ
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        h1, h2, h3 {
+            color: #2c3e50;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+        }
+        .phase {
+            background-color: #f8f9fa;
+            border-left: 4px solid #007bff;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .phase h3 {
+            margin-top: 0;
+            border-bottom: none;
+            color: #007bff;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        th {
+            background-color: #f4f4f4;
+            font-weight: bold;
+        }
+        .telegram-alert {
+            background-color: #e1f5fe;
+            border: 1px solid #b3e5fc;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            margin: 10px 0;
+        }
+        @media print {
+            body {
+                background-color: #fff;
+            }
+            .container {
+                box-shadow: none;
+                padding: 0;
+            }
+            .phase {
+                border-left-color: #333;
+                page-break-inside: avoid;
+            }
+            .phase h3 {
+                color: #333;
+            }
+        }
     </style>
 </head>
 <body>
+    <div class="container">
+        <h1>Intraday Stock Screener - Single Day Execution Report</h1>
+        <p>This document details the expected execution timeline, architecture, and configuration of the Intraday Stock Screener across a single trading day.</p>
+        
+        <h2>Timeline Phases</h2>
+        
+        <div class="phase">
+            <h3>1. Pre-Market (08:30–09:15 AM IST)</h3>
+            <p>System initializes, loads configuration, and authenticates with the broker. Pre-market gap analysis is performed.</p>
+            <div class="telegram-alert">
+🚀 [SYSTEM START] Intraday Screener Initialized
+✅ Broker Auth Successful
+📊 Pre-Market Gap Analysis Completed
+            </div>
+        </div>
 
-    <div Y2xhc3M9ImhlYWRlciI+
-        PGgxPkludHJhZGF5IFN0b2NrIFNjcmVlbmVyPC9oMT4
-        PGgzPlNpbmdsZS1EYXkgT3BlcmF0aW9uYWwgTGlmZWN5Y2xlIFJlcG9ydDwvaDM+
-        PHAgc3R5bGU9ImNvbG9yOiB2YXIoLS10ZXh0LW11dGVkKSI+BXV0b21hdGVkIE1hcmtldCBJbnRlbGxpZ2VuY2UgJiBFeGVjdXRpb24gV29ya2Zsb3c8L3A+
-    PC9kaXY+
+        <div class="phase">
+            <h3>2. ORB Phase (09:15–10:15 AM IST)</h3>
+            <p>Opening Range Breakout (ORB) monitoring. The system tracks the first 15-minute high and low, alerting on breakouts.</p>
+            <div class="telegram-alert">
+🔥 [ORB ALERT] RELIANCE Breakout
+Direction: BULLISH (Above 15m High)
+Price: 2540.50
+Target: 2560.00
+Stop-loss: 2530.00
+            </div>
+        </div>
 
-    PGRpdiBjbGFzcz0idGltZWxpbmUiPgogICAgICAgIDxkaXYgY2xhc3M9ImNvbnRhaW5lciI+
-        ICAgIDxkaXYgY2xhc3M9ImNvbnRlbnQiPgogICAgICAgICAgICAgICAgPGRpdiBjbGFzcz0idGltZS1iYWRnZSI+MDg6MzAg4oCTIDA5OjE1IEFNIElTVDwvZGl2PgogICAgICAgICAgICAgICAgPGgzIGNsYXNzPSJwaGFzZS10aXRsZSI+UHJlLU1hcmtldCBQcmVwYXJhdGlvbjwvaDM+DQogICAgICAgICAgICAgICAgPHA+PHN0cm9uZz5TeXN0ZW0gU3RhcnR1cDo8L3N0cm9uZz4gVGhlIHN5c3RlbSB3YWtlcyB1cCBhbmQgYmVnaW5zIHRoZSBwcmUtbWFya2V0IHNlcXVlbmNlLiBUaGUgZGFzaGJvYXJkIGluaXRpYWxpemVzIGFuZCBjb25uZWN0cyB0byB0aGUgU1FMaXRlIGhpc3RvcnkgREIuPC9wPg0KICAgICAgICAgICAgICAgIDxwPjxzdHJvbmc+VW5pdmVyc2UgTG9hZGluZzo8L3N0cm9uZz4gU2NhbnMgdGhlIFNtYWxsICYgTWlkY2FwIHVuaXZlcnNlICgyLDQ4OSBzdG9ja3MpLCBmaWx0ZXJpbmcgb3V0IGxhcmdlIGNhcHMgYW5kIGlsbGlxdWlkIHN0b2NrcyB2aWEgPGNvZGU+dW5pdmVyc2Vfc2Nhbm5lci5weTwvY29kZT4uPC9wPg0KICAgICAgICAgICAgICAgIDxwPjxzdHJvbmc+QUkgQnJhaW4gSW5pdDo8L3N0cm9uZz4gVGhlIGR1YWwtYnJhaW4gR3JvcS94QUkgZW5naW5lIGxvYWRzIGhpc3RvcmljYWwgY29udGV4dCBhbmQgb3Zlcm5pZ2h0IGdsb2JhbCBuZXdzLjwvcD4NCiAgICAgICAgICAgICAgICA8cD48c3Ryb25nPlRlbGVncmFtIEJyaWVmaW5nOjwvc3Ryb25nPiBTZW5kcyBhIHByZS1tYXJrZXQgc2V0dXAgc3VtbWFyeSB0byB0aGUgVGVsZWdyYW0gY2hhbm5lbC48L3A+DQogICAgICAgICAgICAgICAgPGRpdiBjbGFzcz0iYWxlcnQtYm94Ij4NCiAgICAgICAgICAgICAgICAgICAgPHN0cm9uZz5bVGVsZWdyYW0gQWxlcnQgRXhhbXBsZV08L3N0cm9uZz48YnI+DQogICAgICAgICAgICAgICAgICAgIPCfk4ggTUFSS0VUTUlORCBQUk8gLSBQUkUtTUFSS0VUIEJSSUVGSU5HPGJyPg0KICAgICAgICAgICAgICAgICAgICDigKIgR2xvYmFsIE1hcmtldHM6IEFzaWFuIGluZGljZXMgKzEuMiUsIFVTIGZ1dHVyZXMgZmxhdC48YnI+DQogICAgICAgICAgICAgICAgICAgIOKAoiBTZXR1cDogRmF2b3JpbmcgSVQgTWlkY2FwcyBkdWUgdG8gb3Zlcm5pZ2h0IE5hc2RhcSBzdXJnZS4NCiAgICAgICAgICAgICAgICA8L2Rpdj4NCiAgICAgICAgICAgIDwvZGl2PgogICAgICAgIDwvZGl2PgogICAgICAgIDxkaXYgY2xhc3M9ImNvbnRhaW5lciI+
-        ICAgIDxkaXYgY2xhc3M9ImNvbnRlbnQiPgogICAgICAgICAgICAgICAgPGRpdiBjbGFzcz0idGltZS1iYWRnZSI+MDk6MTUg4oCTIDEwOjE1IEFNIElTVDwvZGl2PgogICAgICAgICAgICAgICAgPGgzIGNsYXNzPSJwaGFzZS10aXRsZSI+TWFya2V0IE9wZW4gJiBPUkIgUGhhc2U8L2gzPg0KICAgICAgICAgICAgICAgIDxwPjxzdHJvbmc+T1JCIERldGVjdGlvbjo8L3N0cm9uZz4gRGV0ZWN0cyBPcGVuaW5nIFJhbmdlIEJyZWFrb3V0cy4gSGlnaC1tb21lbnR1bSBzdG9ja3MgYnJlYWtpbmcgdGhlaXIgMTUtbWludXRlIGhpZ2ggYXJlIHByaW9yaXRpemVkLjwvcD4NCiAgICAgICAgICAgICAgICA8cD48c3Ryb25nPlNjb3Jpbmc6PC9zdHJvbmc+IFN0b2NrcyBhcmUgc2NvcmVkIGJhc2VkIG9uIHZvbHVtZSBhbm9tYWxpZXMsIHNlY3RvciBpbmZsb3csIGFuZCByZWxhdGl2ZSBzdHJlbmd0aC48L3A+DQogICAgICAgICAgICAgICAgPHA+PHN0cm9uZz5TaWduYWwgR2VuZXJhdGlvbjo8L3N0cm9uZz4gVGhlIEFJIGR1YWwtYnJhaW4gY29uZmlybXMgc2V0dXBzLiBUb3AgcGlja3MgYXJlIGZpbmFsaXplZCBhbmQgZGlzcGF0Y2hlZCB0byBUZWxlZ3JhbS48L3A+DQogICAgICAgICAgICAgICAgPGRpdiBjbGFzcz0iYWxlcnQtYm94Ij4NCiAgICAgICAgICAgICAgICAgICAgPHN0cm9uZz5bVGVsZWdyYW0gQWxlcnQgRXhhbXBsZV08L3N0cm9uZz48YnI+DQogICAgICAgICAgICAgICAgICAgIPCfmIAgTkVXIElOVFJBREFZIExPTkc6IEtQSVRURUNIPGJyPg0KICAgICAgICAgICAgICAgICAgICBFbnRyeTogMTU0MCB8IFRhcmdldDogMTYxMCB8IFN0b3A6IDE1MTA8YnI+DQogICAgICAgICAgICAgICAgICAgIENvbmZpZGVuY2U6IDkyJSAoT1JCIEJyZWFrb3V0ICsgSVQgU2VjdG9yIEluZmxvdykNCiAgICAgICAgICAgICAgICA8L2Rpdj4NCiAgICAgICAgICAgIDwvZGl2PgogICAgICAgIDwvZGl2PgogICAgICAgIDxkaXYgY2xhc3M9ImNvbnRhaW5lciI+
-        ICAgIDxkaXYgY2xhc3M9ImNvbnRlbnQiPgogICAgICAgICAgICAgICAgPGRpdiBjbGFzcz0idGltZS1iYWRnZSI+MTA6MTUgQU0g4oCTIDEyOjMwIFBNIElTVDwvZGl2PgogICAgICAgICAgICAgICAgPGgzIGNsYXNzPSJwaGFzZS10aXRsZSI+TWlkZGF5IFZXQVAgJiBDb25zb2xpZGF0aW9uIFBoYXNlPC9oMz4NCiAgICAgICAgICAgICAgICA8cD48c3Ryb25nPlZXQVAgQW5jaG9yaW5nOjwvc3Ryb25nPiA8Y29kZT5zdG9ja190cmFja2VyLnB5PC9jb2RlPiBtb25pdG9ycyBhY3RpdmUgcG9zaXRpb25zIGFnYWluc3QgVldBUC4gSWYgYSBzdG9jayBob2xkcyBhYm92ZSBWV0FQIG9uIHB1bGxiYWNrcywgY29udmljdGlvbiBpbmNyZWFzZXMuPC9wPg0KICAgICAgICAgICAgICAgIDxwPjxzdHJvbmc+VHJlbmQgQ29udGludWF0aW9uOjwvc3Ryb25nPiBUaGUgc3lzdGVtIGxvb2tzIGZvciBzZWNvbmRhcnkgYnJlYWtvdXRzIGluIHRoZSB0cmVuZGluZyBzZWN0b3JzIGlkZW50aWZpZWQgZWFybGllciBpbiB0aGUgZGF5LjwvcD4NCiAgICAgICAgICAgIDwvZGl2PgogICAgICAgIDwvZGl2PgogICAgICAgIDxkaXYgY2xhc3M9ImNvbnRhaW5lciI+
-        ICAgIDxkaXYgY2xhc3M9ImNvbnRlbnQiPgogICAgICAgICAgICAgICAgPGRpdiBjbGFzcz0idGltZS1iYWRnZSI+MTI6MzAg4oCTIDAyOjE1IFBNIElTVDwvZGl2PgogICAgICAgICAgICAgICAgPGgzIGNsYXNzPSJwaGFzZS10aXRsZSI+BWZ0ZXJub29uIFN1cmdlIFBoYXNlPC9oMz4NCiAgICAgICAgICAgICAgICA8cD48c3Ryb25nPk1vbWVudHVtIFBsYXlzOjwvc3Ryb25nPiBUaGUgc3lzdGVtIGlkZW50aWZpZXMgZnJlc2ggaW5zdGl0dXRpb25hbCBpbmZsb3dzIG9jY3VycmluZyBwb3N0LUV1cm9wZWFuIG1hcmtldCBvcGVuLjwvcD4NCiAgICAgICAgICAgICAgICA8cD48c3Ryb25nPkFUUiBUYXJnZXRzOjwvc3Ryb25nPiBQb3NpdGlvbnMgYXJlIGR5bmFtaWNhbGx5IG1hbmFnZWQuIElmIGEgc3RvY2sgaGl0cyArNSUgdG8gKzglIChBVFItYmFzZWQgdGFyZ2V0cyksIHBhcnRpYWwgb3IgZnVsbCBwcm9maXRzIGFyZSBib29rZWQuPC9wPg0KICAgICAgICAgICAgPC9kaXY+DQogICAgICAgIDwvZGl2PgogICAgICAgIDxkaXYgY2xhc3M9ImNvbnRhaW5lciI+
-        ICAgIDxkaXYgY2xhc3M9ImNvbnRlbnQiPgogICAgICAgICAgICAgICAgPGRpdiBjbGFzcz0idGltZS1iYWRnZSI+MDI6MTUg4oCTIDAzOjMwIFBNIElTVDwvZGl2PgogICAgICAgICAgICAgICAgPGgzIGNsYXNzPSJwaGFzZS10aXRsZSI+U3F1YXJlLU9mZiBQaGFzZTwvaDM+DQogICAgICAgICAgICAgICAgPHA+PHN0cm9uZz5UcmFpbGluZyBTdG9wczwvc3Ryb25nPiBUaWdodGVucyB0cmFpbGluZyBzdG9wLWxvc3NlcyB0byBwcm90ZWN0IGFjY3VtdWxhdGVkIGludHJhZGF5IHByb2ZpdHMuPC9wPg0KICAgICAgICAgICAgICAgIDxwPjxzdHJvbmc+UG9zaXRpb24gQ2xvc3VyZTo8L3N0cm9uZz4gSW50cmFkYXkgTUlTIHBvc2l0aW9ucyBhcmUgc3F1YXJlZCBvZmYgYXV0b21hdGljYWxseSBvciBhbGVydHMgYXJlIHNlbnQgdG8gY2xvc2UgbWFudWFsbHkgYmVmb3JlIHRoZSAzOjE1IFBNIGJyb2tlciBhdXRvLXNxdWFyZS1vZmYgd2luZG93LjwvcD4NCiAgICAgICAgICAgIDwvZGl2PgogICAgICAgIDwvZGl2PgogICAgICAgIDxkaXYgY2xhc3M9ImNvbnRhaW5lciI+
-        ICAgIDxkaXYgY2xhc3M9ImNvbnRlbnQiPgogICAgICAgICAgICAgICAgPGRpdiBjbGFzcz0idGltZS1iYWRnZSI+MDM6MzAg4oCTIDA0OjAwIFBNIElTVDwvZGl2PgogICAgICAgICAgICAgICAgPGgzIGNsYXNzPSJwaGFzZS10aXRsZSI+RU9EIFJlY29uY2lsaWF0aW9uPC9oMz4NCiAgICAgICAgICAgICAgICA8cD48c3Ryb25nPlBuTCBDYWxjdWxhdGlvbjo8L3N0cm9uZz4gQ2FsY3VsYXRlcyBmaW5hbCBkYXkgbWV0cmljcyB3aXRob3V0IGRpdmlzaW9uLWJ5LXplcm8gZXJyb3JzLjwvcD4NCiAgICAgICAgICAgICAgICA8cD48c3Ryb25nPkNvbnRpbnVvdXMgTGVhcm5pbmc6PC9zdHJvbmc+IDxjb2RlPmNvbnRpbnVvdXNfbGVhcm5pbmcucHk8L2NvZGU+IHVwZGF0ZXMgdGhlIGxvY2FsIGtub3dsZWRnZSBiYXNlLCBhbmFseXppbmcgd2hpY2ggc2V0dXBzIHdvcmtlZCBhbmQgd2hpY2ggZmFpbGVkLjwvcD4NCiAgICAgICAgICAgICAgICA8cD48c3Ryb25nPkVPRCBTdW1tYXJ5Ojwvc3Ryb25nPiBEaXNwYXRjaGVzIHRoZSBmaW5hbCBkYWlseSByZXBvcnQgdG8gVGVsZWdyYW0uPC9wPg0KICAgICAgICAgICAgICAgIDxkaXYgY2xhc3M9ImFsZXJ0LWJveCI+DQogICAgICAgICAgICAgICAgICAgIDxzdHJvbmc+W1RlbGVncmFtIEFsZXJ0IEV4YW1wbGVdPC9zdHJvbmc+PGJyPg0KICAgICAgICAgICAgICAgICAgICDwn5SkIEVPRCBTVU1NQVJZIFJFUE9SVDxicj4NCiAgICAgICAgICAgICAgICAgICAg4oCiIFRvdGFsIENhbGxzOiA0IHwgSGl0czogMyB8IE1pc3NlczogMTxicj4NCiAgICAgICAgICAgICAgICAgICAg4oCiIE5ldCBEYXkgUG5MOiArNS4yJTxicj4NCiAgICAgICAgICAgICAgICAgICAg4oCiIFRvcCBXaW5uZXI6IEtQSVRURUNIICgrNC41JSkNCiAgICAgICAgICAgICAgICA8L2Rpdj4NCiAgICAgICAgICAgIDwvZGl2PgogICAgICAgIDwvZGl2PgogICAgPC9kaXY+DQogICAgPGRpdiBzdHlsZT0ibWFyZ2luLXRvcDogNTBweDsiPgogICAgICAgIDxoMj5TeXN0ZW0gQXJjaGl0ZWN0dXJlIERpYWdyYW08L2gyPgogICAgICAgIDx0YWJsZSBjbGFzcz0iYXJjaGl0ZWN0dXJlLXRhYmxlIj4NCiAgICAgICAgICAgIDx0aGVhZD4NCiAgICAgICAgICAgICAgICA8dHI+DQogICAgICAgICAgICAgICAgICAgIDx0aD5Nb2R1bGU8L3RoPg0KICAgICAgICAgICAgICAgICAgICA8dGg+RmlsZTwvdGg+DQogICAgICAgICAgICAgICAgICAgIDx0aD5SZXNwb25zaWJpbGl0eTwvdGg+DQogICAgICAgICAgICAgICAgPC90cj4NCiAgICAgICAgICAgIDwvdGhlYWQ+DQogICAgICAgICAgICA8dGJvZHk+DQogICAgICAgICAgICAgICAgPHRyPg0KICAgICAgICAgICAgICAgICAgICA8dGQ+PHN0cm9uZz5Db3JlIExvb3A8L3N0cm9uZz48L3RkPg0KICAgICAgICAgICAgICAgICAgICA8dGQ+PGNvZGU+bWFpbi5weTwvY29kZT4gLyA8Y29kZT5ib3RfcHJvY2Vzcy5weTwvY29kZT48L3RkPg0KICAgICAgICAgICAgICAgICAgICA8dGQ+U2NoZWR1bGVzIEFQU2NoZWR1bGVyIGpvYnMsIGhhbmRsZXMgc3lzdGVtIE9OL09GRiBzdGF0ZSBhbmQgZGFlbW9uIHByb2Nlc3Nlcy48L3RkPg0KICAgICAgICAgICAgICAgIDwvdHI+DQogICAgICAgICAgICAgICAgPHRyPg0KICAgICAgICAgICAgICAgICAgICA8dGQ+PHN0cm9uZz5EYXNoYm9hcmQ8L3N0cm9uZz48L3RkPg0KICAgICAgICAgICAgICAgICAgICA8dGQ+PGNvZGU+ZGFzaGJvYXJkL2FwcC5weTwvY29kZT48L3RkPg0KICAgICAgICAgICAgICAgICAgICA8dGQ+Rmxhc2sgQVBJLCBVSSBmb3IgbW9uaXRvcmluZywgcmVhbC10aW1lIGZldGNoaW5nIHdpdGhvdXQgaGFyZGNvZGVkIGZhbGxiYWNrIGJ1Z3MuPC90ZD4NCiAgICAgICAgICAgICAgICA8L3RyPg0KICAgICAgICAgICAgICAgIDx0cj4NCiAgICAgICAgICAgICAgICAgICAgPHRkPjxzdHJvbmc+QUkgQnJhaW48L3N0cm9uZz48L3RkPg0KICAgICAgICAgICAgICAgICAgICA8dGQ+PGNvZGU+bW9kdWxlcy9ncm9rX2JyYWluLnB5PC9jb2RlPiAvIDxjb2RlPmR1YWxfYnJhaW4ucHk8L2NvZGU+PC90ZD4NCiAgICAgICAgICAgICAgICAgICAgPHRkPkludGVycHJldHMgbWFya2V0IG5ld3MsIGRlYmF0ZXMgc2V0dXBzLCBjb25maXJtcyBwYXR0ZXJucy48L3RkPg0KICAgICAgICAgICAgICAgIDwvdHI+DQogICAgICAgICAgICAgICAgPHRyPg0KICAgICAgICAgICAgICAgICAgICA8dGQ+PHN0cm9uZz5TY2FubmVyPC9zdHJvbmc+PC90ZD4NCiAgICAgICAgICAgICAgICAgICAgPHRkPjxjb2RlPm1vZHVsZXMvdW5pdmVyc2Vfc2Nhbm5lci5weTwvY29kZT48L3RkPg0KICAgICAgICAgICAgICAgICAgICA8dGQ+RmlsdGVycyB0aGUgMiw0ODkgU21hbGwvTWlkY2FwIHVuaXZlcnNlLCBkcm9wcGluZyBsYXJnZSBjYXBzIGFuZCBpbGxpcXVpZCBzdG9ja3MuPC90ZD4NCiAgICAgICAgICAgICAgICA8L3RyPg0KICAgICAgICAgICAgICAgIDx0cj4NCiAgICAgICAgICAgICAgICAgICAgPHRkPjxzdHJvbmc+BWxlcnRzPC9zdHJvbmc+PC90ZD4NCiAgICAgICAgICAgICAgICAgICAgPHRkPjxjb2RlPm1vZHVsZXMvYWxlcnRzLnB5PC9jb2RlPjwvdGQ+DQogICAgICAgICAgICAgICAgICAgIDx0ZD5Gb3JtYXRzIGFuZCBkaXNwYXRjaGVzIHNpZ25hbHMgYW5kIHJlcG9ydHMgdG8gVGVsZWdyYW0gKGhhbmRsZXMgSFRNTCBwYXJzZSBlcnJvcnMpLjwvdGQ+DQogICAgICAgICAgICAgICAgPC90cj4NCiAgICAgICAgICAgIDwvdGJvZHk+DQogICAgICAgIDwvdGFibGU+DQogICAgPC9kaXY+DQogICAgPGRpdiBzdHlsZT0ibWFyZ2luLXRvcDogNTBweDsiPgogICAgICAgIDxoMj5LZXkgQ29uZmlndXJhdGlvbiBSZWZlcmVuY2UgKGNvbmZpZy5weSk8L2gyPgogICAgICAgIDx0YWJsZSBjbGFzcz0iYXJjaGl0ZWN0dXJlLXRhYmxlIj4NCiAgICAgICAgICAgIDx0aGVhZD4NCiAgICAgICAgICAgICAgICA8dHI+DQogICAgICAgICAgICAgICAgICAgIDx0aD5Db25maWcgS2V5PC90aD4NCiAgICAgICAgICAgICAgICAgICAgPHRoPlB1cnBvc2U8L3RoPg0KICAgICAgICAgICAgICAgIDwvdHI+DQogICAgICAgICAgICA8L3RoZWFkPg0KICAgICAgICAgICAgPHRib2R5Pg0KICAgICAgICAgICAgICAgIDx0cj4NCiAgICAgICAgICAgICAgICAgICAgPHRkPjxjb2RlPlRPUF9OX1BJQ0tTPC9jb2RlPjwvdGQ+DQogICAgICAgICAgICAgICAgICAgIDx0ZD5MaW1pdHMgbWF4aW11bSBudW1iZXIgb2YgZGFpbHkgc3RvY2sgcGlja3MgKGUuZy4sIDUpLjwvdGQ+DQogICAgICAgICAgICAgICAgPC90cj4NCiAgICAgICAgICAgICAgICA8dHI+DQogICAgICAgICAgICAgICAgICAgIDx0ZD48Y29kZT5NT1JOSU5HX1VOSVZFUlNFX1NDQU5fU1RBUlQ8L2NvZGU+PC90ZD4NCiAgICAgICAgICAgICAgICAgICAgPHRkPkNyb24gdGltZSB0byBiZWdpbiBwcmUtbWFya2V0IHNjcmVlbmluZyAoZS5nLiwgIjA4OjAwIikuPC90ZD4NCiAgICAgICAgICAgICAgICA8L3RyPg0KICAgICAgICAgICAgICAgIDx0cj4NCiAgICAgICAgICAgICAgICAgICAgPHRkPjxjb2RlPk1PUk5JTkdfRklOQUxfUElDS1M8L2NvZGU+PC90ZD4NCiAgICAgICAgICAgICAgICAgICAgPHRkPkNyb24gdGltZSB0byBmaW5hbGl6ZSBhbmQgYnJvYWRjYXN0IHRoZSBkYXkncyBzZWxlY3Rpb25zIChlLmcuLCAiMDk6MTAiKS48L3RkPg0KICAgICAgICAgICAgICAgIDwvdHI+DQogICAgICAgICAgICAgICAgPHRyPg0KICAgICAgICAgICAgICAgICAgICA8dGQ+PGNvZGU+SU5UUkFEQVlfTUlOX1JFVFVSTl9QQ1Q8L2NvZGU+PC90ZD4NCiAgICAgICAgICAgICAgICAgICAgPHRkPlRocmVzaG9sZCBmb3IgbGVhcm5pbmcgZnJvbSBpbnRyYWRheSB3aW5uZXJzIChlLmcuLCA3LjAlKS48L3RkPg0KICAgICAgICAgICAgICAgIDwvdHI+DQogICAgICAgICAgICA8L3Rib2R5Pg0KICAgICAgICA8L3RhYmxlPgogICAgPC9kaXY+CjwvYm9keT4KPC9odG1sPg==
+        <div class="phase">
+            <h3>3. Midday VWAP Phase (10:15 AM–12:30 PM IST)</h3>
+            <p>Focus shifts to VWAP and moving average strategies as morning volatility settles.</p>
+            <div class="telegram-alert">
+📈 [VWAP ALERT] INFY
+Signal: Price crossed above VWAP
+Price: 1450.20
+VWAP: 1445.50
+Volume: 2.5x Average
+            </div>
+        </div>
+
+        <div class="phase">
+            <h3>4. Afternoon Surge (12:30–02:15 PM IST)</h3>
+            <p>Monitoring for European market opening effects and afternoon breakout setups.</p>
+            <div class="telegram-alert">
+⚡ [AFTERNOON SURGE] HDFCBANK
+Volume Spike Detected!
+Price: 1620.00 (+1.5%)
+            </div>
+        </div>
+
+        <div class="phase">
+            <h3>5. Square-Off (02:15–03:30 PM IST)</h3>
+            <p>No new positions are initiated. Open positions are managed for trailing stop-losses or squared off before market close.</p>
+            <div class="telegram-alert">
+⚠️ [SQUARE-OFF WARNING]
+Time: 03:10 PM IST
+Closing all open positions in 5 minutes.
+            </div>
+        </div>
+
+        <div class="phase">
+            <h3>6. EOD Reconciliation (03:30–04:00 PM IST)</h3>
+            <p>Final summary report generation, log rotation, and system shutdown.</p>
+            <div class="telegram-alert">
+📊 [EOD SUMMARY]
+Total Trades: 5
+Winners: 3
+Losers: 2
+Net PnL: +₹4,500
+System Shutting Down. See you tomorrow!
+            </div>
+        </div>
+
+        <h2>Module Architecture</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Module</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>main.py</code></td>
+                    <td>Entry point, scheduler, and main execution loop.</td>
+                </tr>
+                <tr>
+                    <td><code>data_fetcher.py</code></td>
+                    <td>Handles API calls to broker for quotes and historical data.</td>
+                </tr>
+                <tr>
+                    <td><code>strategy_orb.py</code></td>
+                    <td>Logic for Opening Range Breakout detection.</td>
+                </tr>
+                <tr>
+                    <td><code>strategy_vwap.py</code></td>
+                    <td>Logic for VWAP mean reversion and trend following.</td>
+                </tr>
+                <tr>
+                    <td><code>telegram_notifier.py</code></td>
+                    <td>Formatting and sending alerts via Telegram Bot API.</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Configuration Reference</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Key</th>
+                    <th>Default</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><code>RISK_REWARD_RATIO</code></td>
+                    <td>1:2</td>
+                    <td>Minimum required RR for trade alerts.</td>
+                </tr>
+                <tr>
+                    <td><code>MAX_TRADES_PER_DAY</code></td>
+                    <td>10</td>
+                    <td>Hard limit on number of alerts/trades to prevent overtrading.</td>
+                </tr>
+                <tr>
+                    <td><code>ORB_TIMEFRAME_MINS</code></td>
+                    <td>15</td>
+                    <td>Timeframe used for Opening Range calculation.</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+</body>
+</html>
