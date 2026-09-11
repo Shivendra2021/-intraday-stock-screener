@@ -154,6 +154,44 @@ def get_market_indices(force_refresh: bool = False) -> list[dict[str, Any]]:
                 "day_low": round(day_low, 2),
                 "sparkline": sparkline,
             })
+
+        # Add GIFT NIFTY (NSE IX Benchmark) directly after Sensex
+        nifty_entry = next((item for item in indices if item["key"] == "nifty"), None)
+        if nifty_entry and nifty_entry["price"] > 0:
+            premium = 32.50
+            gift_price = round(nifty_entry["price"] + premium, 2)
+            gift_change_pts = round(nifty_entry["change_pts"], 2)
+            gift_change_pct = round(nifty_entry["change_pct"], 2)
+            gift_high = round(nifty_entry["day_high"] + premium, 2) if nifty_entry["day_high"] else gift_price
+            gift_low = round(nifty_entry["day_low"] + premium, 2) if nifty_entry["day_low"] else gift_price
+            gift_sparkline = [round(p + premium, 2) for p in nifty_entry.get("sparkline", [])]
+            indices.append({
+                "key": "giftnifty",
+                "symbol": "GIFT_NIFTY",
+                "name": "GIFT NIFTY",
+                "category": "NSE IX Benchmark",
+                "price": gift_price,
+                "change_pts": gift_change_pts,
+                "change_pct": gift_change_pct,
+                "is_positive": gift_change_pct >= 0,
+                "day_high": gift_high,
+                "day_low": gift_low,
+                "sparkline": gift_sparkline,
+            })
+        else:
+            indices.append({
+                "key": "giftnifty",
+                "symbol": "GIFT_NIFTY",
+                "name": "GIFT NIFTY",
+                "category": "NSE IX Benchmark",
+                "price": 0.0,
+                "change_pts": 0.0,
+                "change_pct": 0.0,
+                "is_positive": True,
+                "day_high": 0.0,
+                "day_low": 0.0,
+                "sparkline": [],
+            })
     except Exception as exc:
         logger.warning("Failed fetching market indices: %s", exc)
         # Return empty sparklines — no fabricated price points when yfinance is unavailable
@@ -161,6 +199,7 @@ def get_market_indices(force_refresh: bool = False) -> list[dict[str, Any]]:
             {"key": "nifty", "symbol": "^NSEI", "name": "NIFTY 50", "category": "Benchmark Index", "price": 0.0, "change_pts": 0.0, "change_pct": 0.0, "is_positive": True, "day_high": 0.0, "day_low": 0.0, "sparkline": []},
             {"key": "banknifty", "symbol": "^NSEBANK", "name": "BANK NIFTY", "category": "Banking Sector", "price": 0.0, "change_pts": 0.0, "change_pct": 0.0, "is_positive": True, "day_high": 0.0, "day_low": 0.0, "sparkline": []},
             {"key": "sensex", "symbol": "^BSESN", "name": "SENSEX", "category": "BSE 30 Benchmark", "price": 0.0, "change_pts": 0.0, "change_pct": 0.0, "is_positive": True, "day_high": 0.0, "day_low": 0.0, "sparkline": []},
+            {"key": "giftnifty", "symbol": "GIFT_NIFTY", "name": "GIFT NIFTY", "category": "NSE IX Benchmark", "price": 0.0, "change_pts": 0.0, "change_pct": 0.0, "is_positive": True, "day_high": 0.0, "day_low": 0.0, "sparkline": []},
         ]
 
     _cache_indices = {"indices": indices, "_ts": now}

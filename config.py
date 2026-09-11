@@ -213,3 +213,14 @@ RL_TIGHTEN_TRIGGER_PCT = float(os.getenv("RL_TIGHTEN_TRIGGER_PCT", "2.8"))
 RL_TAKE_PROFIT_TRIGGER_PCT = float(os.getenv("RL_TAKE_PROFIT_TRIGGER_PCT", "4.2"))
 RL_MAX_SL_PCT = float(os.getenv("RL_MAX_SL_PCT", "2.0"))
 
+# ── Institutional Quant & Risk Engine (MT5 Hedge Terminal Port) ───────────────
+RVOL_THRESHOLD_BREAKOUT = float(os.getenv("RVOL_THRESHOLD_BREAKOUT", "1.8"))
+RVOL_BULL_TRAP_THRESHOLD = float(os.getenv("RVOL_BULL_TRAP_THRESHOLD", "1.0"))
+ATR_MAX_EXPANSION_PCT = float(os.getenv("ATR_MAX_EXPANSION_PCT", "90.0"))
+ATR_PRIME_EXPANSION_PCT = float(os.getenv("ATR_PRIME_EXPANSION_PCT", "40.0"))
+MAX_BID_ASK_SPREAD_PCT = float(os.getenv("MAX_BID_ASK_SPREAD_PCT", "0.05"))
+AUDIT_RULES_PATH = os.getenv("AUDIT_RULES_PATH", "data/audit_rules.json")
+EARNINGS_FREEZE_SYMBOLS = [s.strip().upper() for s in os.getenv("EARNINGS_FREEZE_SYMBOLS", "").split(",") if s.strip()]
+MACRO_EVENTS_TODAY = []  # Can be configured with high-impact events: [{"name": "RBI Policy", "time": "10:00"}]
+
+

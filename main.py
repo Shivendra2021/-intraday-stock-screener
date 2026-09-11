@@ -572,6 +572,15 @@ def job_after_market_learning():
             lines.append(f"• {p.get('pattern_key')}: conf {p.get('confidence', 0):.0%}, avg {p.get('avg_return_pct', 0):.1f}%")
         lines.append("\n<i>Research only. Learned similarities feed the next scan.</i>")
         send_raw_alert("\n".join(lines), event_type="after_market_learning")
+
+        # Run Self-Learning Auditor cycle to review loss setups and update penalty rules
+        try:
+            from modules.auditor import audit_closed_trades
+            auditor_res = audit_closed_trades()
+            logger.info("Auditor cycle finished: %s", auditor_res)
+        except Exception as aud_err:
+            logger.warning("Auditor cycle failed: %s", aud_err)
+
     except Exception as e:
         logger.error("After-market learning failed: %s", e)
 
@@ -580,9 +589,8 @@ def job_pattern_learning():
     """Pattern learning."""
     if not _is_trading_day():
         return
-    
+
     logger.info("=== JOB: Pattern Learning ===")
-    
     try:
         from modules.pattern_learner import run_self_learning
         run_self_learning()

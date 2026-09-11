@@ -116,6 +116,13 @@ def _write_picks_to_db(
     except Exception as exc:
         logger.error("Could not write daily picks to JSON history: %s", exc)
 
+    try:
+        from modules.auditor import record_alert_snapshot
+        for p in picks:
+            record_alert_snapshot(p["symbol"], p)
+    except Exception as exc:
+        logger.debug("Could not record auditor alert snapshot: %s", exc)
+
 
 def get_system_accuracy_stats() -> dict:
     """Calculate overall system accuracy from the picks database."""
