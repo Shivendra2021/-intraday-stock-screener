@@ -319,9 +319,53 @@ def discover_all_apis() -> List[Dict[str, Any]]:
             icon="fa-robot",
         )
 
-    # 11. GENERIC DYNAMIC AUTO-DISCOVERY:
+    # 11. SerpApi Google News Catalyst Engine (NEW)
+    try:
+        from config import SERPAPI_KEY
+        serpapi_key = (SERPAPI_KEY or "").strip()
+    except Exception:
+        serpapi_key = os.getenv("SERPAPI_KEY", "").strip()
+
+    if serpapi_key:
+        add_api(
+            api_id="serpapi_news",
+            name="SerpApi Google News (Catalyst Engine)",
+            short_name="Google News Catalyst",
+            category="Market News & Sentiment",
+            model="Google News India (gl=in)",
+            limit=250,
+            used=get_api_usage("serpapi_news"),
+            unit="searches/mo",
+            status="Active",
+            status_color="#f97316",
+            icon="fa-bolt",
+        )
+
+    # 12. Tavily Search API (if configured)
+    try:
+        from config import TAVILY_API_KEY
+        tavily_key = (TAVILY_API_KEY or "").strip()
+    except Exception:
+        tavily_key = os.getenv("TAVILY_API_KEY", "").strip()
+
+    if tavily_key:
+        add_api(
+            api_id="tavily_search",
+            name="Tavily AI Web Search",
+            short_name="Tavily Search",
+            category="Market News & Sentiment",
+            model="Tavily Basic Search API",
+            limit=1000,
+            used=get_api_usage("tavily_search"),
+            unit="searches/mo",
+            status="Active",
+            status_color="#38bdf8",
+            icon="fa-magnifying-glass",
+        )
+
+    # 13. GENERIC DYNAMIC AUTO-DISCOVERY:
     # Automatically scan for ANY new API keys or tokens added to environment or .env
-    known_prefixes = ("TELEGRAM_", "GROQ_", "OPENROUTER_", "XAI_", "THENEWSAPI_", "NEWSAPI_", "ZERODHA_", "DHAN_")
+    known_prefixes = ("TELEGRAM_", "GROQ_", "OPENROUTER_", "XAI_", "THENEWSAPI_", "NEWSAPI_", "ZERODHA_", "DHAN_", "SERPAPI_", "TAVILY_")
     for env_var, env_val in os.environ.items():
         if not env_val or len(env_val.strip()) < 3:
             continue

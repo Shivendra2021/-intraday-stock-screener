@@ -107,9 +107,13 @@ XAI_BRAIN_TIMEOUT_SECONDS = int(os.getenv("XAI_BRAIN_TIMEOUT_SECONDS", "60"))
 XAI_BRAIN_MIN_INTERVAL_SECONDS = int(os.getenv("XAI_BRAIN_MIN_INTERVAL_SECONDS", "0"))
 XAI_BRAIN_MAX_DAILY_CALLS = int(os.getenv("XAI_BRAIN_MAX_DAILY_CALLS", "200"))
 
-# ── News APIs ──────────────────────────────────────────────────────────────────
+# ── News APIs & Real-Time Catalyst Search ────────────────────────────────────
 NEWSAPI_KEY              = os.getenv("NEWSAPI_KEY", "")
 THENEWSAPI_KEY           = os.getenv("THENEWSAPI_KEY", "")
+SERPAPI_KEY              = os.getenv("SERPAPI_KEY", "199deab6a92c965bbcc4d2cf6378ac886d7502cc7154794ff182ee4712e98202")
+TAVILY_API_KEY           = os.getenv("TAVILY_API_KEY", "")
+CATALYST_SEARCH_ENABLED  = os.getenv("CATALYST_SEARCH_ENABLED", "True").strip().lower() in ("true", "1", "yes")
+CATALYST_MAX_DAILY_SEARCHES = int(os.getenv("CATALYST_MAX_DAILY_SEARCHES", "8"))
 
 # ── Price Validation ───────────────────────────────────────────────────────────
 PRICE_VALIDATION_MAX_SPREAD_PCT  = float(os.getenv("PRICE_VALIDATION_MAX_SPREAD_PCT", "2.0"))

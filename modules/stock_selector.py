@@ -863,7 +863,15 @@ def deep_research_stocks(stocks: list[dict], n: int = 5) -> list[dict]:
         risk = price - sl_price
         reward = tp_price - price
         rr = round(reward / risk, 2) if risk > 0 else 0.0
-        
+
+        # Real-time catalyst detection (SerpApi Google News & Tavily)
+        catalyst_info = None
+        try:
+            from modules.catalyst_search import get_stock_catalyst
+            catalyst_info = get_stock_catalyst(stock.get("symbol", ""))
+        except Exception as exc:
+            logger.debug("Catalyst lookup failed for %s: %s", stock.get("symbol"), exc)
+
         final.append({
             **stock,
             "rank": i,
@@ -872,6 +880,9 @@ def deep_research_stocks(stocks: list[dict], n: int = 5) -> list[dict]:
             "target_price": round(tp_price, 2),
             "upside_pct": round(target_pct, 2),
             "risk_reward": rr,
+            "catalyst": catalyst_info.get("summary") if catalyst_info else None,
+            "catalyst_headline": catalyst_info.get("headline") if catalyst_info else None,
+            "catalyst_type": catalyst_info.get("catalyst_type") if catalyst_info else None,
             "research_time": datetime.datetime.now().strftime("%H:%M:%S"),
         })
     

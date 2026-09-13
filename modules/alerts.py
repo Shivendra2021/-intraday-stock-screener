@@ -550,6 +550,9 @@ def send_morning_final_picks(
         lines.append(f"   📈 Trend: {ema} | Day Chg: +{daily_chg:.2f}%" + (f" | {dist_str}" if dist_str else ""))
         lines.append(f"   🔑 Pattern: {pat_str}")
         lines.append(f"   💡 Why: {reasons[:100]}")
+        catalyst = p.get("catalyst") or p.get("catalyst_headline")
+        if catalyst:
+            lines.append(f"   ⚡ Catalyst: {catalyst[:120]}")
         lines.append("   ⏰ Status: PENDING | Hold until: 15:30")
         lines.append("")
 
