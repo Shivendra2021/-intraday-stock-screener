@@ -112,6 +112,8 @@ NEWSAPI_KEY              = os.getenv("NEWSAPI_KEY", "")
 THENEWSAPI_KEY           = os.getenv("THENEWSAPI_KEY", "")
 SERPAPI_KEY              = os.getenv("SERPAPI_KEY", "199deab6a92c965bbcc4d2cf6378ac886d7502cc7154794ff182ee4712e98202")
 TAVILY_API_KEY           = os.getenv("TAVILY_API_KEY", "")
+FINNHUB_API_KEY          = os.getenv("FINNHUB_API_KEY", "dajfrqhr01qhhp590rc0dajfrqhr01qhhp590rcg")
+FINNHUB_ENABLED          = os.getenv("FINNHUB_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 CATALYST_SEARCH_ENABLED  = os.getenv("CATALYST_SEARCH_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 CATALYST_MAX_DAILY_SEARCHES = int(os.getenv("CATALYST_MAX_DAILY_SEARCHES", "8"))
 

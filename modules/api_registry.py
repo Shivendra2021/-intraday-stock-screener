@@ -363,9 +363,31 @@ def discover_all_apis() -> List[Dict[str, Any]]:
             icon="fa-magnifying-glass",
         )
 
-    # 13. GENERIC DYNAMIC AUTO-DISCOVERY:
+    # 13. Finnhub Global Macro & Economic Intelligence (NEW)
+    try:
+        from config import FINNHUB_API_KEY
+        finnhub_key = (FINNHUB_API_KEY or "").strip()
+    except Exception:
+        finnhub_key = os.getenv("FINNHUB_API_KEY", "").strip()
+
+    if finnhub_key:
+        add_api(
+            api_id="finnhub_macro",
+            name="Finnhub Global Macro & Economic Feed",
+            short_name="Finnhub Global Macro",
+            category="Global Macro & Sentiment",
+            model="Finnhub v1 REST Feed",
+            limit=60,
+            used=get_api_usage("finnhub_macro"),
+            unit="req/min",
+            status="Active",
+            status_color="#06b6d4",
+            icon="fa-globe",
+        )
+
+    # 14. GENERIC DYNAMIC AUTO-DISCOVERY:
     # Automatically scan for ANY new API keys or tokens added to environment or .env
-    known_prefixes = ("TELEGRAM_", "GROQ_", "OPENROUTER_", "XAI_", "THENEWSAPI_", "NEWSAPI_", "ZERODHA_", "DHAN_", "SERPAPI_", "TAVILY_")
+    known_prefixes = ("TELEGRAM_", "GROQ_", "OPENROUTER_", "XAI_", "THENEWSAPI_", "NEWSAPI_", "ZERODHA_", "DHAN_", "SERPAPI_", "TAVILY_", "FINNHUB_")
     for env_var, env_val in os.environ.items():
         if not env_val or len(env_val.strip()) < 3:
             continue

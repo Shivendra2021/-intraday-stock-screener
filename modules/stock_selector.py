@@ -227,16 +227,27 @@ def _is_earnings_frozen(sym: str) -> bool:
         earnings_today: list[str] = getattr(config, "EARNINGS_FREEZE_SYMBOLS", [])
         if sym in earnings_today:
             return True
-        macro_events: list[dict] = getattr(config, "MACRO_EVENTS_TODAY", [])
-        now = datetime.datetime.now()
-        for evt in macro_events:
-            try:
-                evt_time = datetime.datetime.strptime(evt.get("time", ""), "%H:%M")
-                evt_dt = now.replace(hour=evt_time.hour, minute=evt_time.minute, second=0, microsecond=0)
-                if 0 <= (evt_dt - now).total_seconds() <= 1800:
-                    return True
-            except Exception:
-                continue
+        # Dynamic live economic events via Finnhub
+        try:
+            from modules.finnhub_provider import get_high_impact_macro_events
+            finnhub_events = get_high_impact_macro_events(lookahead_days=1)
+            for evt in finnhub_events:
+                evt_time_str = evt.get("time", "")
+                if evt_time_str:
+                    try:
+                        # Time format: YYYY-MM-DD HH:MM:SS or HH:MM:SS
+                        if " " in evt_time_str:
+                            evt_dt = datetime.datetime.fromisoformat(evt_time_str)
+                        else:
+                            evt_t = datetime.datetime.strptime(evt_time_str[:5], "%H:%M")
+                            evt_dt = now.replace(hour=evt_t.hour, minute=evt_t.minute, second=0, microsecond=0)
+                        if 0 <= (evt_dt - now).total_seconds() <= 1800:
+                            logger.info("Stock %s frozen due to upcoming high-impact event: %s", sym, evt.get("event"))
+                            return True
+                    except Exception:
+                        continue
+        except Exception:
+            pass
     except Exception:
         pass
     return False
