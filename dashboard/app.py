@@ -1241,6 +1241,36 @@ def api_api_limits():
             "status": "Active",
             "status_color": "#34d399",
             "icon": "fa-bolt"
+        },
+        {
+            "id": "dhanhq_broker",
+            "name": "DhanHQ Broker Feed & Quote Engine",
+            "short_name": "DhanHQ Broker",
+            "category": "Broker Execution & Quotes",
+            "model": "Dhan v2 REST / SDK",
+            "limit": 500,
+            "used": 1,
+            "remaining": 499,
+            "unit": "req/min",
+            "pct": 0.2,
+            "status": "Configured",
+            "status_color": "#f59e0b",
+            "icon": "fa-chart-line"
+        },
+        {
+            "id": "jugaad_data",
+            "name": "NSE Official Bhavcopy (jugaad-data)",
+            "short_name": "NSE Bhavcopy",
+            "category": "Institutional Delivery & VWAP",
+            "model": "Official NSE Archives",
+            "limit": 1000,
+            "used": 5,
+            "remaining": 995,
+            "unit": "req/day",
+            "pct": 0.5,
+            "status": "Active",
+            "status_color": "#10b981",
+            "icon": "fa-database"
         }
     ]
 

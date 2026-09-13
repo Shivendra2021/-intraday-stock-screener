@@ -75,6 +75,10 @@ TELEGRAM_BOT_TOKEN       = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID         = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # ── Optional Broker ────────────────────────────────────────────────────────────
+DHAN_CLIENT_ID           = os.getenv("DHAN_CLIENT_ID", "")
+DHAN_ACCESS_TOKEN        = os.getenv("DHAN_ACCESS_TOKEN", "ve1a7d84d-70df-445b-afc3-bddb4d2fb3a5")
+DHAN_ENABLED             = os.getenv("DHAN_ENABLED", "True").strip().lower() in ("true", "1", "yes")
+JUGAAD_DATA_ENABLED      = os.getenv("JUGAAD_DATA_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 ZERODHA_API_KEY          = os.getenv("ZERODHA_API_KEY", "")
 ZERODHA_ACCESS_TOKEN     = os.getenv("ZERODHA_ACCESS_TOKEN", "")
 

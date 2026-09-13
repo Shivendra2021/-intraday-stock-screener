@@ -114,9 +114,18 @@ def _download_with_retry(ticker_sym: str, period: str) -> Optional[pd.DataFrame]
 
 def _jugaad_fallback(symbol: str, period_days: int = 60) -> Optional[pd.DataFrame]:
     """
-    Fetch OHLCV via jugaad-data NSELive as last-resort fallback.
+    Fetch OHLCV via jugaad-data official NSE Bhavcopy as last-resort fallback.
     Returns DataFrame with columns [open, high, low, close, volume] or None.
     """
+    try:
+        from modules.jugaad_provider import get_jugaad_ohlcv
+        df = get_jugaad_ohlcv(symbol, lookback_days=period_days)
+        if df is not None and not df.empty and len(df) >= 5:
+            logger.info("jugaad bhavcopy fallback OK for %s (%d rows)", symbol, len(df))
+            return df
+    except Exception as exc:
+        logger.debug("jugaad bhavcopy fallback failed for %s: %s", symbol, exc)
+
     try:
         from jugaad_data.nse import NSELive
         import datetime
@@ -131,7 +140,6 @@ def _jugaad_fallback(symbol: str, period_days: int = 60) -> Optional[pd.DataFram
         if not last_price:
             return None
 
-        # jugaad provides only current-day snapshot — build a single-row frame
         today = datetime.date.today()
         df = pd.DataFrame([{
             "open":   price_info.get("open", last_price),
@@ -141,7 +149,7 @@ def _jugaad_fallback(symbol: str, period_days: int = 60) -> Optional[pd.DataFram
             "volume": quote.get("marketDeptOrderBook", {}).get("tradeInfo", {}).get("totalTradedVolume", 0),
         }], index=[pd.Timestamp(today)])
 
-        logger.info("jugaad fallback OK for %s price=%.2f", symbol, last_price)
+        logger.info("jugaad snapshot fallback OK for %s price=%.2f", symbol, last_price)
         return df
 
     except ImportError:
@@ -227,9 +235,30 @@ def fetch_price(symbol: str) -> Optional[float]:
                     return val
         except Exception as exc:
             logger.debug("fetch_price error for %s (%s): %s", symbol, ticker_sym, exc)
-        time.sleep(0.5)
+        time.sleep(0.3)
 
-    # jugaad fallback for price
+    # 1. DhanHQ live broker quote fallback
+    try:
+        from modules.dhan_provider import is_dhan_configured, get_dhan_price
+        if is_dhan_configured():
+            dp = get_dhan_price(symbol)
+            if dp and dp > 0:
+                logger.info("fetch_price: DhanHQ fallback OK for %s price=%.2f", symbol, dp)
+                return dp
+    except Exception as exc:
+        logger.debug("fetch_price: DhanHQ fallback failed for %s: %s", symbol, exc)
+
+    # 2. jugaad-data NSE live quote fallback
+    try:
+        from modules.jugaad_provider import get_jugaad_price
+        jp = get_jugaad_price(symbol)
+        if jp and jp > 0:
+            logger.info("fetch_price: jugaad live fallback OK for %s price=%.2f", symbol, jp)
+            return jp
+    except Exception as exc:
+        logger.debug("fetch_price: jugaad live fallback failed for %s: %s", symbol, exc)
+
+    # 3. jugaad bhavcopy / snapshot fallback for price
     df = _jugaad_fallback(symbol)
     if df is not None and not df.empty and "close" in df.columns:
         return float(df["close"].iloc[-1])

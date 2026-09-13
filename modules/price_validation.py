@@ -27,6 +27,15 @@ def yahoo_price(symbol: str) -> float | None:
 
 
 def nse_price(symbol: str) -> float | None:
+    """Fetch official NSE quote, trying jugaad-data first, then direct requests session."""
+    try:
+        from modules.jugaad_provider import get_jugaad_price
+        p = get_jugaad_price(symbol)
+        if p and p > 0:
+            return _clean_price(p)
+    except Exception as exc:
+        logger.debug("jugaad_price fallback for %s: %s", symbol, exc)
+
     headers = {
         "User-Agent": "Mozilla/5.0",
         "Accept": "application/json,text/plain,*/*",
@@ -48,6 +57,18 @@ def nse_price(symbol: str) -> float | None:
 
 
 def broker_price(symbol: str) -> float | None:
+    """Fetch live quote from connected broker: DhanHQ (primary) or Zerodha Kite (secondary)."""
+    # 1. Try DhanHQ broker API
+    try:
+        from modules.dhan_provider import is_dhan_configured, get_dhan_price
+        if is_dhan_configured():
+            dp = get_dhan_price(symbol)
+            if dp and dp > 0:
+                return _clean_price(dp)
+    except Exception as exc:
+        logger.debug("Dhan broker quote failed for %s: %s", symbol, exc)
+
+    # 2. Try Zerodha Kite broker API
     try:
         from config import ZERODHA_ACCESS_TOKEN, ZERODHA_API_KEY
     except Exception:
