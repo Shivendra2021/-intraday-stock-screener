@@ -385,9 +385,31 @@ def discover_all_apis() -> List[Dict[str, Any]]:
             icon="fa-globe",
         )
 
-    # 14. GENERIC DYNAMIC AUTO-DISCOVERY:
+    # 14. FRED Economic Data Gateway (NEW)
+    try:
+        from config import FRED_API_KEY
+        fred_key = (FRED_API_KEY or "").strip()
+    except Exception:
+        fred_key = os.getenv("FRED_API_KEY", "").strip()
+
+    if fred_key:
+        add_api(
+            api_id="fred_macro",
+            name="FRED Federal Reserve Economic Data",
+            short_name="FRED Macro Gateway",
+            category="Global Macro & Sentiment",
+            model="St. Louis Fed API (v1)",
+            limit=120,
+            used=get_api_usage("fred_macro"),
+            unit="req/min",
+            status="Active",
+            status_color="#14b8a6",
+            icon="fa-landmark",
+        )
+
+    # 15. GENERIC DYNAMIC AUTO-DISCOVERY:
     # Automatically scan for ANY new API keys or tokens added to environment or .env
-    known_prefixes = ("TELEGRAM_", "GROQ_", "OPENROUTER_", "XAI_", "THENEWSAPI_", "NEWSAPI_", "ZERODHA_", "DHAN_", "SERPAPI_", "TAVILY_", "FINNHUB_")
+    known_prefixes = ("TELEGRAM_", "GROQ_", "OPENROUTER_", "XAI_", "THENEWSAPI_", "NEWSAPI_", "ZERODHA_", "DHAN_", "SERPAPI_", "TAVILY_", "FINNHUB_", "FRED_")
     for env_var, env_val in os.environ.items():
         if not env_val or len(env_val.strip()) < 3:
             continue
