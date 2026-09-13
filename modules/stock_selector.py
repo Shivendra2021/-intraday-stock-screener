@@ -614,14 +614,16 @@ def select_top_stocks(sectors: list[str], n: int = 5) -> list[dict]:
     # Build final picks with entry/SL/TP
     final: list[dict] = []
     for i, stock in enumerate(picks[:n], start=1):
+        from config import RUNNER_TP1_PCT, RUNNER_TP2_PCT
         price = stock["price"]
         atr   = stock.get("atr", price * 0.015)
-        target_pct = 6.5
+        target_pct = RUNNER_TP2_PCT
 
         sl_price = max(price - atr * 1.5, price * 0.98)
-        tp_price = price * (1 + target_pct / 100)
+        tp1_price = price * (1 + RUNNER_TP1_PCT / 100)
+        tp2_price = price * (1 + RUNNER_TP2_PCT / 100)
         risk     = price - sl_price
-        reward   = tp_price - price
+        reward   = tp2_price - price
         rr       = round(reward / risk, 2) if risk > 0 else 0.0
 
         final.append({
@@ -629,7 +631,11 @@ def select_top_stocks(sectors: list[str], n: int = 5) -> list[dict]:
             "rank":         i,
             "entry_price":  round(price, 2),
             "sl_price":     round(sl_price, 2),
-            "target_price": round(tp_price, 2),
+            "target_price": round(tp2_price, 2),
+            "tp1_price":    round(tp1_price, 2),
+            "tp2_price":    round(tp2_price, 2),
+            "tp1_pct":      round(RUNNER_TP1_PCT, 2),
+            "tp2_pct":      round(RUNNER_TP2_PCT, 2),
             "upside_pct":   round(target_pct, 2),
             "risk_reward":  rr,
             "selected_at":  datetime.datetime.now().strftime("%H:%M:%S"),
@@ -865,14 +871,16 @@ def deep_research_stocks(stocks: list[dict], n: int = 5) -> list[dict]:
     # Build final picks with entry/SL/TP
     final = []
     for i, stock in enumerate(detailed[:n], start=1):
+        from config import RUNNER_TP1_PCT, RUNNER_TP2_PCT
         price = stock.get("price", 100)
         atr = price * 0.015
-        target_pct = 6.5
+        target_pct = RUNNER_TP2_PCT
         
         sl_price = max(price - atr * 1.5, price * 0.98)
-        tp_price = price * (1 + target_pct / 100)
+        tp1_price = price * (1 + RUNNER_TP1_PCT / 100)
+        tp2_price = price * (1 + RUNNER_TP2_PCT / 100)
         risk = price - sl_price
-        reward = tp_price - price
+        reward = tp2_price - price
         rr = round(reward / risk, 2) if risk > 0 else 0.0
 
         # Real-time catalyst detection (SerpApi Google News & Tavily)
@@ -888,7 +896,11 @@ def deep_research_stocks(stocks: list[dict], n: int = 5) -> list[dict]:
             "rank": i,
             "entry_price": round(price, 2),
             "sl_price": round(sl_price, 2),
-            "target_price": round(tp_price, 2),
+            "target_price": round(tp2_price, 2),
+            "tp1_price": round(tp1_price, 2),
+            "tp2_price": round(tp2_price, 2),
+            "tp1_pct": round(RUNNER_TP1_PCT, 2),
+            "tp2_pct": round(RUNNER_TP2_PCT, 2),
             "upside_pct": round(target_pct, 2),
             "risk_reward": rr,
             "catalyst": catalyst_info.get("summary") if catalyst_info else None,

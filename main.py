@@ -299,6 +299,21 @@ def run_morning_session():
         return
     
     session_type, is_official_morning, source_label = _morning_session_type()
+    if is_official_morning:
+        try:
+            from modules.circuit_breaker import reset_daily_circuit_breaker
+            reset_daily_circuit_breaker()
+        except Exception as exc:
+            logger.debug("Circuit breaker reset skipped: %s", exc)
+    else:
+        try:
+            from modules.circuit_breaker import is_circuit_breaker_active
+            if is_circuit_breaker_active():
+                logger.warning("Circuit breaker ACTIVE: skipping late recovery session to protect capital")
+                return
+        except Exception as exc:
+            logger.debug("Circuit breaker check skipped: %s", exc)
+
     logger.info("=== MORNING SESSION STARTED session=%s official=%s ===", session_type, is_official_morning)
     _write_morning_stage("started", "running", f"session={session_type}", {"official": is_official_morning})
     
@@ -525,15 +540,20 @@ def job_find_winners():
     """Find 7%+ intraday winners."""
     if not _is_trading_day():
         return
-    
+    try:
+        from modules.circuit_breaker import is_circuit_breaker_active
+        if is_circuit_breaker_active():
+            logger.warning("Circuit breaker ACTIVE: skipping winner scan to protect capital")
+            return
+    except Exception:
+        pass
+
     logger.info("=== JOB: Find Winners ===")
-    
     try:
         from modules.winner_finder import find_winners
         from modules.alerts import send_raw_alert
-        
+
         winners = find_winners(7.0)
-        
         if winners:
             lines = [f"📈 <b>INTRADAY WINNERS ({len(winners)})</b>\n"]
             for w in winners[:10]:
@@ -680,11 +700,18 @@ def job_preclose():
     """Preclose scan."""
     if not _is_trading_day():
         return
-    
+    try:
+        from modules.circuit_breaker import is_circuit_breaker_active
+        if is_circuit_breaker_active():
+            logger.warning("Circuit breaker ACTIVE: skipping preclose scan to protect capital")
+            return
+    except Exception:
+        pass
+
     try:
         from modules.preclose_watchlist import run_preclose_scan
         from modules.alerts import send_preclose_alert
-        
+
         results = run_preclose_scan()
         if results:
             send_preclose_alert(results)

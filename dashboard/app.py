@@ -1358,6 +1358,17 @@ def api_system_stop():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/api/circuit-breaker")
+def api_circuit_breaker():
+    """Return live daily circuit breaker status and risk telemetry."""
+    try:
+        from modules.circuit_breaker import get_circuit_breaker_status
+        return jsonify(get_circuit_breaker_status())
+    except Exception as e:
+        return jsonify({"error": str(e), "active": False}), 500
+
+
+
 if __name__ == "__main__":
     import io, sys
     from waitress import serve

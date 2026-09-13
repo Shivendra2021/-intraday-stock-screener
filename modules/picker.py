@@ -39,7 +39,10 @@ def _calculate_levels(stock: dict) -> dict | None:
     sl_pct  = price * (1 - MAX_SL_PCT / 100)
     sl_price = max(sl_atr, sl_pct)  # tighter of two
 
-    target_price = price * (1 + move_pct / 100)
+    from config import RUNNER_TP1_PCT, RUNNER_TP2_PCT
+    tp1_price = price * (1 + RUNNER_TP1_PCT / 100)
+    tp2_price = price * (1 + RUNNER_TP2_PCT / 100)
+    target_price = tp2_price
 
     risk   = price - sl_price
     reward = target_price - price
@@ -58,6 +61,10 @@ def _calculate_levels(stock: dict) -> dict | None:
         "entry_price":       round(price, 2),
         "sl_price":          round(sl_price, 2),
         "target_price":      round(target_price, 2),
+        "tp1_price":         round(tp1_price, 2),
+        "tp2_price":         round(tp2_price, 2),
+        "tp1_pct":           round(RUNNER_TP1_PCT, 2),
+        "tp2_pct":           round(RUNNER_TP2_PCT, 2),
         "upside_pct":        round(upside_pct, 2),
         "risk_reward":       round(rr, 2),
         "prime_window":      timing.get("prime_window"),

@@ -248,10 +248,12 @@ def init_tracking(picks: list[dict]) -> None:
     tracking: dict[str, dict] = {}
 
     for pick in picks:
+        from config import RUNNER_TP1_PCT, RUNNER_TP2_PCT
         sym    = pick.get("symbol", "")
         entry  = float(pick.get("entry_price") or pick.get("price") or 0)
         sl     = float(pick.get("sl_price") or entry * 0.98)
-        tp     = float(pick.get("target_price") or entry * 1.065)
+        tp1    = float(pick.get("tp1_price") or entry * (1 + RUNNER_TP1_PCT / 100))
+        tp2    = float(pick.get("tp2_price") or pick.get("target_price") or entry * (1 + RUNNER_TP2_PCT / 100))
 
         tracking[sym] = {
             "symbol":       sym,
@@ -260,8 +262,12 @@ def init_tracking(picks: list[dict]) -> None:
             "sector":       pick.get("sector", ""),
             "entry_price":  entry,
             "sl_price":     sl,
-            "tp_price":     tp,
-            "upside_pct":   pick.get("upside_pct", 6.5),
+            "tp_price":     tp2,
+            "tp1_price":    tp1,
+            "tp2_price":    tp2,
+            "tp1_pct":      RUNNER_TP1_PCT,
+            "tp2_pct":      RUNNER_TP2_PCT,
+            "upside_pct":   pick.get("upside_pct", RUNNER_TP2_PCT),
             "risk_reward":  pick.get("risk_reward", "N/A"),
             "score":        pick.get("score", 0),
             "rsi":          pick.get("rsi"),
@@ -270,10 +276,13 @@ def init_tracking(picks: list[dict]) -> None:
             "signal_reasons": pick.get("signal_reasons", ""),
             # Live tracking state
             "status":       "ACTIVE",
+            "stage":        "STAGE_1",
             "current_price": entry,
             "pnl_pct":      0.0,
             "hit_sl":       None,
             "hit_tp":       None,
+            "hit_tp1":      None,
+            "hit_tp2":      None,
             "exit_price":   None,
             "exit_time":    None,
             "init_time":    _now_str(),
@@ -344,6 +353,23 @@ def update_tracking() -> dict:
         except Exception as exc:
             logger.debug("RL intraday evaluation skipped for %s: %s", sym, exc)
 
+        tp1 = float(data.get("tp1_price") or entry * 1.038)
+        # Check Target 1 hit (+3.8%): Book 50%, lock trailing SL on remaining 50%
+        if price >= tp1 and not data.get("hit_tp1"):
+            from config import RUNNER_TRAIL_LOCKED_PCT
+            data["hit_tp1"] = now_str
+            data["stage"] = "RUNNER_ACTIVE"
+            locked_sl = round(entry * (1 + RUNNER_TRAIL_LOCKED_PCT / 100), 2)
+            if locked_sl > data.get("sl_price", 0):
+                old_sl = data.get("sl_price")
+                data["sl_price"] = locked_sl
+                logger.info("TP1 reached for %s: Trailed SL %.2f -> %.2f (+%.2f%% locked)", sym, old_sl, locked_sl, RUNNER_TRAIL_LOCKED_PCT)
+            try:
+                from modules.alerts import send_tp1_hit
+                send_tp1_hit(sym, pnl, data["sl_price"])
+            except Exception as exc:
+                logger.debug("TP1 alert error: %s", exc)
+
         if price <= sl and not data.get("hit_sl"):
             data["hit_sl"]     = now_str
             data["status"]     = "SL_HIT"
@@ -353,12 +379,21 @@ def update_tracking() -> dict:
             _alert_sl_hit(data)
             _persist_pick_outcome(data, "sl_hit")
 
+            # Check and record in Daily Loss Circuit Breaker
+            try:
+                from modules.circuit_breaker import record_sl_hit
+                record_sl_hit(sym, pnl)
+            except Exception as cb_exc:
+                logger.error("Failed to record SL in circuit breaker: %s", cb_exc)
+
         elif price >= tp and not data.get("hit_tp"):
             data["hit_tp"]     = now_str
+            data["hit_tp2"]    = now_str
             data["status"]     = "TP_HIT"
             data["exit_price"] = round(price, 2)
             data["exit_time"]  = now_str
-            logger.info("TP HIT: %s at %.2f (entry %.2f, gain %.2f%%)", sym, price, entry, pnl)
+            data["stage"]      = "CLOSED_PROFIT"
+            logger.info("TP2 RUNNER HIT: %s at %.2f (entry %.2f, gain %.2f%%)", sym, price, entry, pnl)
             _alert_tp_hit(data)
             _persist_pick_outcome(data, "tp_hit")
 

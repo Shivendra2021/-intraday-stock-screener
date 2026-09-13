@@ -136,6 +136,12 @@ def send_raw_alert(text: str, review_with_grok: bool = True, event_type: str = "
 # Message builders
 # ─────────────────────────────────────────────────────────────────────────────
 
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Message builders
+# ─────────────────────────────────────────────────────────────────────────────
+
 def send_picks(picks: list, sentiment: float = 0.0) -> bool:
     """Send morning top-5 picks message."""
     date_str = now_ist().strftime("%d %b %Y")
@@ -175,6 +181,39 @@ def send_tp_hit(symbol: str, ret: float) -> bool:
         f"Return: <b>+{ret:.2f}%</b>"
     )
     return _send(text)
+
+
+def send_tp1_hit(symbol: str, ret: float, new_sl: float = 0.0) -> bool:
+    """Send Target 1 hit notification (50% profit booked, trailing remaining 50%)."""
+    sl_line = f"• Trailing SL on Runner: <b>₹{new_sl:.2f} (+1.80%)</b>\n" if new_sl > 0 else ""
+    text = (
+        f"🎯 <b>TARGET 1 HIT: 50% PROFIT SECURED</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"✅ Stock: <b>{symbol}</b>\n"
+        f"📈 Price: <b>+{ret:.2f}% achieved</b>\n"
+        f"💼 Execution:\n"
+        f"  • 50% Quantity: <b>Closed & Locked</b>\n"
+        f"  • Remaining 50%: <b>Riding to TP2 Runner (+7.50%)</b>\n"
+        f"{sl_line}"
+        f"🔒 <i>Trade is permanently green. Letting the winner run!</i>"
+    )
+    return _send(text, review_with_grok=False, event_type="tp1_hit")
+
+
+def send_circuit_breaker_alert(sl_count: int, max_sl: int = 2, loss_pct: float = 0.0) -> bool:
+    """Send Daily Circuit Breaker lockdown notification."""
+    text = (
+        f"🚨 <b>DAILY LOSS CIRCUIT BREAKER ENGAGED</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🛡️ <b>Protection:</b> Max daily stop-losses reached ({sl_count}/{max_sl})\n"
+        f"📉 <b>Cumulative Loss:</b> {loss_pct:.2f}% (Within safe -2.0% cap)\n"
+        f"⚡ <b>Action Taken:</b>\n"
+        f"  • All pending trade scans paused for remainder of today.\n"
+        f"  • No new afternoon momentum picks will be triggered.\n"
+        f"  • Capital preserved to trade another day.\n\n"
+        f"🔒 <i>Discipline Enforced: Preserving capital from choppy market conditions.</i>"
+    )
+    return _send(text, review_with_grok=False, event_type="circuit_breaker_alert")
 
 
 def send_sl_hit(symbol: str, ret: float) -> bool:
@@ -544,8 +583,13 @@ def send_morning_final_picks(
         if regime:
             meta.append(str(regime))
         suffix = f" [{' | '.join(meta)}]" if meta else ""
+        tp1_price = float(p.get("tp1_price") or (price * 1.038))
+        tp1_pct   = float(p.get("tp1_pct") or 3.8)
+        tp2_price = target
+        tp2_pct   = upside_pct
         lines.append(f"{rank}. <b>{symbol}</b>{suffix} | Score: {score:.0f} | {risk_tag}")
-        lines.append(f"   💰 Entry: ₹{price:.2f} | SL: ₹{sl_price:.2f} (-{sl_pct:.1f}%) | TP: ₹{target:.2f} (+{upside_pct:.1f}%) | RR: {rr}")
+        lines.append(f"   💰 Entry: ₹{price:.2f} | SL: ₹{sl_price:.2f} (-{sl_pct:.1f}%) | RR: {rr}")
+        lines.append(f"   🎯 TP1 (50% Book): ₹{tp1_price:.2f} (+{tp1_pct:.1f}%) | TP2 (Runner): ₹{tp2_price:.2f} (+{tp2_pct:.1f}%)")
         lines.append(f"   📊 RSI: {rsi_str} | ADX: {adx_str} | Vol: {vol_str} | Gap: +{gap:.2f}%")
         lines.append(f"   📈 Trend: {ema} | Day Chg: +{daily_chg:.2f}%" + (f" | {dist_str}" if dist_str else ""))
         lines.append(f"   🔑 Pattern: {pat_str}")

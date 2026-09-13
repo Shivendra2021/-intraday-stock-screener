@@ -237,4 +237,14 @@ AUDIT_RULES_PATH = os.getenv("AUDIT_RULES_PATH", "data/audit_rules.json")
 EARNINGS_FREEZE_SYMBOLS = [s.strip().upper() for s in os.getenv("EARNINGS_FREEZE_SYMBOLS", "").split(",") if s.strip()]
 MACRO_EVENTS_TODAY = []  # Can be configured with high-impact events: [{"name": "RBI Policy", "time": "10:00"}]
 
+# ── Daily Loss Circuit Breaker (Tilt Protection) ──────────────────────────────
+MAX_DAILY_SL_HITS = int(os.getenv("MAX_DAILY_SL_HITS", "2"))
+MAX_DAILY_PORTFOLIO_LOSS_PCT = float(os.getenv("MAX_DAILY_PORTFOLIO_LOSS_PCT", "2.0"))
+
+# ── 2-Stage Runner Target Engine (+7% to +8% Targets) ─────────────────────────
+RUNNER_TP1_PCT = float(os.getenv("RUNNER_TP1_PCT", "3.8"))
+RUNNER_TP2_PCT = float(os.getenv("RUNNER_TP2_PCT", "7.5"))
+RUNNER_TRAIL_LOCKED_PCT = float(os.getenv("RUNNER_TRAIL_LOCKED_PCT", "1.8"))
+
+
 
