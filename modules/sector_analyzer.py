@@ -48,25 +48,65 @@ SECTOR_KEYWORDS: dict[str, list[str]] = {
 
 
 def _price_momentum_scores() -> dict[str, float]:
-    """Score sectors by average 5-day % change of 3 benchmark stocks."""
-    from modules.fetch import fetch_ohlcv
+    """Score sectors by average 5-day % change of 3 benchmark stocks.
+    
+    Uses batch yfinance download for all 33 symbols in a single network call
+    instead of serial per-stock downloads with sleep delays.
+    """
+    import yfinance as yf
 
-    scores: dict[str, float] = {}
+    # Collect all unique symbols across sectors
+    all_syms = []
+    sym_to_sectors: dict[str, list[str]] = {}
     for sector, syms in SECTOR_BENCHMARKS.items():
-        changes = []
         for sym in syms:
+            ticker = f"{sym}.NS"
+            if ticker not in sym_to_sectors:
+                all_syms.append(ticker)
+                sym_to_sectors[ticker] = []
+            sym_to_sectors[ticker].append(sector)
+
+    # Batch download: one network roundtrip for all 33 symbols
+    scores: dict[str, list[float]] = {s: [] for s in SECTOR_BENCHMARKS}
+    try:
+        batch_df = yf.download(all_syms, period="5d", group_by="ticker",
+                               progress=False, threads=True)
+        for ticker, sectors in sym_to_sectors.items():
             try:
-                df = fetch_ohlcv(sym, period="5d")
+                if len(all_syms) == 1:
+                    df = batch_df
+                else:
+                    df = batch_df[ticker] if ticker in batch_df.columns.get_level_values(0) else None
                 if df is None or df.empty or len(df) < 2:
                     continue
-                pct = (float(df["close"].iloc[-1]) - float(df["close"].iloc[0])) / float(df["close"].iloc[0]) * 100
-                changes.append(pct)
+                close_col = df["Close"] if "Close" in df.columns else df.get("close")
+                if close_col is None or close_col.dropna().empty or len(close_col.dropna()) < 2:
+                    continue
+                close_vals = close_col.dropna()
+                pct = (float(close_vals.iloc[-1]) - float(close_vals.iloc[0])) / float(close_vals.iloc[0]) * 100
+                for sec in sectors:
+                    scores[sec].append(pct)
             except Exception as e:
-                logger.debug("Price momentum error %s: %s", sym, e)
-            time.sleep(0.5)
-        scores[sector] = float(np.mean(changes)) if changes else 0.0
-        logger.debug("Sector %s momentum: %.2f%%", sector, scores[sector])
-    return scores
+                logger.debug("Batch momentum error %s: %s", ticker, e)
+    except Exception as e:
+        logger.warning("Batch yfinance download failed, falling back to serial: %s", e)
+        # Fallback: serial download without artificial sleep
+        from modules.fetch import fetch_ohlcv
+        for sector, syms in SECTOR_BENCHMARKS.items():
+            for sym in syms:
+                try:
+                    df = fetch_ohlcv(sym, period="5d")
+                    if df is None or df.empty or len(df) < 2:
+                        continue
+                    pct = (float(df["close"].iloc[-1]) - float(df["close"].iloc[0])) / float(df["close"].iloc[0]) * 100
+                    scores[sector].append(pct)
+                except Exception as e:
+                    logger.debug("Price momentum error %s: %s", sym, e)
+
+    result = {s: float(np.mean(vals)) if vals else 0.0 for s, vals in scores.items()}
+    for sector, score in result.items():
+        logger.debug("Sector %s momentum: %.2f%%", sector, score)
+    return result
 
 
 def _news_sentiment_scores() -> dict[str, float]:

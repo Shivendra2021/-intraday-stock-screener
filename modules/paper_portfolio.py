@@ -95,16 +95,42 @@ def allocate_for_date(date_s: str, max_picks: int = 5) -> dict[str, Any]:
         if cash <= 0:
             return {"date": date_s, "allocated": 0, "reason": "no_cash"}
 
-        per_pick = round(cash / len(picks), 2)
         allocated = 0.0
+        allocated_count = 0
+        risk_per_trade = cash * 0.02  # 2% max risk per position
+        max_stock_cash = cash * 0.35  # cap individual stock allocation to 35% of total portfolio cash
+
         for pick in picks:
             entry = float(pick["entry_price"] or 0)
             if entry <= 0:
                 continue
-            allocation = min(per_pick, cash - allocated)
-            if allocation <= 0:
+            remaining_cash = cash - allocated
+            if remaining_cash <= 0:
+                break
+
+            sl = float(pick["sl_price"] or 0)
+            risk_amount_per_share = entry - sl
+            if risk_amount_per_share <= 0:
+                risk_amount_per_share = entry * 0.02
+
+            target_qty = risk_per_trade / risk_amount_per_share
+            raw_allocation = min(target_qty * entry, remaining_cash, max_stock_cash)
+            if raw_allocation <= 0:
                 continue
-            qty = allocation / entry
+
+            # Ensure integer share quantity
+            qty = int(raw_allocation // entry)
+            if qty <= 0:
+                if remaining_cash >= entry and (entry <= max_stock_cash or remaining_cash == cash):
+                    qty = 1
+                else:
+                    continue
+
+            actual_invested = round(qty * entry, 2)
+            if actual_invested > remaining_cash:
+                continue
+
+            allocation = actual_invested
             conn.execute(
                 """
                 INSERT INTO paper_positions
@@ -117,7 +143,7 @@ def allocate_for_date(date_s: str, max_picks: int = 5) -> dict[str, Any]:
                     pick["date"],
                     pick["symbol"],
                     entry,
-                    float(pick["sl_price"] or 0),
+                    sl,
                     float(pick["target_price"] or 0),
                     float(pick["confidence"] or 0),
                     allocation,
@@ -127,6 +153,7 @@ def allocate_for_date(date_s: str, max_picks: int = 5) -> dict[str, Any]:
                 ),
             )
             allocated += allocation
+            allocated_count += 1
 
         conn.execute(
             """
@@ -137,8 +164,8 @@ def allocate_for_date(date_s: str, max_picks: int = 5) -> dict[str, Any]:
             (round(cash - allocated, 2), _now()),
         )
         conn.commit()
-        logger.info("Paper portfolio allocated %.2f for %s", allocated, date_s)
-        return {"date": date_s, "allocated": round(allocated, 2), "positions": len(picks)}
+        logger.info("Paper portfolio allocated %.2f for %s across %d positions", allocated, date_s, allocated_count)
+        return {"date": date_s, "allocated": round(allocated, 2), "positions": allocated_count}
 
 
 def allocate_today() -> dict[str, Any]:

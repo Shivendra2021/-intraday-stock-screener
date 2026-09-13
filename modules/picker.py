@@ -419,13 +419,99 @@ def _grok_review_evidence_pack(candidates: list[dict], rejected: list[dict]) -> 
     return summary
 
 
+def _compute_correlation_matrix(candidates: list[dict]) -> dict[tuple[str, str], float]:
+    """
+    Computes pairwise Pearson correlation of daily percentage returns for candidate stocks.
+    Uses batch download without artificial sleep for zero latency penalty.
+    Returns a dict mapping (sym_a, sym_b) -> correlation_float.
+    """
+    import numpy as np
+    import pandas as pd
+
+    symbols = [c.get("symbol") for c in candidates if c.get("symbol")]
+    if len(symbols) < 2:
+        return {}
+
+    returns_by_sym: dict[str, pd.Series] = {}
+
+    for c in candidates:
+        sym = c.get("symbol")
+        if not sym:
+            continue
+        if "returns" in c and isinstance(c["returns"], (pd.Series, list, np.ndarray)) and len(c["returns"]) >= 5:
+            returns_by_sym[sym] = pd.Series(c["returns"]).dropna()
+
+    missing_syms = [s for s in symbols if s not in returns_by_sym]
+    if len(missing_syms) >= 2:
+        try:
+            import yfinance as yf
+            tickers = [f"{s}.NS" for s in missing_syms]
+            batch_df = yf.download(
+                tickers=tickers,
+                period="1mo",
+                interval="1d",
+                progress=False,
+                group_by="ticker",
+                auto_adjust=True,
+                threads=True,
+                timeout=8,
+            )
+            if batch_df is not None and not batch_df.empty:
+                for sym in missing_syms:
+                    ticker = f"{sym}.NS"
+                    try:
+                        if len(missing_syms) == 1:
+                            df = batch_df
+                        elif hasattr(batch_df.columns, "levels") and ticker in batch_df.columns.levels[0]:
+                            df = batch_df[ticker]
+                        elif ticker in batch_df:
+                            df = batch_df[ticker]
+                        else:
+                            continue
+                        close_col = df["Close"] if "Close" in df.columns else df.get("close")
+                        if close_col is not None:
+                            s = close_col.dropna()
+                            if len(s) >= 5:
+                                rets = s.pct_change().dropna()
+                                if len(rets) >= 4:
+                                    returns_by_sym[sym] = rets
+                    except Exception:
+                        pass
+        except Exception as e:
+            logger.debug("Picker correlation batch download skipped/failed: %s", e)
+
+    corr_matrix: dict[tuple[str, str], float] = {}
+    calc_syms = list(returns_by_sym.keys())
+    for i in range(len(calc_syms)):
+        s1 = calc_syms[i]
+        r1 = returns_by_sym[s1]
+        for j in range(i + 1, len(calc_syms)):
+            s2 = calc_syms[j]
+            r2 = returns_by_sym[s2]
+            try:
+                aligned1, aligned2 = r1.align(r2, join="inner")
+                if len(aligned1) >= 5:
+                    v1 = aligned1.values.astype(float)
+                    v2 = aligned2.values.astype(float)
+                    c_matrix = np.corrcoef(v1, v2)
+                    corr_val = float(c_matrix[0, 1])
+                    if not np.isnan(corr_val):
+                        corr_matrix[(s1, s2)] = round(corr_val, 4)
+                        corr_matrix[(s2, s1)] = round(corr_val, 4)
+            except Exception:
+                pass
+
+    return corr_matrix
+
+
 def run_picker(analyzed: list = None) -> list:
     """
     Main picker pipeline.
     1. Takes analyzer output (or runs analyzer if not provided)
     2. Filters by risk-reward
-    3. Returns top-5 picks
-    4. Writes to DB
+    3. Diversifies via cross-stock correlation gate (anti-concentration)
+    4. Returns top-5 picks
+    5. Writes to DB
     """
     from config import TOP_N_PICKS
     from modules.db_migrations import ensure_research_tables
@@ -506,11 +592,60 @@ def run_picker(analyzed: list = None) -> list:
         audit_candidate("quality_scoring", enriched, True, enriched.get("quality_reasons", "quality_scored"))
     valid = sorted(enriched_valid, key=lambda x: x.get("score", 0), reverse=True)
 
-    # Take top N
-    top_picks = valid[:TOP_N_PICKS]
+    # Feature 3: Cross-Stock Correlation Gate (Greedy Anti-Concentration)
+    corr_matrix = _compute_correlation_matrix(valid)
+    CORR_THRESHOLD = 0.70
+
+    top_picks: list[dict] = []
+    skipped_by_gate: list[tuple[dict, str]] = []
+
+    for item in valid:
+        if len(top_picks) >= TOP_N_PICKS:
+            break
+        sym = item.get("symbol")
+        sec = item.get("sector")
+
+        is_correlated = False
+        reason = ""
+
+        for picked in top_picks:
+            p_sym = picked.get("symbol")
+            p_sec = picked.get("sector")
+
+            # 1. Pearson correlation check if available
+            if (sym, p_sym) in corr_matrix:
+                pair_corr = corr_matrix[(sym, p_sym)]
+                if pair_corr > CORR_THRESHOLD:
+                    is_correlated = True
+                    reason = f"corr_gate: {sym} correlated with {p_sym} (r={pair_corr:.2f} > {CORR_THRESHOLD})"
+                    break
+            # 2. Fallback: same sector check when correlation is unavailable
+            elif sec and p_sec and sec == p_sec and sec not in ("Unknown", ""):
+                is_correlated = True
+                reason = f"sector_gate: {sym} same sector as {p_sym} ({sec})"
+                break
+
+        if is_correlated:
+            logger.info("Anti-concentration gate skipped %s: %s", sym, reason)
+            skipped_by_gate.append((item, reason))
+        else:
+            top_picks.append(item)
+
+    # If top_picks is still below TOP_N_PICKS (e.g. strict gating left open slots), backfill from skipped
+    if len(top_picks) < TOP_N_PICKS:
+        for item, reason in skipped_by_gate:
+            if len(top_picks) >= TOP_N_PICKS:
+                break
+            top_picks.append(item)
+
     selected_symbols = {p.get("symbol") for p in top_picks}
-    for item in valid[TOP_N_PICKS:]:
-        audit_candidate("final_selection", item, False, f"ranked_below_top{TOP_N_PICKS}_after_quality_scoring")
+    for item in valid:
+        sym = item.get("symbol")
+        if sym not in selected_symbols:
+            gate_reason = next((r for cand, r in skipped_by_gate if cand.get("symbol") == sym), None)
+            if gate_reason:
+                audit_candidate("anti_concentration", item, False, gate_reason)
+            audit_candidate("final_selection", item, False, f"ranked_below_top{TOP_N_PICKS}_or_correlated")
 
     for i, pick in enumerate(top_picks, start=1):
         pick["rank"] = i

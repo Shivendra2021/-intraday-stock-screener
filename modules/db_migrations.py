@@ -19,6 +19,10 @@ def ensure_research_tables() -> None:
 
     conn = sqlite3.connect(DB_PATH)
     try:
+        # ── Performance PRAGMAs: WAL mode for concurrent agent access ──────────
+        conn.execute("PRAGMA journal_mode = WAL;")
+        conn.execute("PRAGMA synchronous = NORMAL;")
+        conn.execute("PRAGMA busy_timeout = 5000;")
 
         # Core tables used by dashboard and bot startup. Keep schemas permissive so
         # older installs can start and then evolve through additive migrations.

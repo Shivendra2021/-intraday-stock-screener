@@ -110,24 +110,58 @@ def _calc_atr_exhaustion_score(day_high: float, day_low: float, daily_atr: float
     return round(expansion_pct, 2), round(score, 4)
 
 
-def _calc_macro_alignment_score(price: float, ema200: float, vwap: float) -> tuple[str, float]:
+def _calc_macro_alignment_score(price: float, ema200: float, vwap: float,
+                                  weekly_trend: str = "unknown") -> tuple[str, float]:
     """
-    Dual-timeframe macro alignment check.
-    Long: price > EMA200 AND price > VWAP  → score 1.0
-    Short-biased: price < EMA200 AND price < VWAP → score 0.0 (reject longs)
-    Mixed: partial alignment → score 0.5
+    Multi-Timeframe (MTF) macro alignment check.
+    Checks 3 tiers:
+      - Weekly Trend: EMA10w > EMA30w (macro tailwind)
+      - Daily Trend:  Price > EMA200 (structural bull)
+      - Intraday:     Price > VWAP (session momentum)
+    
     Returns (alignment_label, score 0-1).
     """
     above_ema200 = price > ema200 if ema200 > 0 else True
     above_vwap = price > vwap if vwap > 0 else True
+
+    # Base dual-timeframe score
     if above_ema200 and above_vwap:
-        return "full_bull", 1.0
+        label, base_score = "full_bull", 1.0
     elif not above_ema200 and not above_vwap:
-        return "full_bear", 0.0
+        label, base_score = "full_bear", 0.0
     elif above_ema200:
-        return "ema_bull_vwap_bear", 0.5
+        label, base_score = "ema_bull_vwap_bear", 0.5
     else:
-        return "ema_bear_vwap_bull", 0.35
+        label, base_score = "ema_bear_vwap_bull", 0.35
+
+    # Weekly trend MTF bonus/penalty (±0.10)
+    if weekly_trend == "bull":
+        base_score = min(1.0, base_score + 0.10)
+        label = label + "_weekly_bull"
+    elif weekly_trend == "bear":
+        base_score = max(0.0, base_score - 0.10)
+        label = label + "_weekly_bear"
+
+    return label, round(base_score, 4)
+
+
+def _calc_weekly_trend(df_daily: "pd.DataFrame") -> str:
+    """
+    Determine weekly macro trend by resampling daily bars to weekly.
+    Returns 'bull' if Weekly EMA10 > Weekly EMA30, 'bear' otherwise.
+    Zero extra API calls — pure resampling of existing daily data.
+    """
+    try:
+        if df_daily is None or len(df_daily) < 30:
+            return "unknown"
+        weekly = df_daily["close"].resample("W").last().dropna()
+        if len(weekly) < 10:
+            return "unknown"
+        ema10w = float(weekly.ewm(span=10, adjust=False).mean().iloc[-1])
+        ema30w = float(weekly.ewm(span=30, adjust=False, min_periods=10).mean().iloc[-1])
+        return "bull" if ema10w > ema30w else "bear"
+    except Exception:
+        return "unknown"
 
 
 def _calc_vwap(df_intraday: "pd.DataFrame") -> float:
@@ -142,6 +176,33 @@ def _calc_vwap(df_intraday: "pd.DataFrame") -> float:
         return vwap
     except Exception:
         return 0.0
+
+
+def _calc_close_location_value(price: float, day_high: float, day_low: float) -> float:
+    """
+    Close Location Value (CLV): measures where price closed within the day's range.
+    CLV = (Price - Low) / (High - Low)  ∈ [0, 1]
+    CLV > 0.80 = aggressive buying pressure (institutional accumulation)
+    CLV < 0.20 = selling pressure / distribution
+    Zero cost: uses price data already fetched.
+    """
+    if day_high <= day_low or day_high <= 0:
+        return 0.5  # neutral fallback
+    clv = (price - day_low) / (day_high - day_low)
+    return round(max(0.0, min(1.0, clv)), 4)
+
+
+def _calc_spread_to_atr_ratio(bid: float, ask: float, atr: float) -> float:
+    """
+    Spread-to-ATR ratio: detects illiquidity traps.
+    High spread relative to ATR = stock is too illiquid to trade safely.
+    Returns ratio (lower is better). Threshold: reject if > 0.02 (2% of ATR).
+    Zero cost: uses bid/ask already fetched in _check_bid_ask_spread.
+    """
+    if atr <= 0 or bid <= 0 or ask <= 0:
+        return 0.0  # unknown, fail-open
+    spread = ask - bid
+    return round(spread / atr, 6)
 
 
 def _is_earnings_frozen(sym: str) -> bool:
@@ -170,9 +231,10 @@ def _is_earnings_frozen(sym: str) -> bool:
     return False
 
 
-def _check_bid_ask_spread(sym: str, price: float) -> bool:
+def _check_bid_ask_spread(sym: str, price: float, atr: float = 0.0) -> bool:
     """
-    Check if bid-ask spread is within acceptable range (< 0.05% of price).
+    Check if bid-ask spread is within acceptable range (< 0.05% of price
+    and spread/ATR <= 0.02 if ATR is provided).
     Returns True if spread is acceptable (or unknown — fail-open).
     Uses yfinance fast_info if available.
     """
@@ -182,10 +244,15 @@ def _check_bid_ask_spread(sym: str, price: float) -> bool:
         info = ticker.fast_info
         bid = getattr(info, "bid", None) or 0.0
         ask = getattr(info, "ask", None) or 0.0
-        if bid > 0 and ask > 0 and price > 0:
-            spread_pct = (ask - bid) / price * 100
-            if spread_pct > 0.05:
-                return False  # too wide
+        if bid > 0 and ask > 0:
+            if price > 0:
+                spread_pct = (ask - bid) / price * 100
+                if spread_pct > 0.05:
+                    return False  # too wide
+            if atr > 0:
+                spread_atr = _calc_spread_to_atr_ratio(bid, ask, atr)
+                if spread_atr > 0.02:
+                    return False  # illiquidity trap relative to ATR
     except Exception:
         pass
     return True  # fail-open
@@ -361,9 +428,10 @@ def _score_stock(sym: str) -> Optional[dict]:
         ema_partial = price > ema21 and not ema_full
         ema_align   = "EMA_full_bull" if ema_full else ("EMA_partial_bull" if ema_partial else "EMA_bear")
 
-        # Component 3: Dual-Timeframe Macro Alignment (EMA200 + VWAP)
-        macro_align, macro_score = _calc_macro_alignment_score(price, ema200, vwap)
-        if macro_align == "full_bear":
+        # Component 3: Multi-Timeframe Macro Alignment (Weekly + Daily EMA200 + VWAP)
+        weekly_trend = _calc_weekly_trend(df)
+        macro_align, macro_score = _calc_macro_alignment_score(price, ema200, vwap, weekly_trend)
+        if "full_bear" in macro_align:
             # Rejection rule: price < EMA200 AND price < VWAP -> reject long signal
             logger.debug("Stock %s rejected: Full bear macro alignment (below EMA200 and VWAP)", sym)
             return None
@@ -389,7 +457,10 @@ def _score_stock(sym: str) -> Optional[dict]:
             "price": price,
         })
 
-        # Technical momentum base boost (0 - 20 pts)
+        # Microstructure: Close Location Value (CLV) — buying pressure signal
+        clv = _calc_close_location_value(price, day_high, day_low)
+
+        # Technical momentum base boost (0 - 25 pts, increased from 20 for microstructure)
         tech_boost = 0.0
         if 55 <= rsi <= 70:
             tech_boost += 8.0
@@ -399,9 +470,14 @@ def _score_stock(sym: str) -> Optional[dict]:
             tech_boost += 6.0
         if dist_52w <= 3.0:
             tech_boost += 6.0
+        # Microstructure CLV bonus: aggressive buying pressure at close
+        if clv >= 0.80:
+            tech_boost += 5.0  # strong institutional accumulation signal
+        elif clv <= 0.20:
+            tech_boost -= 3.0  # distribution / selling pressure penalty
 
-        # Suggested Institutional Quant Score Formula:
-        # Score = (30 × RVOL) + (25 × Macro Alignment) + (25 × Unspent ATR) - Audit Penalties + Tech Boost
+        # Composite Institutional Quant Score Formula (v3 — with MTF + Microstructure):
+        # Score = (30 × RVOL) + (25 × Macro MTF) + (25 × Unspent ATR) - Audit Penalties + Tech Boost
         quant_score = (30.0 * rvol_score) + (25.0 * macro_score) + (25.0 * unspent_atr_score) - audit_penalty + tech_boost
         final_score = round(min(100.0, max(0.0, quant_score)), 2)
 
@@ -409,11 +485,13 @@ def _score_stock(sym: str) -> Optional[dict]:
         patterns = []
         if rvol >= 1.8:                            patterns.append(f"high_rvol_{rvol:.1f}x")
         if unspent_atr_score >= 0.9:               patterns.append(f"unspent_atr_{expansion_pct:.0f}%")
-        if macro_align == "full_bull":             patterns.append("macro_trend_aligned")
+        if "full_bull" in macro_align:             patterns.append("macro_trend_aligned")
         if dist_52w <= 3.0:                        patterns.append("52wk_high_proximity")
         if gap_up_pct >= 1.5 and rvol >= 1.5:      patterns.append("gap_breakout")
         if ema_full and rsi >= 55:                  patterns.append("ema_momentum")
         if bull_trap_warning:                      patterns.append("bull_trap_warning")
+        if clv >= 0.80:                            patterns.append("clv_accumulation")
+        if weekly_trend == "bull":                 patterns.append("weekly_bull_trend")
 
         return {
             "symbol":            sym,
@@ -435,6 +513,8 @@ def _score_stock(sym: str) -> Optional[dict]:
             "audit_reasons":     audit_reasons,
             "bull_trap_warning": bull_trap_warning,
             "ema_alignment":     ema_align,
+            "weekly_trend":      weekly_trend,
+            "clv":               round(clv, 4),
             "vol_ratio":         round(rvol, 2),
             "gap_up":            round(gap_up_pct, 2),
             "daily_change":      round(daily_chg, 2),
@@ -641,14 +721,24 @@ def deep_research_stocks(stocks: list[dict], n: int = 5) -> list[dict]:
                 logger.debug("deep_research: %s disqualified by ATR exhaustion %.1f%%", sym, expansion_pct)
                 continue
 
+            # Component 5 & 6: Bid-Ask spread & Spread-to-ATR check
+            if not _check_bid_ask_spread(sym, price, atr_val):
+                logger.debug("deep_research: %s disqualified by bid-ask / spread-to-ATR", sym)
+                continue
+
             ema200 = float(close.ewm(span=200, adjust=False, min_periods=30).mean().iloc[-1]) if len(close) >= 30 else 0.0
             vwap = _calc_vwap(df)
-            macro_align, macro_score = _calc_macro_alignment_score(price, ema200, vwap)
+            weekly_trend = _calc_weekly_trend(df)
+            macro_align, macro_score = _calc_macro_alignment_score(price, ema200, vwap, weekly_trend)
 
             # Rejection rule: Price below EMA200 and below VWAP
-            if macro_align == "full_bear":
+            if "full_bear" in macro_align:
                 logger.debug("deep_research: %s rejected by macro bear alignment", sym)
                 continue
+
+            # Check resistance: Running directly into major EMA200 overhead (< 0.75% below EMA200)
+            if ema200 > price and ((ema200 - price) / price * 100) < 0.75:
+                macro_score = max(0.0, macro_score - 0.3)
 
             # Bull trap check
             high_20d = float(high.rolling(20, min_periods=10).max().iloc[-1])
@@ -668,7 +758,10 @@ def deep_research_stocks(stocks: list[dict], n: int = 5) -> list[dict]:
                 "price": price,
             })
 
-            # Base momentum & technical bonus (0 - 20 pts)
+            # Microstructure: Close Location Value (CLV)
+            clv = _calc_close_location_value(price, day_high, day_low)
+
+            # Base momentum & technical bonus (0 - 25 pts)
             tech_bonus = 0.0
             if 45 <= rsi <= 65:
                 tech_bonus += 6.0
@@ -680,6 +773,11 @@ def deep_research_stocks(stocks: list[dict], n: int = 5) -> list[dict]:
                 tech_bonus += 3.0
             if news_score > 0:
                 tech_bonus += 3.0
+            # Microstructure CLV bonus
+            if clv >= 0.80:
+                tech_bonus += 5.0
+            elif clv <= 0.20:
+                tech_bonus -= 3.0
 
             # Composite Quant Score Formula (0 - 100):
             # Score = (30 × RVOL) + (25 × Macro Alignment) + (25 × Unspent ATR) - Audit Penalties + Tech Bonus
@@ -707,6 +805,8 @@ def deep_research_stocks(stocks: list[dict], n: int = 5) -> list[dict]:
                 "macro_score": round(macro_score, 2),
                 "ema200": round(ema200, 2),
                 "vwap": round(vwap, 2),
+                "weekly_trend": weekly_trend,
+                "clv": round(clv, 4),
                 "audit_penalty": round(audit_penalty, 2),
                 "audit_reasons": audit_reasons,
                 "bull_trap_warning": bull_trap_warning,

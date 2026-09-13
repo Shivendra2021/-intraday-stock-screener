@@ -31,7 +31,7 @@ SYMBOL_ALIASES: dict[str, str] = {
 # ── Config ─────────────────────────────────────────────────────────────────────
 _MAX_RETRIES     = 3
 _RETRY_DELAY     = 2.0   # seconds between retries
-_CALL_DELAY      = 1.5   # seconds between consecutive yfinance download calls
+_CALL_DELAY      = 0.3   # seconds between consecutive yfinance calls (reduced from 1.5)
 _MIN_ROWS        = 20    # minimum rows for OHLCV to be considered valid
 
 
