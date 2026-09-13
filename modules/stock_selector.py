@@ -152,13 +152,24 @@ def _calc_weekly_trend(df_daily: "pd.DataFrame") -> str:
     Zero extra API calls — pure resampling of existing daily data.
     """
     try:
-        if df_daily is None or len(df_daily) < 30:
+        if df_daily is None or len(df_daily) < 20:
             return "unknown"
-        weekly = df_daily["close"].resample("W").last().dropna()
-        if len(weekly) < 10:
+        if not isinstance(df_daily.index, pd.DatetimeIndex):
+            if "date" in df_daily.columns:
+                df = df_daily.set_index(pd.to_datetime(df_daily["date"]))
+            else:
+                try:
+                    df = df_daily.set_index(pd.to_datetime(df_daily.index))
+                except Exception:
+                    return "unknown"
+        else:
+            df = df_daily
+        weekly = df["close"].resample("W").last().dropna()
+        if len(weekly) < 6:
             return "unknown"
         ema10w = float(weekly.ewm(span=10, adjust=False).mean().iloc[-1])
-        ema30w = float(weekly.ewm(span=30, adjust=False, min_periods=10).mean().iloc[-1])
+        min_p = min(6, len(weekly))
+        ema30w = float(weekly.ewm(span=30, adjust=False, min_periods=min_p).mean().iloc[-1])
         return "bull" if ema10w > ema30w else "bear"
     except Exception:
         return "unknown"
@@ -201,7 +212,7 @@ def _calc_spread_to_atr_ratio(bid: float, ask: float, atr: float) -> float:
     """
     if atr <= 0 or bid <= 0 or ask <= 0:
         return 0.0  # unknown, fail-open
-    spread = ask - bid
+    spread = max(0.0, ask - bid)
     return round(spread / atr, 6)
 
 
@@ -358,11 +369,6 @@ def _score_stock(sym: str) -> Optional[dict]:
         if price < 50:
             return None
 
-        # Component 5: Bid-Ask spread check (< 0.05%)
-        if not _check_bid_ask_spread(sym, price):
-            logger.debug("Stock %s disqualified: Bid-Ask spread > 0.05%%", sym)
-            return None
-
         # Volume filter
         avg_vol = float(vol.rolling(20, min_periods=10).mean().iloc[-1])
         if avg_vol < 50_000:
@@ -415,6 +421,11 @@ def _score_stock(sym: str) -> Optional[dict]:
         if unspent_atr_score < 0:
             # Rejection rule: >= 90% of daily ATR already consumed
             logger.debug("Stock %s disqualified: ATR Exhaustion %.1f%% >= 90%%", sym, expansion_pct)
+            return None
+
+        # Component 5 & 6: Bid-Ask spread (< 0.05%) & Spread-to-ATR (<= 0.02) check
+        if not _check_bid_ask_spread(sym, price, atr):
+            logger.debug("Stock %s disqualified: Bid-Ask spread / Spread-to-ATR check failed", sym)
             return None
 
         # EMA Indicators
@@ -783,8 +794,15 @@ def deep_research_stocks(stocks: list[dict], n: int = 5) -> list[dict]:
             # Score = (30 × RVOL) + (25 × Macro Alignment) + (25 × Unspent ATR) - Audit Penalties + Tech Bonus
             quant_score = (30.0 * rvol_score) + (25.0 * macro_score) + (25.0 * unspent_atr_score) - audit_penalty + tech_bonus
             score = round(min(100.0, max(0.0, quant_score)), 2)
-            
+
+            patterns = list(stock.get("patterns", []))
+            if clv >= 0.80 and "clv_accumulation" not in patterns:
+                patterns.append("clv_accumulation")
+            if weekly_trend == "bull" and "weekly_bull_trend" not in patterns:
+                patterns.append("weekly_bull_trend")
+
             detailed.append({
+                **stock,
                 "symbol": sym,
                 "sector": sector,
                 "price": price,
@@ -810,6 +828,7 @@ def deep_research_stocks(stocks: list[dict], n: int = 5) -> list[dict]:
                 "audit_penalty": round(audit_penalty, 2),
                 "audit_reasons": audit_reasons,
                 "bull_trap_warning": bull_trap_warning,
+                "patterns": patterns,
                 "deep_analysis": True,
             })
             

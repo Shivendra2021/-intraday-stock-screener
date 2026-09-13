@@ -60,7 +60,7 @@ def _account(conn: sqlite3.Connection) -> sqlite3.Row:
 
 
 def allocate_for_date(date_s: str, max_picks: int = 5) -> dict[str, Any]:
-    """Allocate available cash equally across that day's highest-confidence picks."""
+    """Allocate available cash across highest-confidence picks using volatility-adjusted risk-parity sizing."""
     ensure_account()
     with _connect() as conn:
         existing = conn.execute(
@@ -121,7 +121,7 @@ def allocate_for_date(date_s: str, max_picks: int = 5) -> dict[str, Any]:
             # Ensure integer share quantity
             qty = int(raw_allocation // entry)
             if qty <= 0:
-                if remaining_cash >= entry and (entry <= max_stock_cash or remaining_cash == cash):
+                if remaining_cash >= entry and entry <= max_stock_cash:
                     qty = 1
                 else:
                     continue

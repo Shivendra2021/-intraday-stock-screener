@@ -428,21 +428,21 @@ def _compute_correlation_matrix(candidates: list[dict]) -> dict[tuple[str, str],
     import numpy as np
     import pandas as pd
 
-    symbols = [c.get("symbol") for c in candidates if c.get("symbol")]
+    symbols = [str(c.get("symbol", "")).upper().strip() for c in candidates if c.get("symbol")]
     if len(symbols) < 2:
         return {}
 
     returns_by_sym: dict[str, pd.Series] = {}
 
     for c in candidates:
-        sym = c.get("symbol")
+        sym = str(c.get("symbol", "")).upper().strip()
         if not sym:
             continue
         if "returns" in c and isinstance(c["returns"], (pd.Series, list, np.ndarray)) and len(c["returns"]) >= 5:
             returns_by_sym[sym] = pd.Series(c["returns"]).dropna()
 
     missing_syms = [s for s in symbols if s not in returns_by_sym]
-    if len(missing_syms) >= 2:
+    if len(missing_syms) >= 1 and (len(returns_by_sym) + len(missing_syms) >= 2):
         try:
             import yfinance as yf
             tickers = [f"{s}.NS" for s in missing_syms]
@@ -460,13 +460,11 @@ def _compute_correlation_matrix(candidates: list[dict]) -> dict[tuple[str, str],
                 for sym in missing_syms:
                     ticker = f"{sym}.NS"
                     try:
-                        if len(missing_syms) == 1:
-                            df = batch_df
-                        elif hasattr(batch_df.columns, "levels") and ticker in batch_df.columns.levels[0]:
-                            df = batch_df[ticker]
-                        elif ticker in batch_df:
-                            df = batch_df[ticker]
+                        if isinstance(batch_df.columns, pd.MultiIndex):
+                            df = batch_df[ticker] if ticker in batch_df else None
                         else:
+                            df = batch_df
+                        if df is None or df.empty:
                             continue
                         close_col = df["Close"] if "Close" in df.columns else df.get("close")
                         if close_col is not None:
@@ -493,11 +491,19 @@ def _compute_correlation_matrix(candidates: list[dict]) -> dict[tuple[str, str],
                 if len(aligned1) >= 5:
                     v1 = aligned1.values.astype(float)
                     v2 = aligned2.values.astype(float)
-                    c_matrix = np.corrcoef(v1, v2)
-                    corr_val = float(c_matrix[0, 1])
-                    if not np.isnan(corr_val):
-                        corr_matrix[(s1, s2)] = round(corr_val, 4)
-                        corr_matrix[(s2, s1)] = round(corr_val, 4)
+                elif len(r1) >= 5 and len(r2) >= 5:
+                    min_len = min(len(r1), len(r2))
+                    v1 = r1.iloc[-min_len:].values.astype(float)
+                    v2 = r2.iloc[-min_len:].values.astype(float)
+                else:
+                    continue
+                if np.std(v1) > 1e-9 and np.std(v2) > 1e-9:
+                    with np.errstate(all='ignore'):
+                        c_matrix = np.corrcoef(v1, v2)
+                        corr_val = float(c_matrix[0, 1])
+                        if not np.isnan(corr_val):
+                            corr_matrix[(s1, s2)] = round(corr_val, 4)
+                            corr_matrix[(s2, s1)] = round(corr_val, 4)
             except Exception:
                 pass
 
@@ -602,14 +608,14 @@ def run_picker(analyzed: list = None) -> list:
     for item in valid:
         if len(top_picks) >= TOP_N_PICKS:
             break
-        sym = item.get("symbol")
+        sym = str(item.get("symbol", "")).upper().strip()
         sec = item.get("sector")
 
         is_correlated = False
         reason = ""
 
         for picked in top_picks:
-            p_sym = picked.get("symbol")
+            p_sym = str(picked.get("symbol", "")).upper().strip()
             p_sec = picked.get("sector")
 
             # 1. Pearson correlation check if available

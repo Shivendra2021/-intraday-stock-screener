@@ -44,6 +44,18 @@ class TestStockSelectorSignals(unittest.TestCase):
         trend_down = _calc_weekly_trend(df_down)
         self.assertEqual(trend_down, "bear")
 
+    def test_weekly_trend_with_date_column_and_range_index(self):
+        # Non-DatetimeIndex: integer index with date column
+        dates = pd.date_range(start="2025-01-01", periods=60, freq="B").strftime("%Y-%m-%d").tolist()
+        prices = [100.0 + i * 2.0 for i in range(60)]
+        df = pd.DataFrame({"date": dates, "close": prices})
+        trend = _calc_weekly_trend(df)
+        self.assertEqual(trend, "bull")
+
+    def test_spread_to_atr_ratio_crossed_book(self):
+        # Crossed book or ask < bid -> 0.0 (non-negative)
+        self.assertEqual(_calc_spread_to_atr_ratio(100.0, 95.0, 5.0), 0.0)
+
     def test_macro_alignment_with_weekly(self):
         label, score = _calc_macro_alignment_score(price=110, ema200=100, vwap=105, weekly_trend="bull")
         self.assertIn("weekly_bull", label)
@@ -149,6 +161,19 @@ class TestPaperPortfolioRiskParity(unittest.TestCase):
             self.assertEqual(p2["quantity"], 70)
             self.assertEqual(p2["invested_amount"], 35000.0)
 
+    def test_risk_parity_allocation_strictly_enforces_35pct_cap(self):
+        from unittest.mock import patch
+        # Stock with entry price 40,000 > 35,000 (35% of 100,000 cash) should NOT be bought even if first pick
+        self.conn.execute("""
+            INSERT INTO picks (date, rank, symbol, entry_price, sl_price, target_price, confidence)
+            VALUES ('2026-09-14', 1, 'EXPENSIVE', 40000.0, 39000.0, 42000.0, 0.95)
+        """)
+        self.conn.commit()
+
+        with patch("modules.paper_portfolio._connect", return_value=self.conn):
+            res = allocate_for_date("2026-09-14")
+            self.assertEqual(res["positions"], 0)
+
 
 class TestPickerCorrelationGate(unittest.TestCase):
     def test_greedy_correlation_gate(self):
@@ -226,6 +251,101 @@ class TestPickerCorrelationGate(unittest.TestCase):
             # Should backfill so we still get 2 picks
             self.assertEqual(len(picks), 2)
             self.assertEqual([p["symbol"] for p in picks], ["INFY", "WIPRO"])
+
+    def test_single_missing_symbol_downloaded_and_correlated(self):
+        from unittest.mock import patch
+
+        series1 = pd.Series([0.01, -0.02, 0.03, 0.01, -0.01, 0.02])
+        cand1 = {"symbol": "INFY", "returns": series1}
+        # Cand 2 has no returns -> len(missing_syms) == 1
+        cand2 = {"symbol": "TCS"}
+
+        # Mock yf.download returning a DataFrame with Close prices that mirror series1
+        # For a 1-ticker download, columns may be MultiIndex
+        cols = pd.MultiIndex.from_tuples([("TCS.NS", "Close")])
+        mock_df = pd.DataFrame([[100], [101], [98.98], [101.95], [102.97], [101.94], [103.98]], columns=cols)
+
+        with patch("yfinance.download", return_value=mock_df):
+            corr = _compute_correlation_matrix([cand1, cand2])
+            self.assertIn(("INFY", "TCS"), corr)
+
+
+class TestStockSelectorDeepResearch(unittest.TestCase):
+    def test_deep_research_preserves_patterns_and_metadata(self):
+        from unittest.mock import patch
+        from modules.stock_selector import deep_research_stocks
+
+        cand = {
+            "symbol": "INFY",
+            "score": 80.0,
+            "patterns": ["gap_breakout"],
+            "custom_metadata": "kept",
+        }
+
+        # Generate 60 days of synthetic OHLCV
+        dates = pd.date_range("2026-01-01", periods=60, freq="B")
+        close_prices = [100.0 + i * 2.0 for i in range(60)]
+        mock_df = pd.DataFrame({
+            "open": close_prices,
+            "high": [p + 2.0 for p in close_prices],
+            "low": [p - 1.0 for p in close_prices],
+            "close": close_prices,
+            "volume": [100_000] * 60,
+        }, index=dates)
+
+        with patch("modules.fetch.fetch_ohlcv", return_value=mock_df), \
+             patch("modules.stock_selector._check_bid_ask_spread", return_value=True), \
+             patch("modules.scanner.is_small_or_midcap", return_value=True), \
+             patch("modules.bandit_selector.rank_candidates_with_bandit", side_effect=lambda x, top_n: x):
+
+            result = deep_research_stocks([cand], n=1)
+            self.assertEqual(len(result), 1)
+            res = result[0]
+            # Verify original metadata preserved
+            self.assertEqual(res.get("custom_metadata"), "kept")
+            # Verify patterns list contains original and enriched patterns
+            self.assertIn("gap_breakout", res.get("patterns", []))
+            self.assertIn("weekly_bull_trend", res.get("patterns", []))
+
+
+class TestDbMigrationsPaperPositions(unittest.TestCase):
+    def test_ensure_research_tables_adds_quantity_and_invested(self):
+        import sqlite3
+        import tempfile
+        import os
+        from unittest.mock import patch
+        from modules.db_migrations import ensure_research_tables
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_db = os.path.join(tmpdir, "test.db")
+            conn = sqlite3.connect(temp_db)
+            # Create old schema paper_positions table WITHOUT quantity or invested_amount
+            conn.execute("""
+                CREATE TABLE paper_positions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    pick_id INTEGER UNIQUE,
+                    date TEXT,
+                    symbol TEXT,
+                    entry_price REAL,
+                    sl_price REAL,
+                    target_price REAL,
+                    confidence REAL,
+                    allocation REAL,
+                    status TEXT DEFAULT 'open'
+                )
+            """)
+            conn.commit()
+            conn.close()
+
+            with patch("config.DB_PATH", temp_db):
+                ensure_research_tables()
+
+            conn = sqlite3.connect(temp_db)
+            columns = [c[1] for c in conn.execute("PRAGMA table_info(paper_positions)").fetchall()]
+            conn.close()
+
+            self.assertIn("quantity", columns)
+            self.assertIn("invested_amount", columns)
 
 
 if __name__ == "__main__":

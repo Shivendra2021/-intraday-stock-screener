@@ -300,7 +300,8 @@ def ensure_research_tables() -> None:
                VALUES (1, 50000, 50000, 0, CURRENT_TIMESTAMP)"""
         )
 
-        if "picks" in {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}:
+        tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+        if "picks" in tables:
             _add_column(conn, "picks", "pattern_key", "TEXT")
             _add_column(conn, "picks", "validated_price", "REAL")
             _add_column(conn, "picks", "price_validation_status", "TEXT")
@@ -315,6 +316,10 @@ def ensure_research_tables() -> None:
             _add_column(conn, "picks", "agreement_score", "REAL")
             _add_column(conn, "picks", "confidence_delta", "REAL DEFAULT 0")
             _add_column(conn, "picks", "quality_reasons", "TEXT")
+
+        if "paper_positions" in tables:
+            _add_column(conn, "paper_positions", "quantity", "REAL")
+            _add_column(conn, "paper_positions", "invested_amount", "REAL")
 
         conn.commit()
     finally:

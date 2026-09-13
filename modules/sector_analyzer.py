@@ -70,13 +70,13 @@ def _price_momentum_scores() -> dict[str, float]:
     scores: dict[str, list[float]] = {s: [] for s in SECTOR_BENCHMARKS}
     try:
         batch_df = yf.download(all_syms, period="5d", group_by="ticker",
-                               progress=False, threads=True)
+                               progress=False, threads=True, timeout=10)
         for ticker, sectors in sym_to_sectors.items():
             try:
-                if len(all_syms) == 1:
-                    df = batch_df
+                if isinstance(batch_df.columns, pd.MultiIndex):
+                    df = batch_df[ticker] if ticker in batch_df else None
                 else:
-                    df = batch_df[ticker] if ticker in batch_df.columns.get_level_values(0) else None
+                    df = batch_df
                 if df is None or df.empty or len(df) < 2:
                     continue
                 close_col = df["Close"] if "Close" in df.columns else df.get("close")
