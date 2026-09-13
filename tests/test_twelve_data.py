@@ -13,8 +13,9 @@ class TestTwelveDataProvider(unittest.TestCase):
     def test_twelve_data_configured(self):
         self.assertTrue(is_twelve_data_configured())
 
+    @patch('modules.twelve_data_provider._load_cache', return_value={})
     @patch('modules.twelve_data_provider.requests.get')
-    def test_get_usdinr_rate_mock(self, mock_get):
+    def test_get_usdinr_rate_mock(self, mock_get, mock_cache):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {"price": "86.54"}
@@ -24,8 +25,9 @@ class TestTwelveDataProvider(unittest.TestCase):
         self.assertIsNotNone(rate)
         self.assertAlmostEqual(rate, 86.54)
 
+    @patch('modules.twelve_data_provider._load_cache', return_value={})
     @patch('modules.twelve_data_provider.requests.get')
-    def test_twelve_data_price_fail_open_on_error(self, mock_get):
+    def test_twelve_data_price_fail_open_on_error(self, mock_get, mock_cache):
         mock_resp = MagicMock()
         mock_resp.status_code = 200
         mock_resp.json.return_value = {

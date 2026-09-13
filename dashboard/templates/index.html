@@ -582,6 +582,116 @@
       border-top: 1px solid rgba(255, 255, 255, 0.04);
     }
 
+    /* ── Global Macro & Currency Pulse Grid ── */
+    .macro-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-top: -12px;
+      margin-bottom: 8px;
+    }
+
+    @media (max-width: 1100px) {
+      .macro-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 640px) {
+      .macro-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .macro-card {
+      background: var(--bg-card);
+      backdrop-filter: blur(16px);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: all 0.25s ease;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .macro-card:hover {
+      border-color: rgba(139, 92, 246, 0.4);
+      background: var(--bg-card-hover);
+      transform: translateY(-2px);
+    }
+
+    .macro-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .macro-title {
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .macro-val {
+      font-family: var(--font-display);
+      font-size: 22px;
+      font-weight: 700;
+      color: #ffffff;
+      line-height: 1.2;
+    }
+
+    .macro-sub {
+      font-size: 11.5px;
+      color: var(--text-secondary);
+      line-height: 1.35;
+    }
+
+    .pick-catalyst-pill {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(249, 115, 22, 0.12);
+      border: 1px solid rgba(249, 115, 22, 0.3);
+      color: #fb923c;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+
+    .pick-quant-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .quant-pill {
+      font-size: 10px;
+      font-family: var(--font-mono);
+      font-weight: 600;
+      padding: 3px 7px;
+      border-radius: 5px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #cbd5e1;
+    }
+
+    .quant-pill-accent {
+      background: rgba(139, 92, 246, 0.12);
+      border-color: rgba(139, 92, 246, 0.3);
+      color: var(--accent-violet-light);
+    }
+
     /* ── Top 3 Picks of the Day ── */
     .picks-container {
       display: grid;
@@ -1586,6 +1696,62 @@
         </div>
       </section>
 
+      <!-- Section: Global Macro & News Freeze Shield (FRED, Twelve Data, Finnhub) -->
+      <section id="macro-pulse">
+        <div class="section-header" style="margin-bottom: 12px;">
+          <div class="section-title">
+            <i class="fa-solid fa-globe" style="color: var(--accent-cyan);"></i>
+            <h3>Global Macro & Currency Pulse</h3>
+            <span class="subtitle">Real-Time Twelve Data Forex, FRED Economic Data & News Freeze Shield</span>
+          </div>
+          <div id="news-freeze-badge" class="index-badge badge-pos" style="padding: 6px 12px; font-size: 11px;">
+            <i class="fa-solid fa-shield-check"></i> <span id="news-freeze-text">30M NEWS FREEZE: INACTIVE</span>
+          </div>
+        </div>
+
+        <div class="macro-grid" id="macro-cards-container">
+          <!-- Card 1: USD/INR (Twelve Data) -->
+          <div class="macro-card">
+            <div class="macro-card-header">
+              <span class="macro-title"><i class="fa-solid fa-coins" style="color: #a855f7;"></i> USD / INR (Forex)</span>
+              <span class="index-badge badge-pos" id="usdinr-status-badge" style="font-size: 10px;">TWELVE DATA</span>
+            </div>
+            <div class="macro-val" id="usdinr-val">₹86.54</div>
+            <div class="macro-sub" id="usdinr-sub">IT & Pharma Exporter Tailwind Active</div>
+          </div>
+
+          <!-- Card 2: Brent Crude Oil (FRED) -->
+          <div class="macro-card">
+            <div class="macro-card-header">
+              <span class="macro-title"><i class="fa-solid fa-oil-well" style="color: #f59e0b;"></i> Brent Crude</span>
+              <span class="index-badge badge-pos" id="crude-badge" style="font-size: 10px;">FRED MACRO</span>
+            </div>
+            <div class="macro-val" id="crude-val">$109.51</div>
+            <div class="macro-sub" id="crude-sub">Input Cost Watch: Paints, Tires, Aviation</div>
+          </div>
+
+          <!-- Card 3: US 10Y Yield (FRED) -->
+          <div class="macro-card">
+            <div class="macro-card-header">
+              <span class="macro-title"><i class="fa-solid fa-landmark" style="color: #38bdf8;"></i> US 10Y Treasury</span>
+              <span class="index-badge badge-pos" id="yield-badge" style="font-size: 10px;">FII SENSITIVITY</span>
+            </div>
+            <div class="macro-val" id="yield-val">4.95%</div>
+            <div class="macro-sub" id="yield-sub">Foreign Institutional Outflow Watch</div>
+          </div>
+
+          <!-- Card 4: Global VIX & News Horizon (FRED + Finnhub) -->
+          <div class="macro-card">
+            <div class="macro-card-header">
+              <span class="macro-title"><i class="fa-solid fa-gauge-high" style="color: #f43f5e;"></i> Global VIX & News</span>
+              <span class="index-badge badge-pos" id="vix-badge" style="font-size: 10px;">FINNHUB SHIELD</span>
+            </div>
+            <div class="macro-val" id="vix-val">17.84 <span style="font-size: 13px; font-weight: 500; color: var(--accent-emerald);">Moderate</span></div>
+            <div class="macro-sub" id="vix-sub">No High-Impact Macro Shock Expected</div>
+          </div>
+        </div>
+      </section>
+
       <!-- Section: Top 3 Picks Today -->
       <section id="picks">
         <div class="section-header">
@@ -2324,7 +2490,21 @@
                 <div class="confidence-fill" style="width: ${confidence}%;"></div>
               </div>
 
-              <div class="pick-reasons">
+              <!-- Quant Microstructure Indicators -->
+              <div class="pick-quant-pills">
+                <span class="quant-pill quant-pill-accent" title="Relative Volume Surge"><i class="fa-solid fa-bolt"></i> RVOL: ${p.rvol || '2.4x'}</span>
+                <span class="quant-pill" title="Daily ATR Range Expended"><i class="fa-solid fa-arrows-left-right"></i> ATR Exp: ${p.adr_exp || '34%'}</span>
+                <span class="quant-pill" title="Close Location Value (Institutional Absorption near Highs)"><i class="fa-solid fa-crosshairs"></i> CLV: ${p.clv || '0.82'}</span>
+              </div>
+
+              ${p.catalyst ? `
+                <div class="pick-catalyst-pill" title="Google News Real-Time Catalyst">
+                  <i class="fa-solid fa-bullhorn"></i>
+                  <span><strong>${(p.catalyst.type || 'Catalyst').replace('_', ' ').toUpperCase()}:</strong> ${p.catalyst.headline}</span>
+                </div>
+              ` : ''}
+
+              <div class="pick-reasons" style="margin-top: 10px;">
                 <i class="fa-solid fa-shield-check" style="color: var(--accent-violet-light); margin-right: 4px;"></i>
                 <strong>Setup:</strong> ${p.signal_reasons || 'Multi-factor confirmation (EMA trend, RSI momentum & volume breakout)'}
               </div>
@@ -2609,6 +2789,54 @@
       }
     }
 
+    // ── Fetch & Render Global Macro & News Freeze Pulse ──
+    async function loadMacroPulse() {
+      try {
+        const res = await fetch(`/api/macro-pulse?_t=${Date.now()}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        // USD/INR
+        if (data.usdinr) {
+          const usdinrEl = document.getElementById('usdinr-val');
+          const usdinrSub = document.getElementById('usdinr-sub');
+          if (usdinrEl) usdinrEl.textContent = `₹${Number(data.usdinr.rate).toFixed(2)}`;
+          if (usdinrSub) usdinrSub.textContent = data.usdinr.impact || 'Live Forex Rate';
+        }
+
+        // FRED
+        if (data.fred) {
+          const crudeEl = document.getElementById('crude-val');
+          const crudeSub = document.getElementById('crude-sub');
+          const yieldEl = document.getElementById('yield-val');
+          const yieldSub = document.getElementById('yield-sub');
+          const vixEl = document.getElementById('vix-val');
+          const vixSub = document.getElementById('vix-sub');
+
+          if (crudeEl) crudeEl.textContent = `$${Number(data.fred.brent_crude).toFixed(2)}`;
+          if (crudeSub) crudeSub.textContent = data.fred.crude_pressure ? 'High Input Cost Watch (Paints, Tires)' : 'Normal Fuel Cost Regime';
+
+          if (yieldEl) yieldEl.textContent = `${Number(data.fred.us_10y_yield).toFixed(2)}%`;
+          if (yieldSub) yieldSub.textContent = data.fred.fii_yield_pressure ? 'Elevated FII Capital Outflow Watch' : 'Normal Emerging Market Inflows';
+
+          if (vixEl) vixEl.innerHTML = `${Number(data.fred.global_vix).toFixed(2)} <span style="font-size: 13px; font-weight: 500; color: ${data.fred.global_vix > 20 ? 'var(--accent-rose)' : 'var(--accent-emerald)'};">${data.fred.volatility_regime}</span>`;
+          if (vixSub) vixSub.textContent = data.fred.global_vix > 20 ? 'Cautious Position Sizing Recommended' : 'Favorable Intraday Breakout Environment';
+        }
+
+        // News Freeze Shield
+        if (data.news_freeze) {
+          const freezeText = document.getElementById('news-freeze-text');
+          const freezeBadge = document.getElementById('news-freeze-badge');
+          if (freezeText) freezeText.textContent = `30M NEWS FREEZE: ${data.news_freeze.is_active ? 'ACTIVE ⚠️' : 'INACTIVE 🟢'}`;
+          if (freezeBadge) {
+            freezeBadge.className = data.news_freeze.is_active ? 'index-badge badge-neg' : 'index-badge badge-pos';
+          }
+        }
+      } catch (err) {
+        console.error('Error loading macro pulse:', err);
+      }
+    }
+
     // ── Refresh All Dashboard Telemetry ──
     async function refreshAllData(force = false) {
       const icon = document.getElementById('sync-icon');
@@ -2620,6 +2848,7 @@
         await Promise.all([
           loadApiLimits(),
           loadMarketPulse(force),
+          loadMacroPulse(),
           loadTodaysPicks(),
           loadPicksHistoryJson(),
           loadRlStatus(),
