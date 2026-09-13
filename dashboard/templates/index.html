@@ -2012,6 +2012,20 @@
               <div style="margin-top: 6px;">Trailing Policy: <span style="color: var(--accent-emerald);">Adaptive ATR (x1.25)</span></div>
             </div>
           </div>
+
+          <!-- Autonomous Risk Auditor Card (Tier 3) -->
+          <div style="background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-subtle); border-radius: 14px; padding: 18px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+              <h4 style="font-size: 15px; font-weight: 700; color: #ffffff;"><i class="fa-solid fa-user-shield" style="color: var(--accent-rose); margin-right: 6px;"></i> Risk Auditor Loop</h4>
+              <span class="pick-status-badge status-tp-hit" style="background: rgba(244, 63, 94, 0.15); color: #fb7185; border-color: rgba(244, 63, 94, 0.3);">Self-Learning (Active)</span>
+            </div>
+            <p style="font-size: 12px; color: var(--text-secondary); margin-bottom: 12px;">
+              Clusters losing setups from closed trades, synthesizes symbolic penalty rules, and injects hard vetoes into AI brain prompts.
+            </p>
+            <div id="auditor-rules-container" style="display: flex; flex-direction: column; gap: 8px; font-size: 11.5px; font-family: var(--font-mono); max-height: 140px; overflow-y: auto;">
+              <!-- Rendered via JS -->
+            </div>
+          </div>
         </div>
       </section>
 
@@ -2687,6 +2701,34 @@
               </div>
             `;
           }).join('');
+        }
+
+        // Render Tier 3 Autonomous Auditor Rules
+        const auditorContainer = document.getElementById('auditor-rules-container');
+        if (auditorContainer && data.auditor && data.auditor.penalty_rules) {
+          const rules = data.auditor.penalty_rules.filter(r => r.active !== false);
+          if (rules.length === 0) {
+            auditorContainer.innerHTML = '<div style="color: var(--text-muted); font-size: 11px;">Zero active loss penalties. Clean risk profile.</div>';
+          } else {
+            auditorContainer.innerHTML = rules.map(r => {
+              const ruleId = r.rule_id || r.type || 'RULE';
+              const target = r.symbol || r.target || 'ALL';
+              const pts = r.penalty_pts || 10;
+              const lossRate = (r.evidence && r.evidence.loss_rate_pct !== undefined) ? `${r.evidence.loss_rate_pct}% Loss Rate` : (r.loss_rate ? `${r.loss_rate}% Loss Rate` : 'Active Prior');
+              return `
+                <div style="display: flex; align-items: center; justify-content: space-between; padding: 6px 8px; background: rgba(0,0,0,0.25); border-radius: 6px; border-left: 2px solid var(--accent-rose);">
+                  <div style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px;">
+                    <span style="font-weight: 700; color: #ffffff;">${ruleId}</span>
+                    <span style="color: var(--text-muted); font-size: 10px; margin-left: 3px;">(${target})</span>
+                  </div>
+                  <div style="text-align: right; flex-shrink: 0;">
+                    <span style="color: var(--accent-rose); font-weight: 700;">-${pts}pts</span>
+                    <div style="font-size: 9.5px; color: var(--text-muted);">${lossRate}</div>
+                  </div>
+                </div>
+              `;
+            }).join('');
+          }
         }
       } catch (err) {
         console.debug('RL status poll: ', err);

@@ -737,6 +737,14 @@ def job_eod_outcome_brain():
 
         result = reconcile_daily_outcomes(send_telegram=True, review_with_brain=True)
         logger.info("EOD outcome brain updated %s picks: %s", len(result.get("updates", [])), result.get("stats", {}))
+
+        # Autonomous Risk Auditor: Cluster outcomes and synthesize loss prevention rules
+        try:
+            from modules.auditor import audit_closed_trades
+            aud_res = audit_closed_trades()
+            logger.info("EOD Auditor learning cycle finished: %s", aud_res)
+        except Exception as aud_err:
+            logger.warning("EOD Auditor learning cycle failed: %s", aud_err)
     except Exception as e:
         logger.error("EOD outcome brain failed: %s", e)
 

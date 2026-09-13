@@ -1156,12 +1156,24 @@ def api_rl_status():
     try:
         from modules.bandit_selector import get_bandit_status
         from modules.rl_intraday_manager import get_rl_manager_status
+        from modules.auditor import load_audit_rules
         return jsonify({
             "bandit": get_bandit_status(),
             "rl_manager": get_rl_manager_status(),
+            "auditor": load_audit_rules(),
         })
     except Exception as e:
         return jsonify({"error": str(e)})
+
+
+@app.route("/api/audit-rules")
+def api_audit_rules():
+    """Return the active learned loss prevention rules from the Autonomous Auditor."""
+    try:
+        from modules.auditor import load_audit_rules
+        return jsonify(load_audit_rules())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/api/grok-dashboard")

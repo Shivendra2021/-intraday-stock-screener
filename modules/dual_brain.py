@@ -82,7 +82,14 @@ def _call_openrouter(messages, api_key, model, max_tokens=600, base_url: str | N
 def _format_picks(picks: list[dict]) -> str:
     lines = []
     for i, p in enumerate(picks, 1):
-        lines.append(f"{i}. {p.get('symbol')}: Price={p.get('price', 0):.0f} RSI={p.get('rsi', 0):.0f}")
+        sym = p.get("symbol", "UNKNOWN")
+        price = float(p.get("price", 0) or 0)
+        rsi = float(p.get("rsi", 50) or 50)
+        rvol = p.get("rvol", p.get("vol_ratio", "1.0"))
+        adr = p.get("adr_exp", p.get("expansion_pct", 0))
+        pen = float(p.get("audit_penalty", 0) or 0)
+        pen_str = f" | AuditPen={pen:.1f}pts" if pen > 0 else ""
+        lines.append(f"{i}. {sym}: Price={price:.1f} RSI={rsi:.1f} RVOL={rvol} ATR_Exp={adr}%{pen_str}")
     return "\n".join(lines)
 
 
@@ -133,11 +140,21 @@ def brain1_grok_review(picks: list[dict], context: str = "") -> dict[str, Any]:
     if not cfg["grok_key"]:
         return {"ok": False, "error": "No Grok API key"}
 
+    audit_rules_text = ""
+    try:
+        from modules.auditor import format_auditor_rules_for_prompt
+        audit_rules_text = format_auditor_rules_for_prompt()
+    except Exception as e:
+        logger.debug("Auditor prompt injection skipped: %s", e)
+
     system_prompt = (
-        "You are Brain 1 (Primary). Review stocks. "
+        "You are Brain 1 (Primary Institutional Analyst). Review Indian intraday stock candidates. "
         "You can ISSUE COMMANDS: ADD_PICK, REMOVE_PICK, ADD_WATCH. "
+        "Enforce active risk rules and veto setups that violate institutional criteria. "
         "Return JSON with: verdict, picks_with_reason, commands (optional), key_concerns."
     )
+    if audit_rules_text:
+        system_prompt += f"\n\n{audit_rules_text}"
 
     picks_text = _format_picks(picks)
     user_content = f"Context: {context}\n\nPicks:\n{picks_text}\n\nReview and issue commands if needed."
@@ -167,11 +184,21 @@ def brain2_gpt_review(picks: list[dict], context: str = "") -> dict[str, Any]:
     if not cfg["gpt_key"]:
         return {"ok": False, "error": "No GPT API key"}
 
+    audit_rules_text = ""
+    try:
+        from modules.auditor import format_auditor_rules_for_prompt
+        audit_rules_text = format_auditor_rules_for_prompt()
+    except Exception as e:
+        logger.debug("Auditor prompt injection skipped: %s", e)
+
     system_prompt = (
-        "You are Brain 2 (Challenger). Challenge weak picks. "
+        "You are Brain 2 (Challenger & Risk Committee). Challenge weak picks and enforce institutional loss prevention rules. "
         "ISSUE COMMANDS to add/remove: ADD_PICK, REMOVE_PICK, ADD_WATCH. "
+        "If a pick matches an active Auditor Failure Signature, issue REMOVE_PICK with the Rule ID. "
         "Return JSON: verdict, adjustments, commands (optional), final_vote, risk_flags."
     )
+    if audit_rules_text:
+        system_prompt += f"\n\n{audit_rules_text}"
 
     picks_text = _format_picks(picks)
     user_content = f"Context: {context}\n\nBrain 1 picks:\n{picks_text}\n\nChallenge and issue commands."

@@ -255,6 +255,11 @@ def settle_closed_positions(date_s: str | None = None) -> dict[str, Any]:
         conn.commit()
         if settled:
             logger.info("Paper portfolio settled %s positions", len(settled))
+            try:
+                from modules.auditor import audit_closed_trades
+                audit_closed_trades()
+            except Exception as aud_exc:
+                logger.debug("Auditor trade settlement hook skipped: %s", aud_exc)
         return {"date": date_s, "settled": len(settled), "positions": settled}
 
 
