@@ -407,9 +407,31 @@ def discover_all_apis() -> List[Dict[str, Any]]:
             icon="fa-landmark",
         )
 
-    # 15. GENERIC DYNAMIC AUTO-DISCOVERY:
+    # 15. Twelve Data Market Gateway (NEW)
+    try:
+        from config import TWELVE_DATA_API_KEY
+        td_key = (TWELVE_DATA_API_KEY or "").strip()
+    except Exception:
+        td_key = os.getenv("TWELVE_DATA_API_KEY", "").strip()
+
+    if td_key:
+        add_api(
+            api_id="twelve_data",
+            name="Twelve Data Market Gateway",
+            short_name="Twelve Data",
+            category="Market Data Gateway",
+            model="Twelve Data REST API",
+            limit=800,
+            used=get_api_usage("twelve_data"),
+            unit="credits/day",
+            status="Active",
+            status_color="#a855f7",
+            icon="fa-chart-pie",
+        )
+
+    # 16. GENERIC DYNAMIC AUTO-DISCOVERY:
     # Automatically scan for ANY new API keys or tokens added to environment or .env
-    known_prefixes = ("TELEGRAM_", "GROQ_", "OPENROUTER_", "XAI_", "THENEWSAPI_", "NEWSAPI_", "ZERODHA_", "DHAN_", "SERPAPI_", "TAVILY_", "FINNHUB_", "FRED_")
+    known_prefixes = ("TELEGRAM_", "GROQ_", "OPENROUTER_", "XAI_", "THENEWSAPI_", "NEWSAPI_", "ZERODHA_", "DHAN_", "SERPAPI_", "TAVILY_", "FINNHUB_", "FRED_", "TWELVE_DATA_")
     for env_var, env_val in os.environ.items():
         if not env_val or len(env_val.strip()) < 3:
             continue

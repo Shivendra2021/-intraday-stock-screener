@@ -116,6 +116,8 @@ FINNHUB_API_KEY          = os.getenv("FINNHUB_API_KEY", "dajfrqhr01qhhp590rc0daj
 FINNHUB_ENABLED          = os.getenv("FINNHUB_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 FRED_API_KEY             = os.getenv("FRED_API_KEY", "ccdfbb7fc946c952a51347bbdde32eda")
 FRED_ENABLED             = os.getenv("FRED_ENABLED", "True").strip().lower() in ("true", "1", "yes")
+TWELVE_DATA_API_KEY      = os.getenv("TWELVE_DATA_API_KEY", "34a6780e5c914f14b929067ca8d4cb92")
+TWELVE_DATA_ENABLED      = os.getenv("TWELVE_DATA_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 CATALYST_SEARCH_ENABLED  = os.getenv("CATALYST_SEARCH_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 CATALYST_MAX_DAILY_SEARCHES = int(os.getenv("CATALYST_MAX_DAILY_SEARCHES", "8"))
 
