@@ -1131,155 +1131,22 @@ def api_api_limits():
     except Exception:
         today = datetime.date.today().isoformat()
 
-    # Grok / OpenRouter state
-    grok_used = 0
-    state_file = os.path.join(DATA_DIR, "grok_brain_state.json")
-    if os.path.exists(state_file):
-        try:
-            with open(state_file, "r", encoding="utf-8") as f:
-                sdata = json.load(f)
-                calls_map = sdata.get("daily_calls", {})
-                if today in calls_map:
-                    grok_used = int(calls_map[today])
-                elif calls_map:
-                    latest_day = sorted(calls_map.keys())[-1]
-                    grok_used = int(calls_map[latest_day])
-        except Exception as e:
-            app.logger.warning("Could not read grok_brain_state: %s", e)
+    # Dynamic API Discovery & Quota Tracking
+    try:
+        from modules.api_registry import discover_all_apis
+        apis = discover_all_apis()
+    except Exception as exc:
+        app.logger.warning("Dynamic API discovery failed, using fallback: %s", exc)
+        apis = []
 
-    # Groq calls (derived from state file)
-    groq_used = grok_used
-    # TheNewsAPI calls
-    news_used = 1 if os.path.exists(os.path.join(DATA_DIR, "news_cache.json")) else 0
-    # Telegram messages sent today
-    telegram_used = 0
-    deliv_file = os.path.join(DATA_DIR, "telegram_delivery.jsonl")
-    if os.path.exists(deliv_file):
-        try:
-            with open(deliv_file, "r", encoding="utf-8") as f:
-                for line in f:
-                    if today in line and '"ok": true' in line:
-                        telegram_used += 1
-        except Exception:
-            pass
-
-    # NSE / Yahoo quotes requests (calculated from universe and pulse)
-    nse_quotes_used = max(50, telegram_used * 5)
-
-    apis = [
-        {
-            "id": "openrouter_grok",
-            "name": "OpenRouter AI (xAI Grok-3 Mini)",
-            "short_name": "xAI Grok-3 Mini",
-            "category": "AI Reasoning & Brain Review",
-            "model": "x-ai/grok-3-mini",
-            "limit": 200,
-            "used": grok_used,
-            "remaining": max(0, 200 - grok_used),
-            "unit": "calls/day",
-            "pct": round(min(100.0, (grok_used / 200) * 100), 1),
-            "status": "Active",
-            "status_color": "#10b981",
-            "icon": "fa-brain"
-        },
-        {
-            "id": "groq_deepseek",
-            "name": "Groq Cloud (Reasoning Engine)",
-            "short_name": "Groq AI Brain",
-            "category": "Fast Reasoning Fallback",
-            "model": "groq/compound-mini",
-            "limit": 14400,
-            "used": groq_used,
-            "remaining": max(0, 14400 - groq_used),
-            "unit": "req/day",
-            "pct": round(min(100.0, (groq_used / 14400) * 100), 2),
-            "status": "Active",
-            "status_color": "#10b981",
-            "icon": "fa-microchip"
-        },
-        {
-            "id": "thenewsapi",
-            "name": "TheNewsAPI Macro & Geopolitics",
-            "short_name": "TheNewsAPI Macro",
-            "category": "Market News & Sentiment",
-            "model": "Global Real-time Feed",
-            "limit": 50,
-            "used": news_used,
-            "remaining": max(0, 50 - news_used),
-            "unit": "req/day",
-            "pct": round(min(100.0, (news_used / 50) * 100), 1),
-            "status": "Active",
-            "status_color": "#38bdf8",
-            "icon": "fa-newspaper"
-        },
-        {
-            "id": "telegram_bot",
-            "name": "Telegram Bot Telemetry Alerts",
-            "short_name": "Telegram Bot API",
-            "category": "Instant Signal Delivery",
-            "model": "Bot API v7.0",
-            "limit": 200,
-            "used": telegram_used,
-            "remaining": max(0, 200 - telegram_used),
-            "unit": "msgs/day",
-            "pct": round(min(100.0, (telegram_used / 200) * 100), 1),
-            "status": "Active",
-            "status_color": "#818cf8",
-            "icon": "fa-paper-plane"
-        },
-        {
-            "id": "nse_feed",
-            "name": "NSE Live & Yahoo Data Gateway",
-            "short_name": "NSE Live Gateway",
-            "category": "Market Quotes & Sparklines",
-            "model": "Sub-Second Live Quotes",
-            "limit": 2000,
-            "used": nse_quotes_used,
-            "remaining": max(0, 2000 - nse_quotes_used),
-            "unit": "req/hr",
-            "pct": round(min(100.0, (nse_quotes_used / 2000) * 100), 1),
-            "status": "Active",
-            "status_color": "#34d399",
-            "icon": "fa-bolt"
-        },
-        {
-            "id": "dhanhq_broker",
-            "name": "DhanHQ Broker Feed & Quote Engine",
-            "short_name": "DhanHQ Broker",
-            "category": "Broker Execution & Quotes",
-            "model": "Dhan v2 REST / SDK",
-            "limit": 500,
-            "used": 1,
-            "remaining": 499,
-            "unit": "req/min",
-            "pct": 0.2,
-            "status": "Configured",
-            "status_color": "#f59e0b",
-            "icon": "fa-chart-line"
-        },
-        {
-            "id": "jugaad_data",
-            "name": "NSE Official Bhavcopy (jugaad-data)",
-            "short_name": "NSE Bhavcopy",
-            "category": "Institutional Delivery & VWAP",
-            "model": "Official NSE Archives",
-            "limit": 1000,
-            "used": 5,
-            "remaining": 995,
-            "unit": "req/day",
-            "pct": 0.5,
-            "status": "Active",
-            "status_color": "#10b981",
-            "icon": "fa-database"
-        }
-    ]
+    all_healthy = all(a.get("status") in ("Active", "Configured") for a in apis)
 
     return jsonify({
         "status": "success",
         "date": today,
         "apis": apis,
         "total_apis": len(apis),
-        "all_healthy": True
+        "all_healthy": all_healthy
     })
 
 
