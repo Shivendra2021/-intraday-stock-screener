@@ -134,6 +134,9 @@ def start_bot() -> dict[str, Any]:
         }
 
     python_exe = sys.executable
+    venv_py = os.path.join(BASE_DIR, ".venv", "Scripts", "python.exe")
+    if os.path.exists(venv_py):
+        python_exe = venv_py
     main_script = os.path.join(BASE_DIR, "main.py")
     os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
