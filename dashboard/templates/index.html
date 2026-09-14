@@ -1635,6 +1635,11 @@
   </style>
 </head>
 <body>
+    {% if legacy_view %}
+    <div style="padding:12px 24px;background:#193c38;color:#e4fff7;text-align:center;position:relative;z-index:9999">
+        Legacy research view · Separate from Quant V3 live state · <a href="/" style="color:#86efce">Return to Quant V3 dashboard →</a>
+    </div>
+    {% endif %}
 
   <!-- Left Sidebar Navigation -->
   <aside class="sidebar">
@@ -1734,6 +1739,15 @@
 
     <!-- Main Content Area -->
     <div class="content-area">
+
+      <section id="quant-status" aria-live="polite" style="padding:20px;border:1px solid var(--border-color,#334155);border-radius:12px;margin-bottom:24px">
+        <h3>Quant V3 · Intraday research</h3>
+        <p style="margin:8px 0;color:var(--text-muted)">Premarket watchlist → confirmation after 09:30 IST → up to three paper setups. Targets are measured from entry.</p>
+        <div id="quant-summary">Loading recorded system state…</div>
+        <div id="quant-evidence" style="margin-top:12px"></div>
+        <div id="quant-watchlist" style="margin-top:12px"></div>
+        <p style="margin-top:12px;color:var(--text-muted)">+7% / +10% are research targets, not promised returns. Empty slots mean no qualified setup. Fills and costs are simulated.</p>
+      </section>
 
       <!-- Section: Markets Overview (NIFTY, BANK NIFTY, SENSEX, GIFT NIFTY) -->
       <section id="markets">
@@ -2533,7 +2547,7 @@
           const statusLabel = (p.status === 'tp_hit') ? 'Target Hit 🎯' :
                               (p.status === 'sl_hit') ? 'Stop Hit 🛑' :
                               (p.status === 'eod_closed') ? 'EOD Closed ⏱️' : 'Active / Pending ⏳';
-          const confidence = Math.round(p.confidence || p.score || 75);
+          const confidence = p.confidence == null ? null : Math.round(p.confidence);
 
           return `
             <div class="pick-card">
@@ -2564,19 +2578,19 @@
               </div>
 
               <div class="pick-meta-row">
-                <span>AI Confidence: <strong style="color: #ffffff;">${confidence}%</strong></span>
+                <span>${p.probability_label || 'Legacy score'}: <strong style="color: #ffffff;">${confidence == null ? 'Unavailable' : confidence + (p.probability_label === 'Estimated P(+7%)' ? '%' : '/100')}</strong></span>
                 <span>R:R: <strong style="color: #ffffff;">${p.risk_reward || '2.0'}x</strong></span>
               </div>
 
               <div class="pick-confidence-bar">
-                <div class="confidence-fill" style="width: ${confidence}%;"></div>
+                <div class="confidence-fill" style="width: ${Math.max(0, Math.min(100, confidence || 0))}%;"></div>
               </div>
 
               <!-- Quant Microstructure Indicators -->
               <div class="pick-quant-pills">
-                <span class="quant-pill quant-pill-accent" title="Relative Volume Surge"><i class="fa-solid fa-bolt"></i> RVOL: ${p.rvol || '2.4x'}</span>
-                <span class="quant-pill" title="Daily ATR Range Expended"><i class="fa-solid fa-arrows-left-right"></i> ATR Exp: ${p.adr_exp || '34%'}</span>
-                <span class="quant-pill" title="Close Location Value (Institutional Absorption near Highs)"><i class="fa-solid fa-crosshairs"></i> CLV: ${p.clv || '0.82'}</span>
+                <span class="quant-pill quant-pill-accent" title="Volume relative to prior sessions at the same time">RVOL: ${p.rvol ?? 'Unavailable'}</span>
+                <span class="quant-pill" title="Session range divided by prior daily ATR">ATR Exp: ${p.adr_exp ?? 'Unavailable'}</span>
+                <span class="quant-pill" title="Close position within the observed session range">CLV: ${p.clv ?? 'Unavailable'}</span>
               </div>
 
               ${p.catalyst ? `
@@ -2910,7 +2924,7 @@
         if (data.usdinr) {
           const usdinrEl = document.getElementById('usdinr-val');
           const usdinrSub = document.getElementById('usdinr-sub');
-          if (usdinrEl) usdinrEl.textContent = `₹${Number(data.usdinr.rate).toFixed(2)}`;
+          if (usdinrEl) usdinrEl.textContent = data.usdinr.rate == null ? 'Unavailable' : `₹${Number(data.usdinr.rate).toFixed(2)}`;
           if (usdinrSub) usdinrSub.textContent = data.usdinr.impact || 'Live Forex Rate';
         }
 
@@ -2923,13 +2937,13 @@
           const vixEl = document.getElementById('vix-val');
           const vixSub = document.getElementById('vix-sub');
 
-          if (crudeEl) crudeEl.textContent = `$${Number(data.fred.brent_crude).toFixed(2)}`;
+          if (crudeEl) crudeEl.textContent = data.fred.brent_crude == null ? 'Unavailable' : `$${Number(data.fred.brent_crude).toFixed(2)}`;
           if (crudeSub) crudeSub.textContent = data.fred.crude_pressure ? 'High Input Cost Watch (Paints, Tires)' : 'Normal Fuel Cost Regime';
 
-          if (yieldEl) yieldEl.textContent = `${Number(data.fred.us_10y_yield).toFixed(2)}%`;
+          if (yieldEl) yieldEl.textContent = data.fred.us_10y_yield == null ? 'Unavailable' : `${Number(data.fred.us_10y_yield).toFixed(2)}%`;
           if (yieldSub) yieldSub.textContent = data.fred.fii_yield_pressure ? 'Elevated FII Capital Outflow Watch' : 'Normal Emerging Market Inflows';
 
-          if (vixEl) vixEl.innerHTML = `${Number(data.fred.global_vix).toFixed(2)} <span style="font-size: 13px; font-weight: 500; color: ${data.fred.global_vix > 20 ? 'var(--accent-rose)' : 'var(--accent-emerald)'};">${data.fred.volatility_regime}</span>`;
+          if (vixEl) vixEl.textContent = data.fred.global_vix == null ? 'Unavailable' : `${Number(data.fred.global_vix).toFixed(2)} ${data.fred.volatility_regime}`;
           if (vixSub) vixSub.textContent = data.fred.global_vix > 20 ? 'Cautious Position Sizing Recommended' : 'Favorable Intraday Breakout Environment';
         }
 
@@ -2937,7 +2951,7 @@
         if (data.news_freeze) {
           const freezeText = document.getElementById('news-freeze-text');
           const freezeBadge = document.getElementById('news-freeze-badge');
-          if (freezeText) freezeText.textContent = `30M NEWS FREEZE: ${data.news_freeze.is_active ? 'ACTIVE ⚠️' : 'INACTIVE 🟢'}`;
+          if (freezeText) freezeText.textContent = data.news_freeze.status_text === 'EVENT DATA UNAVAILABLE' ? '30M NEWS FREEZE: UNVERIFIED' : `30M NEWS FREEZE: ${data.news_freeze.is_active ? 'ACTIVE ⚠️' : 'INACTIVE 🟢'}`;
           if (freezeBadge) {
             freezeBadge.className = data.news_freeze.is_active ? 'index-badge badge-neg' : 'index-badge badge-pos';
           }
@@ -2948,6 +2962,20 @@
     }
 
     // ── Refresh All Dashboard Telemetry ──
+    async function loadQuant() {
+      try {
+        const response = await fetch('/api/quant');
+        if (!response.ok) throw new Error('Quant status unavailable');
+        const data = await response.json();
+        const r = data.runtime || {}, w = data.watchlist || {}, l = data.learning || {}, p = data.performance || {};
+        document.getElementById('quant-summary').textContent = `${(r.status || 'awaiting first cycle').replaceAll('_', ' ')} · ${data.signals.length}/3 confirmed today · ${data.observations} recorded observations`;
+        document.getElementById('quant-evidence').textContent = `Learning: ${(l.status || 'not evaluated').replaceAll('_', ' ')}. ${l.sessions ?? 0} eligible sessions, ${l.samples ?? 0} samples. Closed paper fills: ${p.filled_closed ?? 0}. Mean net return: ${p.mean_net_pct == null ? 'not measured' : p.mean_net_pct.toFixed(2) + '%'}.`;
+        document.getElementById('quant-watchlist').textContent = `Watchlist (${w.date || 'not prepared'}): ${(w.candidates || []).slice(0, 12).map(x => x.symbol).join(', ') || 'empty'}. Daily coverage: ${w.coverage ?? 0}/${w.universe_size ?? 0}. ${r.coverage_note || 'Free-source coverage is partial; quotes must pass freshness and price-band checks.'}`;
+      } catch (err) {
+        document.getElementById('quant-summary').textContent = 'Quant status unavailable; no selection state inferred.';
+      }
+    }
+
     async function refreshAllData(force = false) {
       const icon = document.getElementById('sync-icon');
       const btn = document.getElementById('manual-sync-btn');
@@ -2956,6 +2984,7 @@
 
       try {
         await Promise.all([
+          loadQuant(),
           loadApiLimits(),
           loadMarketPulse(force),
           loadMacroPulse(),

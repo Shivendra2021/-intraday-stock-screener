@@ -41,6 +41,12 @@ def _fail(message: str, code: int = 1) -> None:
 
 
 def run() -> None:
+    from config import QUANT_ENABLED
+    if QUANT_ENABLED:
+        from modules.quant_runtime import run_once
+        result = run_once(notify=True)
+        print(f"QUANT_RESULT: {result.get('status')}")
+        return
     today = today_ist_str()
     print(f"CLOUD_MORNING_START: date={today} cwd={ROOT}")
 

@@ -126,8 +126,8 @@ def discover_all_apis() -> List[Dict[str, Any]]:
             "icon": icon,
         })
 
-    # 1. Primary AI Brain: OpenRouter (Grok-3 & GPT-4o)
-    grok_used = 0
+    # 1. V3 AI reviewers: DashScope Qwen primary and OpenRouter Gemma challenger.
+    reviewer_used = 0
     state_file = os.path.join(DATA_DIR, "grok_brain_state.json")
     if os.path.exists(state_file):
         try:
@@ -135,39 +135,38 @@ def discover_all_apis() -> List[Dict[str, Any]]:
                 sdata = json.load(f)
                 calls_map = sdata.get("daily_calls", {})
                 if today in calls_map:
-                    grok_used = int(calls_map[today])
+                    reviewer_used = int(calls_map[today])
                 elif calls_map:
-                    grok_used = int(calls_map[sorted(calls_map.keys())[-1]])
+                    reviewer_used = int(calls_map[sorted(calls_map.keys())[-1]])
         except Exception:
             pass
 
     add_api(
-        api_id="openrouter_grok",
-        name="OpenRouter AI (xAI Grok-3 Mini)",
-        short_name="xAI Grok-3 Mini",
+        api_id="dashscope_qwen",
+        name="DashScope Qwen Max (Primary Reviewer)",
+        short_name="Qwen Max",
         category="AI Reasoning & Brain Review",
-        model=os.getenv("GROK_MODEL", "x-ai/grok-3-mini"),
+        model=os.getenv("QWEN_MAX_MODEL", "qwen3.7-max"),
         limit=200,
-        used=grok_used,
+        used=reviewer_used,
         unit="calls/day",
-        status="Active",
-        status_color="#10b981",
+        status="Configured" if os.getenv("DASHSCOPE_API_KEY", "").strip() else "Key unavailable",
+        status_color="#f59e0b" if os.getenv("DASHSCOPE_API_KEY", "").strip() else "#ef4444",
         icon="fa-brain",
     )
 
-    # 2. Secondary AI Brain: Groq Cloud (Ultra-Fast DeepSeek/Qwen)
-    groq_used = grok_used
+    # 2. Independent challenger, only used after the Qwen primary review.
     add_api(
-        api_id="groq_cloud",
-        name="Groq Cloud (Reasoning Engine)",
-        short_name="Groq AI Brain",
-        category="Fast Reasoning Fallback",
-        model=os.getenv("GROQ_DEEPSEEK_MODEL", "groq/compound-mini"),
-        limit=14400,
-        used=groq_used,
-        unit="req/day",
-        status="Active",
-        status_color="#10b981",
+        api_id="openrouter_gemma",
+        name="OpenRouter Gemma (Independent Challenger)",
+        short_name="Gemma 4B",
+        category="AI Review Fallback",
+        model=os.getenv("OPENROUTER_GEMMA_MODEL", "google/gemma-3-4b-it"),
+        limit=200,
+        used=reviewer_used,
+        unit="calls/day",
+        status="Configured" if os.getenv("OPENROUTER_GEMMA_KEY", "").strip() else "Key unavailable",
+        status_color="#f59e0b" if os.getenv("OPENROUTER_GEMMA_KEY", "").strip() else "#ef4444",
         icon="fa-microchip",
     )
 

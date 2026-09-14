@@ -232,7 +232,7 @@ class TestPickerCorrelationGate(unittest.TestCase):
             # WIPRO skipped because it's same sector as INFY -> SUNPHARMA picked
             self.assertEqual(symbols, ["INFY", "SUNPHARMA"])
 
-    def test_backfill_when_all_candidates_correlated(self):
+    def test_no_backfill_when_all_candidates_correlated(self):
         from unittest.mock import patch
         cand1 = {"symbol": "INFY", "score": 90, "sector": "IT", "price": 100.0, "atr": 2.0}
         cand2 = {"symbol": "WIPRO", "score": 85, "sector": "IT", "price": 150.0, "atr": 3.0}
@@ -248,9 +248,9 @@ class TestPickerCorrelationGate(unittest.TestCase):
              patch("config.TOP_N_PICKS", 2):
 
             picks = run_picker(candidates)
-            # Should backfill so we still get 2 picks
-            self.assertEqual(len(picks), 2)
-            self.assertEqual([p["symbol"] for p in picks], ["INFY", "WIPRO"])
+            # Rejected correlated candidates must not bypass the gate to fill a quota.
+            self.assertEqual(len(picks), 1)
+            self.assertEqual([p["symbol"] for p in picks], ["INFY"])
 
     def test_single_missing_symbol_downloaded_and_correlated(self):
         from unittest.mock import patch

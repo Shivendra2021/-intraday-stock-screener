@@ -6,6 +6,52 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Quant v3: existing/free data only; all execution is simulated research.
+QUANT_ENABLED = os.getenv("QUANT_ENABLED", "True").lower() in ("true", "1", "yes")
+QUANT_DB_PATH = os.getenv("QUANT_DB_PATH", "data/quant.db")
+QUANT_WATCHLIST_TIME = "08:45"
+QUANT_CONFIRM_START = "09:30"
+QUANT_ENTRY_CUTOFF = "11:00"
+QUANT_EXIT_TIME = "15:20"
+QUANT_MAX_PICKS = 3
+QUANT_WATCHLIST_SIZE = int(os.getenv("QUANT_WATCHLIST_SIZE", "100"))
+QUANT_BROAD_BATCH_SIZE = int(os.getenv("QUANT_BROAD_BATCH_SIZE", "100"))
+QUANT_MIN_DAILY_VALUE = float(os.getenv("QUANT_MIN_DAILY_VALUE", "20000000"))
+QUANT_MIN_PRICE = 20.0
+QUANT_MAX_STOP_PCT = 3.0
+QUANT_MIN_STOP_PCT = 0.5
+QUANT_MAX_SPREAD_PCT = 0.30
+QUANT_QUOTE_MAX_AGE_SECONDS = 90
+QUANT_BAR_MAX_AGE_SECONDS = 120
+QUANT_COST_BPS = float(os.getenv("QUANT_COST_BPS", "20"))  # modeled round trip
+QUANT_SLIPPAGE_BPS = float(os.getenv("QUANT_SLIPPAGE_BPS", "5"))  # each fill
+QUANT_MIN_P7 = float(os.getenv("QUANT_MIN_P7", "0.30"))
+QUANT_MIN_MODEL_DAYS = int(os.getenv("QUANT_MIN_MODEL_DAYS", "30"))
+QUANT_MIN_MODEL_SAMPLES = int(os.getenv("QUANT_MIN_MODEL_SAMPLES", "300"))
+QUANT_MIN_EVAL_TRADES = int(os.getenv("QUANT_MIN_EVAL_TRADES", "20"))
+QUANT_DATA_TIMEOUT_SECONDS = 12
+QUANT_RESEARCH_BUDGET_SECONDS = 900
+QUANT_PREPARE_BUDGET_SECONDS = 45
+QUANT_HISTORY_DAYS = 59  # free 5-minute history; provider coverage is audited
+QUANT_MODEL_MAX_AGE_DAYS = 30
+QUANT_DASHBOARD_HOST = os.getenv("QUANT_DASHBOARD_HOST", "127.0.0.1")
+QUANT_AI_DAILY_REVIEW_ENABLED = os.getenv("QUANT_AI_DAILY_REVIEW_ENABLED", "True").strip().lower() in ("true", "1", "yes")
+QUANT_AI_MAX_DAILY_CALLS = 1
+QUANT_BACKFILL_TARGET_SESSIONS = int(os.getenv("QUANT_BACKFILL_TARGET_SESSIONS", "40"))
+QUANT_FORWARD_MIN_DAYS = int(os.getenv("QUANT_FORWARD_MIN_DAYS", "5"))
+
+# Angel One SmartAPI is used only for read-only market data. No order endpoint is
+# implemented by Quant V3.
+ANGEL_ENABLED = os.getenv("ANGEL_ENABLED", "True").strip().lower() in ("true", "1", "yes")
+ANGEL_API_KEY = os.getenv("ANGEL_API_KEY", "")
+ANGEL_CLIENT_CODE = os.getenv("ANGEL_CLIENT_CODE", "")
+ANGEL_PIN = os.getenv("ANGEL_PIN", "")
+ANGEL_TOTP_SECRET = os.getenv("ANGEL_TOTP_SECRET", "")
+ANGEL_BASE_URL = os.getenv("ANGEL_BASE_URL", "https://apiconnect.angelone.in")
+ANGEL_INSTRUMENT_MASTER_URL = os.getenv("ANGEL_INSTRUMENT_MASTER_URL", "https://margincalculator.angelbroking.com/OpenAPI_File/files/OpenAPIScripMaster.json")
+ANGEL_QUOTE_TIMEOUT_SECONDS = int(os.getenv("ANGEL_QUOTE_TIMEOUT_SECONDS", "8"))
+ANGEL_HISTORY_BATCH_DAYS = int(os.getenv("ANGEL_HISTORY_BATCH_DAYS", "30"))
+
 # ── Market Timing ─────────────────────────────────────────────────────────────
 MARKET_OPEN              = "09:15"
 MARKET_CLOSE             = "15:30"
@@ -76,13 +122,29 @@ TELEGRAM_CHAT_ID         = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # ── Optional Broker ────────────────────────────────────────────────────────────
 DHAN_CLIENT_ID           = os.getenv("DHAN_CLIENT_ID", "")
-DHAN_ACCESS_TOKEN        = os.getenv("DHAN_ACCESS_TOKEN", "ve1a7d84d-70df-445b-afc3-bddb4d2fb3a5")
+DHAN_ACCESS_TOKEN        = os.getenv("DHAN_ACCESS_TOKEN", "")
 DHAN_ENABLED             = os.getenv("DHAN_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 JUGAAD_DATA_ENABLED      = os.getenv("JUGAAD_DATA_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 ZERODHA_API_KEY          = os.getenv("ZERODHA_API_KEY", "")
 ZERODHA_ACCESS_TOKEN     = os.getenv("ZERODHA_ACCESS_TOKEN", "")
 
-# ── AI Brain — OpenRouter (Grok primary, GPT fallback) ─────────────────────────
+# ── AI reviewers — Qwen Max primary, OpenRouter Gemma challenger ──────────────
+DASHSCOPE_API_KEY        = os.getenv("DASHSCOPE_API_KEY", "")
+DASHSCOPE_BASE_URL       = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions")
+QWEN_MAX_MODEL           = os.getenv("QWEN_MAX_MODEL", "qwen3.7-max")
+OPENROUTER_GEMMA_KEY     = os.getenv("OPENROUTER_GEMMA_KEY", "")
+OPENROUTER_GEMMA_MODEL   = os.getenv("OPENROUTER_GEMMA_MODEL", "google/gemma-4-26b-a4b-it:free")
+OPENROUTER_FREE_FALLBACK_MODELS = tuple(
+    model.strip() for model in os.getenv(
+        "OPENROUTER_FREE_FALLBACK_MODELS",
+        "google/gemma-4-31b-it:free",
+    ).split(",") if model.strip()
+)
+HF_TOKEN                 = os.getenv("HF_TOKEN", "")
+HF_ROUTER_URL            = os.getenv("HF_ROUTER_URL", "https://router.huggingface.co/v1")
+HF_DAILY_LEARNING_ENABLED = False  # retained only for reading historical status
+
+# Legacy provider settings are retained only to read previous reports.
 OPENROUTER_GROK_KEY      = os.getenv("OPENROUTER_GROK_KEY", "")
 OPENROUTER_GPT_KEY       = os.getenv("OPENROUTER_GPT_KEY", "")
 OPENROUTER_BASE_URL      = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1/chat/completions")
@@ -94,15 +156,15 @@ GPT_MODEL                = os.getenv("GPT_MODEL", "openai/gpt-4o")
 GROQ_API_KEY             = os.getenv("GROQ_API_KEY", "")
 GROQ_BASE_URL            = os.getenv("GROQ_BASE_URL", "https://api.groq.com/openai/v1/chat/completions")
 GROQ_DEEPSEEK_MODEL      = os.getenv("GROQ_DEEPSEEK_MODEL", "qwen/qwen3.6-27b")
-GROQ_DEEPSEEK_ENABLED    = os.getenv("GROQ_DEEPSEEK_ENABLED", "True").strip().lower() in ("true", "1", "yes")
+GROQ_DEEPSEEK_ENABLED    = os.getenv("GROQ_DEEPSEEK_ENABLED", "False").strip().lower() in ("true", "1", "yes")
 GROQ_DEEPSEEK_TIMEOUT_SECONDS = int(os.getenv("GROQ_DEEPSEEK_TIMEOUT_SECONDS", "60"))
 
 # Legacy XAI fields (kept for backward compatibility — now point to OpenRouter)
 XAI_API_KEY              = os.getenv("XAI_API_KEY", OPENROUTER_GROK_KEY)
 XAI_MODEL                = os.getenv("XAI_MODEL", GROK_MODEL)
 XAI_BASE_URL             = os.getenv("XAI_BASE_URL", OPENROUTER_BASE_URL)
-XAI_BRAIN_ENABLED        = os.getenv("XAI_BRAIN_ENABLED", "True").strip().lower() in ("true", "1", "yes")
-XAI_BRAIN_REVIEW_ALERTS  = os.getenv("XAI_BRAIN_REVIEW_ALERTS", "True").strip().lower() in ("true", "1", "yes")
+XAI_BRAIN_ENABLED        = os.getenv("XAI_BRAIN_ENABLED", "False").strip().lower() in ("true", "1", "yes")
+XAI_BRAIN_REVIEW_ALERTS  = os.getenv("XAI_BRAIN_REVIEW_ALERTS", "False").strip().lower() in ("true", "1", "yes")
 XAI_BRAIN_TIMEOUT_SECONDS = int(os.getenv("XAI_BRAIN_TIMEOUT_SECONDS", "60"))
 XAI_BRAIN_MIN_INTERVAL_SECONDS = int(os.getenv("XAI_BRAIN_MIN_INTERVAL_SECONDS", "0"))
 XAI_BRAIN_MAX_DAILY_CALLS = int(os.getenv("XAI_BRAIN_MAX_DAILY_CALLS", "200"))
@@ -175,12 +237,12 @@ INTRADAY_PATTERN_MARKET_CAP_MAX_CR = float(os.getenv("INTRADAY_PATTERN_MARKET_CA
 INTRADAY_PATTERN_LOW_LIQUIDITY_MAX_INR = float(os.getenv("INTRADAY_PATTERN_LOW_LIQUIDITY_MAX_INR", "50000000"))
 
 # Grok Dashboard Agent
-GROK_DASHBOARD_AGENT_ENABLED = os.getenv("GROK_DASHBOARD_AGENT_ENABLED", "True").strip().lower() in ("true", "1", "yes")
+GROK_DASHBOARD_AGENT_ENABLED = os.getenv("GROK_DASHBOARD_AGENT_ENABLED", "False").strip().lower() in ("true", "1", "yes")
 GROK_DASHBOARD_AGENT_INTERVAL_MINUTES = int(os.getenv("GROK_DASHBOARD_AGENT_INTERVAL_MINUTES", "15"))
 GROK_DASHBOARD_AGENT_AI_INTERVAL_MINUTES = int(os.getenv("GROK_DASHBOARD_AGENT_AI_INTERVAL_MINUTES", "45"))
 
 # Ollama Intraday Return Agent
-OLLAMA_AGENT_ENABLED = os.getenv("OLLAMA_AGENT_ENABLED", "True").strip().lower() in ("true", "1", "yes")
+OLLAMA_AGENT_ENABLED = os.getenv("OLLAMA_AGENT_ENABLED", "False").strip().lower() in ("true", "1", "yes")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
 OLLAMA_AGENT_INTERVAL_MINUTES = int(os.getenv("OLLAMA_AGENT_INTERVAL_MINUTES", "20"))

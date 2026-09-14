@@ -136,14 +136,15 @@ def get_system_accuracy_stats() -> dict:
     from config import DB_PATH
     try:
         with sqlite3.connect(DB_PATH) as conn:
-            tp = conn.execute("SELECT COUNT(*) FROM picks WHERE status='tp_hit'").fetchone()[0] or 0
-            sl = conn.execute("SELECT COUNT(*) FROM picks WHERE status='sl_hit'").fetchone()[0] or 0
-            closed = tp + sl
-            win_rate = (tp / closed * 100) if closed > 0 else 0.0
-            avg_row = conn.execute("SELECT AVG(result_return) FROM picks WHERE result_return IS NOT NULL").fetchone()
+            from config import QUANT_ENABLED
+            scope = "source_label LIKE 'quant_v3:%'" if QUANT_ENABLED else "COALESCE(is_official_morning,1)=1"
+            tp, sl, closed, wins = conn.execute(f"SELECT SUM(status='tp_hit'),SUM(status='sl_hit'),COUNT(*),SUM(result_return>0) FROM picks WHERE {scope} AND result_return IS NOT NULL AND status NOT IN ('pending','unfilled','unresolved')").fetchone()
+            tp, sl, wins = int(tp or 0), int(sl or 0), int(wins or 0)
+            win_rate = (wins / closed * 100) if closed > 0 else 0.0
+            avg_row = conn.execute(f"SELECT AVG(result_return) FROM picks WHERE {scope} AND result_return IS NOT NULL AND status NOT IN ('pending','unfilled','unresolved')").fetchone()
             avg_ret = avg_row[0] if (avg_row and avg_row[0] is not None) else 0.0
-            label = f"{round(win_rate, 1)}% System Accuracy" if closed > 0 else "0 Closed Trades"
-            sublabel = f"{tp} TP Hit / {sl} SL Hit" if closed > 0 else "Awaiting Market Execution"
+            label = f"{round(win_rate, 1)}% Net-positive paper fills" if closed > 0 else "0 Closed Paper Fills"
+            sublabel = f"{wins} positive / {closed} closed" if closed > 0 else "Collecting evidence"
             return {
                 "win_rate": round(win_rate, 1),
                 "tp_count": tp,
@@ -644,12 +645,7 @@ def run_picker(analyzed: list = None) -> list:
         else:
             top_picks.append(item)
 
-    # If top_picks is still below TOP_N_PICKS (e.g. strict gating left open slots), backfill from skipped
-    if len(top_picks) < TOP_N_PICKS:
-        for item, reason in skipped_by_gate:
-            if len(top_picks) >= TOP_N_PICKS:
-                break
-            top_picks.append(item)
+    # Fewer picks is a valid result. Rejected correlated candidates stay rejected.
 
     selected_symbols = {p.get("symbol") for p in top_picks}
     for item in valid:

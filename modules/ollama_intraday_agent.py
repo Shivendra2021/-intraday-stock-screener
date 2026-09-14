@@ -333,21 +333,14 @@ def _call_ollama(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _call_openrouter_learning(payload: dict[str, Any]) -> dict[str, Any]:
-    """Use GPT as primary after-market learner, with Grok and Groq DeepSeek fallback."""
+    """Use the free OpenRouter pool, then Hugging Face, for daily lessons only."""
     try:
-        from modules.dual_brain import _call_openrouter
-        from config import (
-            OPENROUTER_BASE_URL,
-            OPENROUTER_GPT_KEY,
-            OPENROUTER_GROK_KEY,
-            GPT_MODEL,
-            GROK_MODEL,
-        )
+        from modules.grok_brain import _call_brain
     except Exception as exc:
         return {"ok": False, "error": str(exc)[:300]}
 
     system_prompt = (
-        "You are the primary GPT learning brain for an Indian NSE intraday research system. "
+        "You are an evidence reviewer for an Indian NSE intraday research system. "
         "Study only the supplied full-universe winner data. Find repeated pre-move behavior "
         "before 7%+ open-to-high or green close moves, sector heat, market-condition context, "
         "upper-circuit style behavior, avoid conditions, and tomorrow scoring rules. "
@@ -356,42 +349,26 @@ def _call_openrouter_learning(payload: dict[str, Any]) -> dict[str, Any]:
     )
     user_prompt = json.dumps(payload, ensure_ascii=True, default=str)[:16000]
     messages = [{"role": "system", "content": system_prompt}, {"role": "user", "content": user_prompt}]
-
-    if OPENROUTER_GPT_KEY:
-        result = _call_openrouter(messages, OPENROUTER_GPT_KEY, GPT_MODEL, 900, OPENROUTER_BASE_URL)
-        if result.get("ok"):
-            parsed = _parse_json(result.get("content", ""))
-            parsed["ok"] = True
-            parsed["model"] = GPT_MODEL
-            parsed["brain_role"] = "gpt_primary"
-            return parsed
-        logger.warning("GPT daily learning failed, trying Grok fallback: %s", result.get("error"))
-
-    if OPENROUTER_GROK_KEY:
-        result = _call_openrouter(messages, OPENROUTER_GROK_KEY, GROK_MODEL, 900, OPENROUTER_BASE_URL)
-        if result.get("ok"):
-            parsed = _parse_json(result.get("content", ""))
-            parsed["ok"] = True
-            parsed["model"] = GROK_MODEL
-            parsed["brain_role"] = "grok_fallback"
-            return parsed
-        logger.warning("Grok daily learning fallback failed, trying Groq DeepSeek: %s", result.get("error"))
+    result = _call_brain(messages, 900)
+    if result.get("ok"):
+        parsed = _parse_json(result.get("content", ""))
+        parsed["ok"] = True
+        parsed["model"] = result.get("model")
+        parsed["brain_role"] = "openrouter_free_daily_learning"
+        return parsed
 
     try:
-        from modules.grok_brain import _call_groq_deepseek, _config as _brain_config
-
-        result = _call_groq_deepseek(messages, _brain_config(), 900)
-        if result.get("ok"):
-            parsed = _parse_json(result.get("content", ""))
-            parsed["ok"] = True
-            parsed["model"] = result.get("model")
-            parsed["brain_role"] = "groq_deepseek_reasoning_fallback"
-            return parsed
-        return {"ok": False, "error": result.get("error", "Groq DeepSeek fallback failed")}
+        from modules.hf_daily_learning import review_daily_learning
+        fallback = review_daily_learning(messages, 900)
     except Exception as exc:
-        return {"ok": False, "error": str(exc)[:300]}
-
-    return {"ok": False, "error": "No GPT/Grok/Groq learning key configured"}
+        fallback = {"ok": False, "error": str(exc)[:300]}
+    if fallback.get("ok"):
+        parsed = _parse_json(fallback.get("content", ""))
+        parsed["ok"] = True
+        parsed["model"] = fallback.get("model")
+        parsed["brain_role"] = "huggingface_free_daily_learning"
+        return parsed
+    return {"ok": False, "error": fallback.get("error", result.get("error", "free daily learning review failed"))}
 
 
 def _parse_json(text: str) -> dict[str, Any]:

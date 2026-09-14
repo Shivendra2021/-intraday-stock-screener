@@ -1,8 +1,8 @@
 """
 grok_brain.py — AI Brain for MarketMind Pro.
 
-PRIMARY  : Grok-3-mini  via OpenRouter
-FALLBACK : GPT-4o       via OpenRouter
+PRIMARY  : configured DashScope Qwen, when available
+FALLBACK : free OpenRouter Gemma model pool
 
 Used for:
   1. Reviewing Telegram alerts before they go out
@@ -36,25 +36,21 @@ MAX_TELEGRAM_CHARS = 3900
 
 def _config() -> dict:
     from config import (
-        OPENROUTER_GROK_KEY, OPENROUTER_GPT_KEY, OPENROUTER_BASE_URL,
-        GROK_MODEL, GPT_MODEL,
-        GROQ_API_KEY, GROQ_BASE_URL, GROQ_DEEPSEEK_MODEL,
-        GROQ_DEEPSEEK_ENABLED, GROQ_DEEPSEEK_TIMEOUT_SECONDS,
+        DASHSCOPE_API_KEY, DASHSCOPE_BASE_URL, QWEN_MAX_MODEL,
+        OPENROUTER_GEMMA_KEY, OPENROUTER_BASE_URL, OPENROUTER_GEMMA_MODEL,
+        OPENROUTER_FREE_FALLBACK_MODELS,
         XAI_BRAIN_ENABLED, XAI_BRAIN_MAX_DAILY_CALLS,
         XAI_BRAIN_MIN_INTERVAL_SECONDS, XAI_BRAIN_REVIEW_ALERTS,
         XAI_BRAIN_TIMEOUT_SECONDS,
     )
     return {
-        "grok_key":     OPENROUTER_GROK_KEY,
-        "gpt_key":      OPENROUTER_GPT_KEY,
-        "base_url":     OPENROUTER_BASE_URL,
-        "grok_model":   GROK_MODEL,
-        "gpt_model":    GPT_MODEL,
-        "groq_key":     GROQ_API_KEY,
-        "groq_base_url": GROQ_BASE_URL,
-        "groq_deepseek_model": GROQ_DEEPSEEK_MODEL,
-        "groq_deepseek_enabled": GROQ_DEEPSEEK_ENABLED,
-        "groq_timeout": GROQ_DEEPSEEK_TIMEOUT_SECONDS,
+        "qwen_key":     DASHSCOPE_API_KEY,
+        "qwen_base_url": DASHSCOPE_BASE_URL,
+        "qwen_model":   QWEN_MAX_MODEL,
+        "gemma_key":    OPENROUTER_GEMMA_KEY,
+        "gemma_base_url": OPENROUTER_BASE_URL,
+        "gemma_model":  OPENROUTER_GEMMA_MODEL,
+        "gemma_fallback_models": OPENROUTER_FREE_FALLBACK_MODELS,
         "enabled":      XAI_BRAIN_ENABLED,
         "review_alerts": XAI_BRAIN_REVIEW_ALERTS,
         "max_daily_calls": XAI_BRAIN_MAX_DAILY_CALLS,
@@ -110,26 +106,35 @@ def _increment_daily_call(state: dict) -> None:
 def is_enabled() -> bool:
     cfg = _config()
     return bool(cfg["enabled"] and cfg["review_alerts"] and
-                (cfg["grok_key"] or cfg["gpt_key"] or (cfg["groq_deepseek_enabled"] and cfg["groq_key"])))
+                (cfg["qwen_key"] or cfg["gemma_key"]))
 
 
 def get_brain_status() -> dict[str, Any]:
     cfg = _config()
     state = _load_state()
+    last_model_used = str(state.get("last_model_used") or "")
+    active_models = (str(cfg["qwen_model"]), str(cfg["gemma_model"]), *map(str, cfg["gemma_fallback_models"]))
+    if last_model_used and not any(last_model_used.startswith(model) for model in active_models):
+        # Do not present a historical legacy-provider result as current V3 state.
+        last_model_used = ""
+    cooldown_epoch = float(state.get("free_provider_retry_after_epoch", 0) or 0)
     return {
         "enabled": bool(cfg["enabled"] and cfg["review_alerts"]),
-        "grok_configured": bool(cfg["grok_key"]),
-        "gpt_configured": bool(cfg["gpt_key"]),
-        "groq_configured": bool(cfg["groq_key"]),
-        "groq_deepseek_enabled": bool(cfg["groq_deepseek_enabled"]),
-        "grok_model": cfg["grok_model"],
-        "gpt_model": cfg["gpt_model"],
-        "groq_deepseek_model": cfg["groq_deepseek_model"],
+        "configured": bool(cfg["qwen_key"] or cfg["gemma_key"]),
+        "model": cfg["qwen_model"],
+        "qwen_configured": bool(cfg["qwen_key"]),
+        "gemma_configured": bool(cfg["gemma_key"]),
+        "qwen_model": cfg["qwen_model"],
+        "gemma_model": cfg["gemma_model"],
         "daily_calls": _daily_call_count(state),
         "max_daily_calls": cfg["max_daily_calls"],
         "last_ok": state.get("last_ok"),
         "last_error": state.get("last_error"),
-        "last_model_used": state.get("last_model_used"),
+        "last_model_used": last_model_used,
+        "free_provider_cooldown_until": (
+            datetime.datetime.fromtimestamp(cooldown_epoch, datetime.timezone.utc).isoformat()
+            if cooldown_epoch > time.time() else None
+        ),
     }
 
 
@@ -138,8 +143,11 @@ def _allow_call() -> tuple[bool, str]:
     state = _load_state()
     if not cfg["enabled"] or not cfg["review_alerts"]:
         return False, "disabled"
-    if not cfg["grok_key"] and not cfg["gpt_key"] and not (cfg["groq_deepseek_enabled"] and cfg["groq_key"]):
+    if not cfg["qwen_key"] and not cfg["gemma_key"]:
         return False, "no API keys configured"
+    retry_after = float(state.get("free_provider_retry_after_epoch", 0) or 0)
+    if retry_after > time.time():
+        return False, "free_provider_cooldown"
     if _daily_call_count(state) >= cfg["max_daily_calls"]:
         return False, "daily budget reached"
     last_ts = float(state.get("last_review_epoch", 0) or 0)
@@ -158,14 +166,16 @@ def _call_openrouter(
     model: str,
     cfg: dict,
     max_tokens: int = 600,
+    base_url: str | None = None,
 ) -> dict[str, Any]:
-    """Single attempt to call OpenRouter with a given model/key."""
+    """Single bounded OpenAI-compatible model call."""
     headers = {
         "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
-        "HTTP-Referer": "https://marketmind.pro",
-        "X-Title": "MarketMind Pro",
     }
+    url = base_url or cfg["gemma_base_url"]
+    if "openrouter.ai" in url:
+        headers.update({"HTTP-Referer": "https://marketmind.pro", "X-Title": "MarketMind Pro"})
     payload = {
         "model": model,
         "messages": messages,
@@ -173,87 +183,46 @@ def _call_openrouter(
         "max_tokens": max_tokens,
     }
     try:
-        response = requests.post(
-            cfg["base_url"],
-            headers=headers,
-            json=payload,
-            timeout=cfg["timeout"],
-        )
-        if response.status_code == 429:
-            return {"ok": False, "error": "rate_limited", "status_code": 429}
-        if response.status_code >= 400:
-            return {"ok": False, "error": response.text[:300], "status_code": response.status_code}
-        data = response.json()
-        message = data["choices"][0].get("message", {})
-        content = (message.get("content") or "").strip()
-        if not content:
-            return {"ok": False, "error": "empty model content", "status_code": response.status_code}
-        return {"ok": True, "content": content, "model": model}
-    except Exception as exc:
-        return {"ok": False, "error": str(exc)}
-
-
-def _strip_reasoning_tags(content: str) -> str:
-    """Remove DeepSeek-style private reasoning blocks before user-facing output."""
-    text = str(content or "").strip()
-    text = text.replace("<think>\n</think>", "")
-    if "<think>" in text and "</think>" in text:
-        text = text.split("</think>", 1)[1]
-    return text.strip()
-
-
-def _call_groq_deepseek(messages: list[dict], cfg: dict, max_tokens: int = 600) -> dict[str, Any]:
-    """Single attempt to call Groq's OpenAI-compatible DeepSeek-R1 distill endpoint."""
-    if not cfg.get("groq_deepseek_enabled") or not cfg.get("groq_key"):
-        return {"ok": False, "error": "Groq DeepSeek disabled or missing key"}
-    headers = {
-        "Authorization": f"Bearer {cfg['groq_key']}",
-        "Content-Type": "application/json",
-    }
-    candidates = [
-        cfg["groq_deepseek_model"],
-        "llama-3.3-70b-versatile",
-        "groq/compound-mini",
-        "openai/gpt-oss-20b",
-    ]
-    seen: set[str] = set()
-    last_error = ""
-    for model in [m for m in candidates if not (m in seen or seen.add(m))]:
-        payload = {
-            "model": model,
-            "messages": messages,
-            "temperature": 0.2,
-            "max_tokens": max_tokens,
-        }
-        try:
+        for attempt in range(3):
             response = requests.post(
-                cfg["groq_base_url"],
+                url,
                 headers=headers,
                 json=payload,
-                timeout=cfg["groq_timeout"],
+                timeout=cfg["timeout"],
             )
             if response.status_code == 429:
-                return {"ok": False, "error": "groq_rate_limited", "status_code": 429}
-            if response.status_code >= 400:
-                last_error = response.text[:300]
-                if any(term in last_error.lower() for term in ("decommissioned", "not found", "does not exist", "invalid model")):
-                    logger.warning("Groq model %s unavailable, trying next fallback", model)
+                retry_after = response.headers.get("X-RateLimit-Reset", "")
+                if not retry_after:
+                    try:
+                        retry_after = response.json().get("error", {}).get("metadata", {}).get("headers", {}).get("X-RateLimit-Reset", "")
+                    except (ValueError, AttributeError):
+                        retry_after = ""
+                try:
+                    retry_after_epoch = float(retry_after)
+                    if retry_after_epoch > 10_000_000_000:
+                        retry_after_epoch /= 1000
+                except (TypeError, ValueError):
+                    retry_after_epoch = None
+                if attempt < 2:
+                    time.sleep(0.75 * (attempt + 1))
                     continue
-                return {"ok": False, "error": last_error, "status_code": response.status_code}
+                return {"ok": False, "error": "rate_limited", "status_code": 429,
+                        "retry_after_epoch": retry_after_epoch}
+            if response.status_code >= 400:
+                return {"ok": False, "error": response.text[:300], "status_code": response.status_code}
             data = response.json()
             message = data["choices"][0].get("message", {})
-            content = _strip_reasoning_tags(message.get("content") or "")
+            content = (message.get("content") or "").strip()
             if not content:
-                last_error = "empty Groq DeepSeek content"
-                continue
+                return {"ok": False, "error": "empty model content", "status_code": response.status_code}
             return {"ok": True, "content": content, "model": model}
-        except Exception as exc:
-            last_error = str(exc)
-    return {"ok": False, "error": last_error or "No Groq fallback model succeeded"}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+    return {"ok": False, "error": "request did not complete"}
 
 
 def _call_brain(messages: list[dict], max_tokens: int = 600) -> dict[str, Any]:
-    """Try GPT first, Grok second, then Groq DeepSeek as controlled fallback."""
+    """Run configured Qwen first, then the free OpenRouter Gemma pool."""
     cfg = _config()
     state = _load_state()
     _increment_daily_call(state)
@@ -261,47 +230,42 @@ def _call_brain(messages: list[dict], max_tokens: int = 600) -> dict[str, Any]:
     state["last_review_time"] = datetime.datetime.now().isoformat(timespec="seconds")
     _save_state(state)
 
-    # 1. Try GPT as the primary brain.
-    if cfg["gpt_key"]:
-        result = _call_openrouter(messages, cfg["gpt_key"], cfg["gpt_model"], cfg, max_tokens)
+    if cfg["qwen_key"]:
+        result = _call_openrouter(messages, cfg["qwen_key"], cfg["qwen_model"], cfg, max_tokens, cfg["qwen_base_url"])
         if result.get("ok"):
             _update_state(
                 last_ok=datetime.datetime.now().isoformat(timespec="seconds"),
                 last_error="",
-                last_model_used=cfg["gpt_model"],
+                last_model_used=cfg["qwen_model"],
             )
-            logger.info("AI Brain: GPT primary used %s", cfg["gpt_model"])
+            logger.info("AI Brain: Qwen primary used %s", cfg["qwen_model"])
             return result
-        logger.warning("GPT primary failed (%s), trying Grok fallback...", result.get("error", "unknown"))
+        logger.warning("Qwen primary failed (%s), trying Gemma challenger...", result.get("error", "unknown"))
 
-    # 2. Fallback to Grok.
-    if cfg["grok_key"]:
-        result = _call_openrouter(messages, cfg["grok_key"], cfg["grok_model"], cfg, max_tokens)
-        if result.get("ok"):
-            _update_state(
-                last_ok=datetime.datetime.now().isoformat(timespec="seconds"),
-                last_error="",
-                last_model_used=cfg["grok_model"] + " (fallback)",
-            )
-            logger.info("AI Brain: Grok fallback used %s", cfg["grok_model"])
-            return result
-        logger.warning("Grok fallback failed (%s), trying Groq DeepSeek...", result.get("error", "unknown"))
+    last_error = ""
+    retry_after_epoch = None
+    if cfg["gemma_key"]:
+        models = tuple(dict.fromkeys((cfg["gemma_model"], *cfg["gemma_fallback_models"])))
+        for model in models:
+            result = _call_openrouter(messages, cfg["gemma_key"], model, cfg, max_tokens, cfg["gemma_base_url"])
+            if result.get("ok"):
+                _update_state(
+                    last_ok=datetime.datetime.now().isoformat(timespec="seconds"),
+                    last_error="",
+                    last_model_used=model + " (OpenRouter free fallback)",
+                )
+                logger.info("AI Brain: OpenRouter fallback used %s", model)
+                return result
+            last_error = str(result.get("error", ""))
+            retry_after_epoch = result.get("retry_after_epoch") or retry_after_epoch
+            logger.warning("OpenRouter model %s failed (%s)", model, last_error)
 
-    # 3. Controlled reasoning fallback through Groq DeepSeek-R1 distill.
-    result = _call_groq_deepseek(messages, cfg, max_tokens)
-    if result.get("ok"):
-        model_used = result.get("model") or cfg["groq_deepseek_model"]
-        _update_state(
-            last_ok=datetime.datetime.now().isoformat(timespec="seconds"),
-            last_error="",
-            last_model_used=model_used + " (groq fallback)",
-        )
-        logger.info("AI Brain: Groq DeepSeek fallback used %s", model_used)
-        return result
+    updates = {"last_error": f"Configured AI models failed: {last_error[:200]}"}
+    if retry_after_epoch:
+        updates["free_provider_retry_after_epoch"] = retry_after_epoch
+    _update_state(**updates)
 
-    _update_state(last_error=f"All AI providers failed: {result.get('error','')[:200]}")
-
-    return {"ok": False, "error": "All AI providers failed"}
+    return {"ok": False, "error": "Qwen and Gemma failed"}
 
 
 # ─────────────────────────────────────────────────────────────────────────────

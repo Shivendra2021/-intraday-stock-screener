@@ -8,12 +8,60 @@ import os
 import sys
 import subprocess
 
-from flask import Flask, jsonify, render_template
+from flask import Flask, jsonify, render_template, request
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from config import DB_PATH
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
+
+@app.before_request
+def protect_controls():
+    if request.method == "POST":
+        from urllib.parse import urlparse
+        origin = request.headers.get("Origin")
+        if request.headers.get("Sec-Fetch-Site") == "cross-site" or (origin and urlparse(origin).netloc != request.host):
+            return jsonify({"error": "Cross-origin control request rejected"}), 403
+
+
+@app.route("/api/quant")
+def api_quant():
+    from modules.quant_engine import snapshot
+    return jsonify(snapshot())
+
+
+@app.route('/api/quant/workspace')
+def api_quant_workspace():
+    from modules.quant_dashboard import context, refresh_market
+    refresh_market()
+    return jsonify(context())
+
+
+@app.route('/api/quant/stock/<symbol>')
+def api_quant_stock(symbol):
+    from modules.quant_dashboard import stock_detail
+    try:
+        return jsonify(stock_detail(symbol.upper()))
+    except ValueError:
+        return jsonify({'error':'Invalid symbol'}),400
+
+
+@app.route('/legacy')
+def legacy_dashboard():
+    return render_template('index.html', legacy_view=True)
+
+
+def _quant_indicators(p):
+    p.update(rvol=None, adr_exp=None, clv=None, probability_label="Legacy score")
+    if (p.get("source_label") or "").startswith("quant_v3:"):
+        from modules.quant_store import Store
+        ident = p["source_label"][len("quant_v3:"):]
+        with Store().connect() as c:
+            result = c.execute("SELECT value FROM signals WHERE id=?", (ident,)).fetchone()
+        if result:
+            r = json.loads(result[0])
+            p.update(rvol=f"{r['rvol']:.2f}x", adr_exp=f"{r['range_atr']*100:.1f}%",
+                     clv=f"{r['close_location']:.2f}", probability_label="Estimated P(+7%)")
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 LOG_DIR = os.path.join(BASE_DIR, "logs")
@@ -293,7 +341,12 @@ def _display_pick_date() -> tuple[str, bool]:
 
 
 def _pick_scope_for_today() -> dict:
+    from config import QUANT_ENABLED
     today = _today_str()
+    if QUANT_ENABLED:
+        return {"where": "date=? AND source_label LIKE 'quant_v3:%'", "params": (today,),
+                "label": "QUANT V3 INTRADAY CANDIDATES", "session_type": "quant_v3_intraday", "is_official": False,
+                "count": _scalar("SELECT COUNT(*) FROM picks WHERE date=? AND source_label LIKE 'quant_v3:%'", (today,), default=0)}
     official = _scalar(
         "SELECT COUNT(*) FROM picks WHERE date=? AND COALESCE(session_type, 'morning_final')='morning_final' "
         "AND COALESCE(is_official_morning, 1)=1",
@@ -426,7 +479,8 @@ def _process_summary() -> dict:
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    from config import QUANT_ENABLED
+    return render_template("quant.html" if QUANT_ENABLED else "index.html")
 
 
 @app.route("/api/health")
@@ -448,80 +502,42 @@ def api_macro_pulse():
         "timestamp": _now_time(),
         "date": today,
         "usdinr": {
-            "rate": 86.54,
-            "status": "Active",
+            "rate": None,
+            "status": "Unavailable",
             "trend": "neutral",
             "impact": "Stable export margins for IT & Pharma"
         },
         "fred": {
-            "brent_crude": 109.51,
-            "us_10y_yield": 4.95,
-            "global_vix": 17.84,
-            "crude_pressure": True,
-            "fii_yield_pressure": True,
-            "volatility_regime": "Moderate"
+            "brent_crude": None,
+            "us_10y_yield": None,
+            "global_vix": None,
+            "crude_pressure": False,
+            "fii_yield_pressure": False,
+            "volatility_regime": "Unavailable"
         },
         "news_freeze": {
             "is_active": False,
-            "status_text": "FREEZE INACTIVE",
-            "badge_color": "#10b981",
+            "status_text": "EVENT DATA UNAVAILABLE",
+            "badge_color": "#64748b",
             "event_count": 0,
             "events": []
         }
     }
 
-    # 1. Fetch USD/INR from Twelve Data
-    try:
-        from modules.twelve_data_provider import get_usdinr_rate, is_twelve_data_configured
-        if is_twelve_data_configured():
-            rate = get_usdinr_rate()
-            if rate and rate > 0:
-                macro_data["usdinr"]["rate"] = round(rate, 2)
-                macro_data["usdinr"]["status"] = "Live"
-                if rate > 87.0:
-                    macro_data["usdinr"]["trend"] = "weakening"
-                    macro_data["usdinr"]["impact"] = "Rupee weakening: Boosts Midcap IT & Pharma exporters"
-                else:
-                    macro_data["usdinr"]["trend"] = "strengthening"
-                    macro_data["usdinr"]["impact"] = "Rupee stable: Balanced domestic import/export flows"
-    except Exception as exc:
-        app.logger.debug("Twelve Data macro error: %s", exc)
-
-    # 2. Fetch FRED Macro Indicators
-    try:
-        from modules.fred_provider import get_macro_snapshot, is_fred_configured
-        if is_fred_configured():
-            snap = get_macro_snapshot()
-            if snap:
-                brent = snap.get("brent_crude", {}).get("value")
-                y10 = snap.get("us_10y_yield", {}).get("value")
-                vix = snap.get("global_vix", {}).get("value")
-                if brent:
-                    macro_data["fred"]["brent_crude"] = round(float(brent), 2)
-                if y10:
-                    macro_data["fred"]["us_10y_yield"] = round(float(y10), 2)
-                if vix:
-                    macro_data["fred"]["global_vix"] = round(float(vix), 2)
-                    macro_data["fred"]["volatility_regime"] = "High Fear" if vix > 22 else ("Moderate" if vix > 15 else "Low Volatility")
-                macro_data["fred"]["crude_pressure"] = bool(snap.get("crude_pressure", False))
-                macro_data["fred"]["fii_yield_pressure"] = bool(snap.get("fii_yield_pressure", False))
-    except Exception as exc:
-        app.logger.debug("FRED macro error: %s", exc)
-
-    # 3. Fetch Finnhub Economic Calendar & News Freeze Status
-    try:
-        from modules.finnhub_provider import get_high_impact_macro_events, is_finnhub_configured
-        if is_finnhub_configured():
-            events = get_high_impact_macro_events(lookahead_days=1)
-            macro_data["news_freeze"]["events"] = events or []
-            macro_data["news_freeze"]["event_count"] = len(events) if events else 0
-            if events:
-                macro_data["news_freeze"]["status_text"] = f"{len(events)} MACRO EVENT(S) TODAY"
-            else:
-                macro_data["news_freeze"]["status_text"] = "NO HIGH-IMPACT EVENT TODAY"
-    except Exception as exc:
-        app.logger.debug("Finnhub macro error: %s", exc)
-
+    # Dashboard reads are bounded: show the most recent saved observations and
+    # leave missing values unavailable. Background jobs own provider requests.
+    from modules.quant_dashboard import finite, saved
+    fx = saved("twelve_data_cache").get("USD/INR", {})
+    if finite(fx.get("price")) is not None:
+        macro_data["usdinr"].update(rate=finite(fx["price"]), status="Cached",
+                                     impact=f"Recorded {fx.get('cached_at') or 'at an unknown time'}")
+    fred = saved("fred_cache")
+    fred_map = {"DCOILBRENTEU": "brent_crude", "DGS10": "us_10y_yield", "VIXCLS": "global_vix"}
+    for source_key, output_key in fred_map.items():
+        item = fred.get(source_key, {})
+        value = finite((item.get("data") or {}).get("value")) if isinstance(item, dict) else None
+        if value is not None:
+            macro_data["fred"][output_key] = value
     return jsonify(macro_data)
 
 
@@ -573,9 +589,7 @@ def api_picks():
             p["catalyst"] = None
 
         # Quant indicators fallback/enrichment
-        p["rvol"] = p.get("rvol") or "2.4x"
-        p["adr_exp"] = p.get("adr_expansion_pct") or "34%"
-        p["clv"] = p.get("clv") or "0.82"
+        _quant_indicators(p)
 
     morning = _morning_status(len(picks))
     if picks and not scope["is_official"]:
@@ -668,9 +682,7 @@ def api_past_session():
             }
         else:
             p["catalyst"] = None
-        p["rvol"] = p.get("rvol") or "2.4x"
-        p["adr_exp"] = p.get("adr_expansion_pct") or "34%"
-        p["clv"] = p.get("clv") or "0.82"
+        _quant_indicators(p)
 
     tp = sum(1 for p in picks if str(p.get("status") or "").lower() == "tp_hit")
     sl = sum(1 for p in picks if str(p.get("status") or "").lower() == "sl_hit")
@@ -742,22 +754,18 @@ def api_command_strip():
             MORNING_FINAL_PICKS,
             TELEGRAM_BOT_TOKEN,
             TELEGRAM_CHAT_ID,
-            OPENROUTER_GROK_KEY,
-            OPENROUTER_GPT_KEY,
-            GROQ_API_KEY,
-            GROK_MODEL,
-            GPT_MODEL,
-            GROQ_DEEPSEEK_MODEL,
+            DASHSCOPE_API_KEY,
+            QWEN_MAX_MODEL,
+            OPENROUTER_GEMMA_KEY,
+            OPENROUTER_GEMMA_MODEL,
             EOD_OUTCOME_BRAIN_TIME,
         )
     except Exception:
         DRY_RUN = False
         MORNING_FINAL_PICKS = "09:10"
         TELEGRAM_BOT_TOKEN = TELEGRAM_CHAT_ID = ""
-        OPENROUTER_GROK_KEY = OPENROUTER_GPT_KEY = ""
-        GROQ_API_KEY = ""
-        GROK_MODEL = GPT_MODEL = ""
-        GROQ_DEEPSEEK_MODEL = ""
+        DASHSCOPE_API_KEY = OPENROUTER_GEMMA_KEY = ""
+        QWEN_MAX_MODEL = OPENROUTER_GEMMA_MODEL = ""
         EOD_OUTCOME_BRAIN_TIME = "15:40"
 
     morning = _morning_status(today_pick_count)
@@ -785,12 +793,10 @@ def api_command_strip():
         "open_count": open_count,
         "closed_count": closed_count,
         "telegram": "DRY_RUN" if DRY_RUN else ("Connected" if TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID else "Missing"),
-        "grok": "Connected" if OPENROUTER_GROK_KEY else "Missing",
-        "gpt": "Connected" if OPENROUTER_GPT_KEY else "Missing",
-        "groq_deepseek": "Connected" if GROQ_API_KEY else "Missing",
-        "grok_model": GROK_MODEL,
-        "gpt_model": GPT_MODEL,
-        "groq_deepseek_model": GROQ_DEEPSEEK_MODEL,
+        "qwen": "Connected" if DASHSCOPE_API_KEY else "Missing",
+        "gemma": "Connected" if OPENROUTER_GEMMA_KEY else "Missing",
+        "qwen_model": QWEN_MAX_MODEL,
+        "gemma_model": OPENROUTER_GEMMA_MODEL,
     })
 
 
@@ -1200,8 +1206,9 @@ def api_grok_dashboard_refresh():
 @app.route("/api/ollama-agent")
 def api_ollama_agent():
     try:
-        from modules.ollama_intraday_agent import get_ollama_agent_state
-        return jsonify(get_ollama_agent_state())
+        from modules.ollama_intraday_agent import _load_state
+        state = _load_state()
+        return jsonify(state or {"status": "unavailable", "reason": "No saved Ollama report"})
     except Exception as e:
         return jsonify({"error": str(e)})
 
@@ -1313,7 +1320,7 @@ def api_system_status():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/api/system/toggle", methods=["GET", "POST"])
+@app.route("/api/system/toggle", methods=["POST"])
 def api_system_toggle():
     """Toggle background bot execution between active and standby."""
     from flask import request
@@ -1382,4 +1389,5 @@ if __name__ == "__main__":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
     print("\n  Stock Analyser V2 Dashboard -> http://localhost:5001")
     print("  Server is running... Press CTRL+C to quit\n")
-    serve(app, host="0.0.0.0", port=5001, threads=32, connection_limit=200, _quiet=True)
+    from config import QUANT_DASHBOARD_HOST
+    serve(app, host=QUANT_DASHBOARD_HOST, port=5001, threads=16, connection_limit=200, _quiet=True)

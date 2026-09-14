@@ -484,8 +484,7 @@ def close_and_report_eod() -> dict:
                 data["current_price"] = round(price, 2)
                 _persist_pick_outcome(data, "eod_closed")
             else:
-                data["status"] = "EOD_CLOSED"
-                _persist_pick_outcome(data, "eod_closed")
+                data["data_status"] = "unresolved_missing_exit_price"
         elif data.get("status") == "TP_HIT":
             _persist_pick_outcome(data, "tp_hit")
         elif data.get("status") == "SL_HIT":

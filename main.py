@@ -60,14 +60,12 @@ def _save_bot_pid():
 def _remove_bot_pid():
     try:
         pid_f = os.path.join("data", "bot.pid")
-        if os.path.exists(pid_f):
+        if os.path.exists(pid_f) and open(pid_f, encoding="utf-8").read().strip() == str(os.getpid()):
             os.remove(pid_f)
     except Exception:
         pass
 
 import atexit
-_save_bot_pid()
-atexit.register(_remove_bot_pid)
 
 _daily_picks: list[dict] = []
 _runtime_lock = None
@@ -293,6 +291,10 @@ def _fallback_intraday_candidates(limit: int = 20) -> list[dict]:
 def run_morning_session():
     """Run morning session (08:00-09:10)."""
     global _daily_picks
+    from config import QUANT_ENABLED
+    if QUANT_ENABLED:
+        from modules.quant_runtime import run_once
+        return run_once(notify=True)
     
     if not _is_trading_day():
         logger.info("Not a trading day, skipping")
@@ -369,7 +371,8 @@ def run_morning_session():
     draft = deep_research_stocks(candidates, n=TOP_N_PICKS)
     
     if not draft:
-        draft = candidates[:TOP_N_PICKS]
+        _write_morning_stage("deep_research", "no_picks", "No candidates passed research")
+        return
     try:
         from modules.market_terminal import rank_candidates
         draft = rank_candidates(draft, limit=TOP_N_PICKS)
@@ -388,13 +391,8 @@ def run_morning_session():
     ctx_str = f"Sectors: {set(s.get('sector') for s in draft)}, learned: {context}"
     final, agreed = debate_picks(draft, ctx_str)
     if not final:
-        final = draft[:TOP_N_PICKS]
-    elif len(final) < TOP_N_PICKS:
-        existing = {p.get("symbol") for p in final}
-        final.extend([p for p in draft if p.get("symbol") not in existing][: TOP_N_PICKS - len(final)])
-    if len(final) < TOP_N_PICKS:
-        existing = {p.get("symbol") for p in final}
-        final.extend([p for p in ranked_candidates if p.get("symbol") not in existing][: TOP_N_PICKS - len(final)])
+        _write_morning_stage("dual_brain", "no_picks", "No candidates approved")
+        return
     try:
         from modules.market_terminal import rank_candidates
         final = rank_candidates(final, limit=TOP_N_PICKS)
@@ -806,6 +804,12 @@ def main():
         return
 
     logger.info("Startup path: executable=%s cwd=%s", sys.executable, os.getcwd())
+    _save_bot_pid()
+    atexit.register(_remove_bot_pid)
+    from config import QUANT_ENABLED
+    if QUANT_ENABLED:
+        from modules.quant_runtime import run
+        return run()
 
     # Start continuous learning (Session 2) in background
     from modules.continuous_learning import start_continuous_learning

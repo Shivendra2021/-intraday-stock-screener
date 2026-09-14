@@ -410,6 +410,12 @@ def current_phase() -> str:
 
 def run_once(dry_run: bool = False, skip_deep: bool = False) -> dict[str, Any]:
     """Run one catch-up pass. Idempotent through DB checks and ledger entries."""
+    from config import QUANT_ENABLED
+    if QUANT_ENABLED:
+        if dry_run:
+            return {"status": "quant_v3", "dry_run": True, "jobs": {}}
+        from modules.quant_runtime import run_once as run_quant_once
+        return run_quant_once(notify=True)
     if not _cycle_lock.acquire(blocking=False):
         return {"ok": False, "reason": "cycle_already_running"}
     try:
