@@ -117,6 +117,9 @@ def _jugaad_fallback(symbol: str, period_days: int = 60) -> Optional[pd.DataFram
     Fetch OHLCV via jugaad-data official NSE Bhavcopy as last-resort fallback.
     Returns DataFrame with columns [open, high, low, close, volume] or None.
     """
+    if not symbol or symbol.startswith("^") or "=" in symbol:
+        return None
+
     try:
         from modules.jugaad_provider import get_jugaad_ohlcv
         df = get_jugaad_ohlcv(symbol, lookback_days=period_days)
@@ -248,15 +251,16 @@ def fetch_price(symbol: str) -> Optional[float]:
     except Exception as exc:
         logger.debug("fetch_price: DhanHQ fallback failed for %s: %s", symbol, exc)
 
-    # 2. jugaad-data NSE live quote fallback
-    try:
-        from modules.jugaad_provider import get_jugaad_price
-        jp = get_jugaad_price(symbol)
-        if jp and jp > 0:
-            logger.info("fetch_price: jugaad live fallback OK for %s price=%.2f", symbol, jp)
-            return jp
-    except Exception as exc:
-        logger.debug("fetch_price: jugaad live fallback failed for %s: %s", symbol, exc)
+    # 2. jugaad-data NSE live quote fallback (equities only)
+    if not symbol.startswith("^") and "=" not in symbol:
+        try:
+            from modules.jugaad_provider import get_jugaad_price
+            jp = get_jugaad_price(symbol)
+            if jp and jp > 0:
+                logger.info("fetch_price: jugaad live fallback OK for %s price=%.2f", symbol, jp)
+                return jp
+        except Exception as exc:
+            logger.debug("fetch_price: jugaad live fallback failed for %s: %s", symbol, exc)
 
     # 3. jugaad bhavcopy / snapshot fallback for price
     df = _jugaad_fallback(symbol)

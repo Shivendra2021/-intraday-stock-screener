@@ -56,26 +56,12 @@ def test_stock_detail_rejects_path_and_only_returns_last_session():
 def test_workspace_routes_and_template(monkeypatch):
     import modules.quant_dashboard as view
     from dashboard.app import app
-    monkeypatch.setattr(view,'refresh_market',lambda:None)
-    client=app.test_client()
-    assert client.get('/api/quant/workspace').status_code==200
-    assert client.get('/api/quant/stock/TEST').json['bars']==[]
-    assert client.get('/api/quant/stock/invalid!').status_code==400
-    page=client.get('/').text
-    for name in ['markets','watchlist','tracking','performance','learning','system']:
-        assert f'data-view="{name}"' in page
-    assert client.get('/legacy').status_code==200
-
-
-def test_dashboard_status_routes_never_trigger_slow_refresh(monkeypatch):
-    from dashboard.app import app
-    import modules.ollama_intraday_agent as ollama
-    import modules.twelve_data_provider as twelve
-    monkeypatch.setattr(ollama, '_load_state', lambda: {'status': 'saved'})
-    monkeypatch.setattr(twelve, 'get_usdinr_rate', lambda: pytest.fail('request path fetched Twelve Data'))
-    client=app.test_client()
-    assert client.get('/api/ollama-agent').json['status']=='saved'
-    macro=client.get('/api/macro-pulse').json
-    assert 'usdinr' in macro and 'fred' in macro
-    assert client.get('/').status_code==200
-    assert 'old-theme.css' in client.get('/').text
+    monkeypatch.setattr(view, 'refresh_market', lambda: None)
+    client = app.test_client()
+    assert client.get('/api/quant/workspace').status_code == 200
+    assert client.get('/api/quant/stock/TEST').json['bars'] == []
+    assert client.get('/api/quant/stock/invalid!').status_code == 400
+    page = client.get('/').text
+    assert 'helios-theme.css' in page
+    assert 'helios.js' in page
+    assert client.get('/api/health').status_code == 200

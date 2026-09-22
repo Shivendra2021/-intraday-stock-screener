@@ -47,11 +47,17 @@ def _audit_send(event_type: str, ok: bool, details: str = "") -> None:
         logger.debug("Could not write Telegram audit: %s", exc)
 
 
-def _send(text: str, review_with_grok: bool = True, event_type: str = "telegram_message") -> bool:
+def _send(
+    text: str,
+    review_with_grok: bool = True,
+    event_type: str = "telegram_message",
+    inline_keyboard: Optional[list] = None
+) -> bool:
     """
     Core Telegram send. Returns True on success.
     In DRY_RUN mode, logs the message and returns True.
     Includes retry logic with exponential backoff for rate limiting.
+    Supports optional inline_keyboard for 1-tap mobile action buttons.
     """
     import time
     from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, DRY_RUN
@@ -66,7 +72,7 @@ def _send(text: str, review_with_grok: bool = True, event_type: str = "telegram_
         _audit_send(event_type, False, "missing credentials")
         return False
 
-    if review_with_grok:
+    if review_with_grok and not inline_keyboard:
         try:
             from modules.grok_brain import review_telegram_alert
             text = review_telegram_alert(text)
@@ -79,6 +85,9 @@ def _send(text: str, review_with_grok: bool = True, event_type: str = "telegram_
         "text":       text,
         "parse_mode": "HTML",
     }
+    if inline_keyboard:
+        payload["reply_markup"] = json.dumps({"inline_keyboard": inline_keyboard})
+
     max_retries = 3
     from modules.http_session import http_post
     for attempt in range(max_retries):
@@ -97,6 +106,8 @@ def _send(text: str, review_with_grok: bool = True, event_type: str = "telegram_
                     "chat_id": TELEGRAM_CHAT_ID,
                     "text": clean_text,
                 }
+                if inline_keyboard:
+                    plain_payload["reply_markup"] = json.dumps({"inline_keyboard": inline_keyboard})
                 r_plain = http_post(url, json=plain_payload, timeout=15)
                 if r_plain.status_code == 200:
                     logger.info("Telegram message sent successfully with plain text fallback")
@@ -774,3 +785,37 @@ def send_pick_status_update(tracking: dict, accuracy: dict = None) -> bool:
     lines.append("")
     lines.append("="*40)
     return _send("\n".join(lines))
+
+
+def send_runner_alert_with_actions(
+    symbol: str,
+    entry_price: float,
+    sl_price: float,
+    tp1_price: float,
+    tp2_price: float,
+    air_ratio: float = 3.5,
+    event_type: str = "runner_breakout_action"
+) -> bool:
+    """Send high-priority breakout alert with mobile 1-tap Telegram inline action buttons."""
+    clean_sym = symbol.replace(".NS", "").replace(".BO", "").strip().upper()
+    text = (
+        f"<b>🚀 INSTITUTIONAL SUPER-RUNNER BREAKOUT</b>\n\n"
+        f"<b>Symbol:</b> #{clean_sym}\n"
+        f"<b>Trigger Entry:</b> ₹{entry_price:.2f}\n"
+        f"<b>Hard Stop (-1.8%):</b> ₹{sl_price:.2f}\n"
+        f"<b>Target 1 (+7.0%):</b> ₹{tp1_price:.2f} (Lock 50%)\n"
+        f"<b>Target 2 (+10.2%):</b> ₹{tp2_price:.2f} (Full Exit)\n"
+        f"<b>Auction Imbalance:</b> <b>{air_ratio:.2f}×</b>\n\n"
+        f"<i>Tap below for instant 1-touch mobile execution:</i>"
+    )
+    inline_buttons = [
+        [
+            {"text": "⚡ Fill Paper Order", "callback_data": f"fill:{clean_sym}"},
+            {"text": "🔒 Move Stop to BE", "callback_data": f"be:{clean_sym}"}
+        ],
+        [
+            {"text": "🛑 Square Off", "callback_data": f"exit:{clean_sym}"},
+            {"text": "📊 Live Telemetry", "callback_data": f"telemetry:{clean_sym}"}
+        ]
+    ]
+    return _send(text, review_with_grok=False, event_type=event_type, inline_keyboard=inline_buttons)

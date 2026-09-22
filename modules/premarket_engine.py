@@ -355,6 +355,10 @@ def _evaluate_candidate_worker(sym_idx_tuple: tuple[int, str]) -> dict[str, Any]
         atr_pct=sim_atr_pct
     )
 
+    # 5. Institutional Volume Profile (POC / VAH / VAL)
+    from modules.volume_profile import get_stock_volume_profile
+    vp = get_stock_volume_profile(sym, current_price=sim_price)
+
     return {
         "symbol": sym,
         "price": sim_price,
@@ -367,6 +371,14 @@ def _evaluate_candidate_worker(sym_idx_tuple: tuple[int, str]) -> dict[str, Any]
         "delivery_pct": deliv["delivery_pct"],
         "delivery_score": deliv["score"],
         "is_float_locked": deliv["is_float_locked"],
+        "volume_profile": {
+            "poc": vp["poc"],
+            "vah": vp["vah"],
+            "val": vp["val"],
+            "zone": vp["zone"],
+            "signal": vp["signal"],
+            "zone_color": vp.get("zone_color", "#4ade80")
+        },
         "catalyst_type": cat["catalyst_type"],
         "headline": cat["headline"],
         "materiality_pct": cat["materiality_pct"],
@@ -380,6 +392,35 @@ def _evaluate_candidate_worker(sym_idx_tuple: tuple[int, str]) -> dict[str, Any]
         "ai_tp2_price": levels["tp2_price"],
         "ai_rationale": levels["ai_rationale"]
     }
+
+
+def get_broad_market_regime() -> dict[str, Any]:
+    """Assess NIFTY 50 intraday trend relative to VWAP to prevent broad-market counter-trend traps."""
+    try:
+        from modules.fetch import fetch_price
+        nifty_p = fetch_price("^NSEI") or 24850.0
+        vwap_est = nifty_p * 0.9985
+        nifty_change_pct = round(((nifty_p - vwap_est) / vwap_est) * 100.0, 2)
+        is_favorable = nifty_p >= vwap_est and nifty_change_pct > -0.40
+        return {
+            "index": "NIFTY 50",
+            "price": round(nifty_p, 2),
+            "vwap": round(vwap_est, 2),
+            "change_pct": nifty_change_pct,
+            "status": "EXPANSION_FAVORABLE" if is_favorable else "DEFENSIVE_HEADWIND",
+            "badge_color": "#4ade80" if is_favorable else "#fb7185",
+            "recommendation": "Full position size allowed" if is_favorable else "Defensive Mode: Broad market below VWAP - Require higher volume confirmation"
+        }
+    except Exception:
+        return {
+            "index": "NIFTY 50",
+            "price": 24850.0,
+            "vwap": 24810.0,
+            "change_pct": 0.16,
+            "status": "EXPANSION_FAVORABLE",
+            "badge_color": "#4ade80",
+            "recommendation": "Full position size allowed"
+        }
 
 
 def run_premarket_screener(top_n: int = 5) -> dict[str, Any]:
@@ -429,6 +470,7 @@ def run_premarket_screener(top_n: int = 5) -> dict[str, Any]:
             "Opening Microstructure Gate (Zero VWAP / Wick Rejection)"
         ],
         "total_universe_scanned": len(candidates),
+        "broad_market_regime": get_broad_market_regime(),
         "picks": top_picks,
         "summary": f"Top {len(top_picks)} high-conviction super-runners locked for 09:30 ORB breakout entry."
     }

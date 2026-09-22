@@ -12,10 +12,13 @@ from __future__ import annotations
 
 import datetime
 import logging
+import warnings
 from typing import Optional
 
 import numpy as np
 import pandas as pd
+
+warnings.filterwarnings("ignore", category=UserWarning, module="jugaad_data")
 
 logger = logging.getLogger(__name__)
 

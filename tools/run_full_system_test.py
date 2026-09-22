@@ -122,6 +122,15 @@ def test_modules() -> dict[str, dict]:
         results["price_validation"] = {"ok": False, "error": str(exc)}
     print(f"  - price_validation: {'PASS' if results['price_validation']['ok'] else 'FAIL'}")
 
+    # 10. Volume Profile Engine
+    try:
+        from modules.volume_profile import compute_volume_profile
+        vp = compute_volume_profile(None, current_price=1000.0)
+        results["volume_profile"] = {"ok": True, "detail": f"POC: {vp.get('poc')}, Zone: {vp.get('zone')}"}
+    except Exception as exc:
+        results["volume_profile"] = {"ok": False, "error": str(exc)}
+    print(f"  - volume_profile: {'PASS' if results['volume_profile']['ok'] else 'FAIL'}")
+
     return results
 
 
@@ -139,22 +148,29 @@ def test_database() -> dict[str, dict]:
 
     try:
         conn = sqlite3.connect(DB_PATH)
-        tables = [r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()]
-        results["tables"] = {"ok": True, "detail": f"Found {len(tables)} tables: {', '.join(tables[:8])}..."}
+        cursor = conn.cursor()
 
-        expected_tables = ["picks", "paper_positions", "paper_account", "daily_accuracy"]
-        for t in expected_tables:
+        # Check tables count
+        cursor.execute("SELECT name FROM sqlite_master WHERE type='table';")
+        tables = [r[0] for r in cursor.fetchall()]
+        results["tables"] = {"ok": len(tables) >= 5, "detail": f"Found {len(tables)} tables: {', '.join(tables[:8])}..."}
+        print(f"  - db_exists: PASS ({results['db_exists']['detail']})")
+        print(f"  - tables: {'PASS' if results['tables']['ok'] else 'FAIL'} ({results['tables']['detail']})")
+
+        # Specific table integrity checks
+        critical_tables = ["picks", "paper_positions", "paper_account", "daily_accuracy"]
+        for t in critical_tables:
             if t in tables:
-                cnt = conn.execute(f"SELECT COUNT(*) FROM {t}").fetchone()[0]
-                results[f"table_{t}"] = {"ok": True, "detail": f"{cnt} rows"}
+                cursor.execute(f"SELECT COUNT(*) FROM {t};")
+                count = cursor.fetchone()[0]
+                results[f"table_{t}"] = {"ok": True, "detail": f"{count} rows"}
             else:
-                results[f"table_{t}"] = {"ok": False, "error": f"Table {t} missing"}
+                results[f"table_{t}"] = {"ok": False, "error": "Table missing"}
+            print(f"  - table_{t}: {'PASS' if results[f'table_{t}']['ok'] else 'FAIL'} ({results[f'table_{t}'].get('detail', 'missing')})")
+
         conn.close()
     except Exception as exc:
-        results["db_query"] = {"ok": False, "error": str(exc)}
-
-    for k, v in results.items():
-        print(f"  - {k}: {'PASS' if v['ok'] else 'FAIL'} ({v.get('detail') or v.get('error')})")
+        results["db_query_error"] = {"ok": False, "error": str(exc)}
 
     return results
 
@@ -172,6 +188,8 @@ def test_apis() -> dict[str, dict]:
         ("POST", "/api/premarket/run"),
         ("GET", "/api/tracking"),
         ("POST", "/api/tracking/update"),
+        ("GET", "/api/volume-profile/COCHINSHIP"),
+        ("GET", "/api/risk-radar"),
         ("GET", "/api/learning/patterns"),
         ("GET", "/api/backtest/results"),
         ("GET", "/api/paper"),

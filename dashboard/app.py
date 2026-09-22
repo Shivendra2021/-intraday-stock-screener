@@ -1524,6 +1524,29 @@ def api_stream_ticks():
     )
 
 
+@app.route("/api/volume-profile/<symbol>")
+def api_volume_profile(symbol):
+    """Institutional Volume Profile (POC / VAH / VAL) for a given symbol."""
+    try:
+        from modules.volume_profile import get_stock_volume_profile
+        profile = get_stock_volume_profile(symbol)
+        return jsonify(profile)
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/api/risk-radar")
+def api_risk_radar():
+    """Real-time institutional risk radar, daily hard stop circuit breaker, and open heat."""
+    try:
+        from modules.paper_portfolio import get_portfolio_risk_radar
+        date_s = request.args.get("date")
+        radar = get_portfolio_risk_radar(date_s)
+        return jsonify(radar)
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
 @app.route("/api/learning/patterns", methods=["GET"])
 def api_learning_patterns():
     try:

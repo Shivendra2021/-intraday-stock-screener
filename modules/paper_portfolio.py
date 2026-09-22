@@ -13,6 +13,8 @@ from typing import Any
 logger = logging.getLogger(__name__)
 
 STARTING_CASH = 150000.0
+DAILY_MAX_LOSS_INR = 4000.0  # Hard daily stop loss circuit breaker (2% of capital)
+MAX_OPEN_RUNNER_POSITIONS = 2  # Max simultaneous runner positions
 
 
 def _now() -> str:
@@ -68,9 +70,85 @@ def _account(conn: sqlite3.Connection) -> sqlite3.Row:
     return conn.execute("SELECT * FROM paper_account WHERE id=1").fetchone()
 
 
+def get_portfolio_risk_radar(date_s: Any = None) -> dict[str, Any]:
+    """Assess real-time desk risk limits, daily drawdown vs hard stop, and open heat."""
+    ensure_account()
+    if not date_s:
+        try:
+            from modules.time_utils import today_ist_str
+            date_s = today_ist_str()
+        except Exception:
+            date_s = datetime.date.today().strftime("%Y-%m-%d")
+
+    with _connect() as conn:
+        acct = _account(conn)
+        open_rows = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(invested_amount), 0) FROM paper_positions WHERE status='open'"
+        ).fetchone()
+        open_count = int(open_rows[0] or 0)
+        open_invested = float(open_rows[1] or 0.0)
+
+        # Closed positions today
+        closed_today = conn.execute(
+            """SELECT COALESCE(SUM(realized_pnl), 0), COUNT(*) 
+               FROM paper_positions 
+               WHERE (exit_date=? OR date=?) AND status!='open'""",
+            (date_s, date_s)
+        ).fetchone()
+        realized_today = float(closed_today[0] or 0.0)
+        trades_today = int(closed_today[1] or 0)
+
+    initial_cash = float(acct["initial_cash"] or STARTING_CASH)
+    cash = float(acct["cash_balance"] or STARTING_CASH)
+    equity = cash + open_invested
+
+    # Circuit breaker check: -₹4,000 max daily loss
+    circuit_breaker_active = realized_today <= -DAILY_MAX_LOSS_INR
+    open_heat_pct = round((open_invested / equity * 100.0), 1) if equity > 0 else 0.0
+    daily_drawdown_pct = round((abs(realized_today) / DAILY_MAX_LOSS_INR * 100.0), 1) if realized_today < 0 else 0.0
+
+    if circuit_breaker_active:
+        risk_status = "CIRCUIT_BREAKER_LOCKED"
+        risk_color = "#ef4444"
+        badge_text = "🛑 HARD STOP LOCKED (-₹4,000 HIT)"
+    elif realized_today < -2000.0:
+        risk_status = "ELEVATED_RISK"
+        risk_color = "#f59e0b"
+        badge_text = "⚠️ ELEVATED DRAWDOWN WATCH"
+    else:
+        risk_status = "NORMAL_CLEAR"
+        risk_color = "#22c55e"
+        badge_text = "🟢 RISK LIMITS NORMAL (0% HEAT OVERHANG)"
+
+    return {
+        "status": "ok",
+        "date": date_s,
+        "daily_max_loss_limit": DAILY_MAX_LOSS_INR,
+        "realized_today_pnl": round(realized_today, 2),
+        "trades_today": trades_today,
+        "open_positions": open_count,
+        "max_open_positions": MAX_OPEN_RUNNER_POSITIONS,
+        "open_heat_pct": open_heat_pct,
+        "daily_drawdown_pct": min(100.0, daily_drawdown_pct),
+        "circuit_breaker_active": circuit_breaker_active,
+        "risk_status": risk_status,
+        "risk_color": risk_color,
+        "badge_text": badge_text
+    }
+
+
 def allocate_for_date(date_s: str, max_picks: int = 5) -> dict[str, Any]:
     """Allocate available cash across highest-confidence picks using volatility-adjusted risk-parity sizing."""
     ensure_account()
+
+    # Risk Radar & Circuit Breaker Check
+    radar = get_portfolio_risk_radar(date_s)
+    if radar.get("circuit_breaker_active"):
+        logger.warning("Allocation rejected: Daily max loss limit (-Rs.%.2f) reached for %s", DAILY_MAX_LOSS_INR, date_s)
+        return {"date": date_s, "allocated": 0, "reason": "daily_loss_circuit_breaker_locked"}
+
+    effective_max = min(max_picks, MAX_OPEN_RUNNER_POSITIONS)
+
     with _connect() as conn:
         existing = conn.execute(
             """SELECT COUNT(*)
@@ -94,7 +172,7 @@ def allocate_for_date(date_s: str, max_picks: int = 5) -> dict[str, Any]:
             ORDER BY confidence DESC, rank ASC, id ASC
             LIMIT ?
             """,
-            (date_s, max_picks),
+            (date_s, effective_max),
         ).fetchall()
         if not picks:
             return {"date": date_s, "allocated": 0, "reason": "no_picks"}
@@ -409,6 +487,7 @@ def portfolio_summary() -> dict[str, Any]:
         "equity_curve": curve,
         "best_pick": dict(best) if best else None,
         "worst_pick": dict(worst) if worst else None,
+        "risk_radar": get_portfolio_risk_radar(),
         "updated_at": acct["updated_at"],
     }
 
