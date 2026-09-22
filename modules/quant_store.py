@@ -173,3 +173,8 @@ class Store:
             rows = c.execute("SELECT * FROM review_ledger" + (" WHERE date=?" if date else "") +
                              " ORDER BY created_at, symbol", (date,) if date else ()).fetchall()
         return [{**dict(row), "payload": json.loads(row["payload"])} for row in rows]
+
+
+# Alias for backward and cross-module compatibility
+QuantStore = Store
+
