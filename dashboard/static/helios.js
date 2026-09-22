@@ -2282,11 +2282,15 @@
 
             const priceEl = row.querySelector('.cur-price-val');
             if (priceEl && priceEl.textContent.trim() !== `₹${curPrice.toFixed(2)}`) {
+              const oldPrice = parseFloat(priceEl.textContent.replace(/[^\d.]/g, '')) || 0;
               priceEl.textContent = `₹${curPrice.toFixed(2)}`;
+              priceEl.classList.remove('tick-flash-up', 'tick-flash-down');
+              void priceEl.offsetWidth;
+              priceEl.classList.add(curPrice >= oldPrice ? 'tick-flash-up' : 'tick-flash-down');
             }
 
             const pnlEl = row.querySelector('.pnl-val');
-            if (pnlEl) {
+            if (pnlEl && pnlEl.textContent.trim() !== `${pnlSign}${pnl.toFixed(2)}%`) {
               pnlEl.textContent = `${pnlSign}${pnl.toFixed(2)}%`;
               pnlEl.style.color = pnlColor;
             }
