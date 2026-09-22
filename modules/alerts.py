@@ -80,9 +80,10 @@ def _send(text: str, review_with_grok: bool = True, event_type: str = "telegram_
         "parse_mode": "HTML",
     }
     max_retries = 3
+    from modules.http_session import http_post
     for attempt in range(max_retries):
         try:
-            r = requests.post(url, json=payload, timeout=15)
+            r = http_post(url, json=payload, timeout=15)
             if r.status_code == 200:
                 logger.info("Telegram message sent successfully")
                 _audit_send(event_type, True, "sent")
@@ -96,7 +97,7 @@ def _send(text: str, review_with_grok: bool = True, event_type: str = "telegram_
                     "chat_id": TELEGRAM_CHAT_ID,
                     "text": clean_text,
                 }
-                r_plain = requests.post(url, json=plain_payload, timeout=15)
+                r_plain = http_post(url, json=plain_payload, timeout=15)
                 if r_plain.status_code == 200:
                     logger.info("Telegram message sent successfully with plain text fallback")
                     _audit_send(event_type, True, "sent_plain_fallback")

@@ -311,82 +311,85 @@ def run_premarket_screener(top_n: int = 5) -> dict[str, Any]:
         ]
       }
     """
+def _evaluate_candidate_worker(sym_idx_tuple: tuple[int, str]) -> dict[str, Any]:
     from modules.historical_backtester import compute_ai_runner_levels
+    idx, sym = sym_idx_tuple
+    seed = (sum(ord(c) for c in sym) * (idx + 1)) % 100
+    sim_gap = round(0.9 + (seed % 18) * 0.12, 2)  # Between +0.9% and +2.9%
+    sim_price = round(250.0 + (seed * 35.5), 2)
+    sim_atr_pct = round(3.5 + (seed % 25) * 0.1, 2)
 
-    candidates = []
-    
-    # Analyze symbols from the high-beta universe
-    for idx, sym in enumerate(RUNNER_UNIVERSE):
-        # Generate simulated/live pre-market gap in sweet-spot
-        seed = (sum(ord(c) for c in sym) * (idx + 1)) % 100
-        sim_gap = round(0.9 + (seed % 18) * 0.12, 2)  # Between +0.9% and +2.9%
-        sim_price = round(250.0 + (seed * 35.5), 2)
-        sim_atr_pct = round(3.5 + (seed % 25) * 0.1, 2)
+    # 1. VCP Squeeze Analysis
+    fake_bars = pd.DataFrame({
+        "high": [sim_price * (1 + 0.02)] * 25,
+        "low": [sim_price * (1 - 0.02)] * 25,
+        "close": [sim_price] * 25,
+        "volume": [100000] * 25
+    })
+    vcp = detect_vcp_compression(fake_bars)
+    vcp_score = round(min(98.0, max(50.0, 65.0 + (seed % 32))), 1)
 
-        # 1. VCP Squeeze Analysis
-        # Simulated 25 daily bars
-        fake_bars = pd.DataFrame({
-            "high": [sim_price * (1 + 0.02)] * 25,
-            "low": [sim_price * (1 - 0.02)] * 25,
-            "close": [sim_price] * 25,
-            "volume": [100000] * 25
-        })
-        vcp = detect_vcp_compression(fake_bars)
-        # Add symbol variation
-        vcp_score = round(min(98.0, max(50.0, 65.0 + (seed % 32))), 1)
+    # 2. Delivery Absorption
+    deliv = get_delivery_absorption(sym)
 
-        # 2. Delivery Absorption
-        deliv = get_delivery_absorption(sym)
+    # 3. Auction Imbalance Ratio (AIR)
+    air = compute_auction_imbalance(sym, gap_pct=sim_gap)
 
-        # 3. Auction Imbalance Ratio (AIR)
-        air = compute_auction_imbalance(sym, gap_pct=sim_gap)
+    # 4. Catalyst Materiality
+    cat = score_catalyst_materiality(sym)
 
-        # 4. Catalyst Materiality
-        cat = score_catalyst_materiality(sym)
+    # Composite Score Calculation (Weighted)
+    comp_score = round(
+        (0.30 * air["air_score"]) +
+        (0.25 * vcp_score) +
+        (0.20 * deliv["score"]) +
+        (0.15 * cat["materiality_score"]) +
+        (0.10 * air["gap_score"]),
+        1
+    )
 
-        # Composite Score Calculation (Weighted)
-        # 30% AIR + 25% VCP + 20% Delivery + 15% Catalyst + 10% Gap Sweet Spot
-        comp_score = round(
-            (0.30 * air["air_score"]) +
-            (0.25 * vcp_score) +
-            (0.20 * deliv["score"]) +
-            (0.15 * cat["materiality_score"]) +
-            (0.10 * air["gap_score"]),
-            1
-        )
+    # Dynamic AI Levels
+    levels = compute_ai_runner_levels(
+        entry_price=sim_price,
+        orb_low=sim_price * (1.0 - 0.018),
+        atr_pct=sim_atr_pct
+    )
 
-        # Dynamic AI Levels
-        levels = compute_ai_runner_levels(
-            entry_price=sim_price,
-            orb_low=sim_price * (1.0 - 0.018),
-            atr_pct=sim_atr_pct
-        )
+    return {
+        "symbol": sym,
+        "price": sim_price,
+        "gap_pct": sim_gap,
+        "gap_grade": air["gap_grade"],
+        "air_ratio": air["air_ratio"],
+        "air_score": air["air_score"],
+        "vcp_score": vcp_score,
+        "vcp_stage": vcp.get("stage", "🔥 Coiled Spring"),
+        "delivery_pct": deliv["delivery_pct"],
+        "delivery_score": deliv["score"],
+        "is_float_locked": deliv["is_float_locked"],
+        "catalyst_type": cat["catalyst_type"],
+        "headline": cat["headline"],
+        "materiality_pct": cat["materiality_pct"],
+        "composite_score": comp_score,
+        "entry_trigger": round(sim_price * (1.0 + 0.005), 2),
+        "ai_sl_pct": levels["sl_pct"],
+        "ai_sl_price": levels["sl_price"],
+        "ai_tp1_pct": levels["tp1_pct"],
+        "ai_tp1_price": levels["tp1_price"],
+        "ai_tp2_pct": levels["tp2_pct"],
+        "ai_tp2_price": levels["tp2_price"],
+        "ai_rationale": levels["ai_rationale"]
+    }
 
-        candidates.append({
-            "symbol": sym,
-            "price": sim_price,
-            "gap_pct": sim_gap,
-            "gap_grade": air["gap_grade"],
-            "air_ratio": air["air_ratio"],
-            "air_score": air["air_score"],
-            "vcp_score": vcp_score,
-            "vcp_stage": vcp.get("stage", "🔥 Coiled Spring"),
-            "delivery_pct": deliv["delivery_pct"],
-            "delivery_score": deliv["score"],
-            "is_float_locked": deliv["is_float_locked"],
-            "catalyst_type": cat["catalyst_type"],
-            "headline": cat["headline"],
-            "materiality_pct": cat["materiality_pct"],
-            "composite_score": comp_score,
-            "entry_trigger": round(sim_price * (1.0 + 0.005), 2),
-            "ai_sl_pct": levels["sl_pct"],
-            "ai_sl_price": levels["sl_price"],
-            "ai_tp1_pct": levels["tp1_pct"],
-            "ai_tp1_price": levels["tp1_price"],
-            "ai_tp2_pct": levels["tp2_pct"],
-            "ai_tp2_price": levels["tp2_price"],
-            "ai_rationale": levels["ai_rationale"]
-        })
+
+def run_premarket_screener(top_n: int = 5) -> dict[str, Any]:
+    """Execute the full 5-Pillar Pre-Market Quantitative Screener concurrently."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    items = list(enumerate(RUNNER_UNIVERSE))
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        candidates = list(executor.map(_evaluate_candidate_worker, items))
+
 
     candidates.sort(key=lambda x: x["composite_score"], reverse=True)
     top_picks = candidates[:top_n]

@@ -14,14 +14,29 @@ def _add_column(conn: sqlite3.Connection, table: str, name: str, ddl: str) -> No
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {name} {ddl}")
 
 
-def ensure_research_tables() -> None:
+def connect_db(path: str | None = None) -> sqlite3.Connection:
+    """Return an optimized SQLite connection with WAL, 256MB MMAP, and NORMAL synchronous mode."""
     from config import DB_PATH
+    p = path or DB_PATH
+    conn = sqlite3.connect(p, timeout=15)
+    conn.execute("PRAGMA journal_mode = WAL;")
+    conn.execute("PRAGMA synchronous = NORMAL;")
+    conn.execute("PRAGMA mmap_size = 268435456;")
+    conn.execute("PRAGMA cache_size = -64000;")
+    conn.execute("PRAGMA temp_store = MEMORY;")
+    conn.execute("PRAGMA busy_timeout = 5000;")
+    return conn
 
-    conn = sqlite3.connect(DB_PATH)
+
+def ensure_research_tables() -> None:
+    conn = connect_db()
     try:
-        # ── Performance PRAGMAs: WAL mode for concurrent agent access ──────────
+        # ── Performance PRAGMAs: WAL mode + 256MB MMAP for zero-syscall I/O ───
         conn.execute("PRAGMA journal_mode = WAL;")
         conn.execute("PRAGMA synchronous = NORMAL;")
+        conn.execute("PRAGMA mmap_size = 268435456;")  # 256 MB memory-mapped I/O
+        conn.execute("PRAGMA cache_size = -64000;")    # 64 MB RAM page cache
+        conn.execute("PRAGMA temp_store = MEMORY;")
         conn.execute("PRAGMA busy_timeout = 5000;")
 
         # Core tables used by dashboard and bot startup. Keep schemas permissive so

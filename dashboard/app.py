@@ -44,10 +44,33 @@ def handle_preflight_and_protect():
 
 
 @app.after_request
-def add_cors_headers(response):
+def postprocess_response(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization, X-Requested-With"
+
+    # Pass through streaming responses untouched
+    if response.mimetype == "text/event-stream" or getattr(response, "is_streamed", False):
+        return response
+
+    # Transparent Gzip compression for payloads >= 500 bytes
+    accept_encoding = request.headers.get("Accept-Encoding", "").lower()
+    if (
+        "gzip" in accept_encoding
+        and response.status_code < 300
+        and not response.direct_passthrough
+        and not response.headers.get("Content-Encoding")
+    ):
+        content_type = response.headers.get("Content-Type", "")
+        if any(t in content_type for t in ("application/json", "text/html", "text/css", "application/javascript")):
+            data = response.get_data()
+            if len(data) >= 500:
+                import gzip
+                compressed = gzip.compress(data, compresslevel=6)
+                response.set_data(compressed)
+                response.headers["Content-Encoding"] = "gzip"
+                response.headers["Content-Length"] = len(compressed)
+
     return response
 
 
@@ -671,16 +694,16 @@ def _process_summary() -> dict:
     }
 
 
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Routes
 # ─────────────────────────────────────────────────────────────────────────────
 
 @app.route("/")
+@app.route("/quant")
 def index():
     from config import QUANT_ENABLED
     return render_template("quant.html" if QUANT_ENABLED else "index.html")
-
-
 @app.route("/api/health")
 @app.route("/health")
 def api_health():
@@ -1458,6 +1481,47 @@ def api_tracking_update():
         return jsonify(get_tracking_status())
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/stream/ticks")
+def api_stream_ticks():
+    """Server-Sent Events (SSE) live tick stream for sub-100ms real-time dashboard updates."""
+    from flask import Response
+    import time
+    from modules.stock_tracker import get_tracking_status
+
+    def event_stream():
+        # Immediate state push upon connection
+        try:
+            initial = get_tracking_status()
+            yield f"data: {json.dumps(initial)}\n\n"
+        except Exception:
+            initial = {}
+
+        last_hash = hash(json.dumps(initial, sort_keys=True))
+        for _ in range(300):  # Stream up to ~20 minutes per connection
+            time.sleep(4)
+            try:
+                curr = get_tracking_status()
+                curr_hash = hash(json.dumps(curr, sort_keys=True))
+                if curr_hash != last_hash:
+                    last_hash = curr_hash
+                    yield f"data: {json.dumps(curr)}\n\n"
+                else:
+                    yield ": ping\n\n"
+            except GeneratorExit:
+                break
+            except Exception:
+                break
+
+    return Response(
+        event_stream(),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        }
+    )
 
 
 @app.route("/api/learning/patterns", methods=["GET"])

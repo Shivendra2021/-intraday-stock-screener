@@ -43,7 +43,11 @@ def nse_price(symbol: str) -> float | None:
     }
     url = f"https://www.nseindia.com/api/quote-equity?symbol={symbol}"
     try:
-        with requests.Session() as session:
+        from modules.http_session import get_http_session
+        session = get_http_session()
+        response = session.get(url, headers=headers, timeout=8)
+        if response.status_code == 401 or response.status_code == 403:
+            # Refresh NSE homepage cookie in pooled session
             session.get("https://www.nseindia.com", headers=headers, timeout=8)
             response = session.get(url, headers=headers, timeout=8)
         if response.status_code != 200:

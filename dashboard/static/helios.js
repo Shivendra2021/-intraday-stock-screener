@@ -2202,63 +2202,118 @@
       const pickList = keys.map(k => picksObj[k]);
       pickList.sort((a, b) => (a.rank || 99) - (b.rank || 99));
 
-      tbody.innerHTML = pickList.map((p, idx) => {
-        const pnl = Number(p.pnl_pct || 0);
-        const pnlColor = pnl > 0 ? '#4ade80' : (pnl < 0 ? '#fb7185' : '#8c899a');
-        const pnlSign = pnl > 0 ? '+' : '';
-        const entry = Number(p.entry_price || p.price || 0);
-        const curPrice = Number(p.current_price || entry);
-        const slPrice = Number(p.sl_price || entry * 0.982);
-        const bePrice = Number(p.be_price || entry * 1.035);
-        const tp1Price = Number(p.tp1_price || entry * 1.07);
-        const tp2Price = Number(p.tp2_price || entry * 1.102);
-
-        // Stage badge rendering
-        let stageBadge = '<span class="telemetry-badge" style="background:rgba(56,189,248,0.12);color:#38bdf8;border-color:rgba(56,189,248,0.3);font-size:9.5px;font-weight:700;">🟢 ACTIVE</span>';
-        if (p.stage === 'BREAKEVEN_LOCKED' || p.hit_be) {
-          stageBadge = '<span class="telemetry-badge" style="background:rgba(245,158,11,0.18);color:#f59e0b;border-color:rgba(245,158,11,0.4);font-size:9.5px;font-weight:700;">🔒 BREAKEVEN (0% RISK)</span>';
-        } else if (p.stage === 'RUNNER_ACTIVE' || p.hit_tp1) {
-          stageBadge = '<span class="telemetry-badge" style="background:rgba(74,222,128,0.18);color:#4ade80;border-color:rgba(74,222,128,0.4);font-size:9.5px;font-weight:700;">🎯 50% BOOKED (+7%)</span>';
-        } else if (p.stage === 'CLOSED_PROFIT' || p.status === 'TP_HIT' || p.hit_tp2) {
-          stageBadge = '<span class="telemetry-badge" style="background:rgba(167,139,250,0.22);color:#a78bfa;border-color:rgba(167,139,250,0.4);font-size:9.5px;font-weight:700;">🚀 +10.2% FULL WINNER</span>';
-        } else if (p.status === 'SL_HIT' || p.hit_sl) {
-          stageBadge = '<span class="telemetry-badge" style="background:rgba(251,113,133,0.18);color:#fb7185;border-color:rgba(251,113,133,0.4);font-size:9.5px;font-weight:700;">🛑 SL HIT (CAP PROTECTED)</span>';
+      window.requestAnimationFrame(() => {
+        let hasMissingRows = false;
+        for (const p of pickList) {
+          if (!document.getElementById(`live-tracker-row-${p.symbol}`)) {
+            hasMissingRows = true;
+            break;
+          }
         }
 
-        return `
-          <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
-            <td style="padding: 10px 10px; color: #6b7280; font-family: var(--font-mono); font-size: 11px;">#${p.rank || (idx + 1)}</td>
-            <td style="padding: 10px 10px; font-weight: 700; color: #fff; font-size: 12px;">
-              <span>${p.symbol}</span>
-              <div style="font-size: 9.5px; color: #8c899a; font-weight: 400;">AIR: <strong style="color:#38bdf8;">${Number(p.air_ratio || 3.4).toFixed(2)}×</strong></div>
-            </td>
-            <td style="padding: 10px 10px; text-align: right; font-family: var(--font-mono); font-weight: 600; color: #e2e0ec;">
-              ₹${entry.toFixed(2)}
-            </td>
-            <td style="padding: 10px 10px; text-align: right; font-family: var(--font-mono); font-weight: 700; color: #fff;">
-              ₹${curPrice.toFixed(2)}
-            </td>
-            <td style="padding: 10px 10px; text-align: right; font-family: var(--font-mono); font-weight: 700; color: ${pnlColor}; font-size: 12px;">
-              ${pnlSign}${pnl.toFixed(2)}%
-            </td>
-            <td style="padding: 10px 10px; text-align: right; font-family: var(--font-mono); color: #fb7185;">
-              ₹${slPrice.toFixed(2)}
-            </td>
-            <td style="padding: 10px 10px; text-align: right; font-family: var(--font-mono); color: #f59e0b; font-weight: 600;">
-              ₹${bePrice.toFixed(2)}
-            </td>
-            <td style="padding: 10px 10px; text-align: right; font-family: var(--font-mono); color: #38bdf8; font-weight: 600;">
-              ₹${tp1Price.toFixed(2)}
-            </td>
-            <td style="padding: 10px 10px; text-align: right; font-family: var(--font-mono); color: #4ade80; font-weight: 700;">
-              ₹${tp2Price.toFixed(2)}
-            </td>
-            <td style="padding: 10px 10px; text-align: center;">
-              ${stageBadge}
-            </td>
-          </tr>
-        `;
-      }).join('');
+        // If structure changed or initial render, build table rows once
+        if (hasMissingRows || tbody.children.length !== pickList.length) {
+          tbody.innerHTML = pickList.map((p, idx) => {
+            const pnl = Number(p.pnl_pct || 0);
+            const pnlColor = pnl > 0 ? '#4ade80' : (pnl < 0 ? '#fb7185' : '#8c899a');
+            const pnlSign = pnl > 0 ? '+' : '';
+            const entry = Number(p.entry_price || p.price || 0);
+            const curPrice = Number(p.current_price || entry);
+            const slPrice = Number(p.sl_price || entry * 0.982);
+            const bePrice = Number(p.be_price || entry * 1.035);
+            const tp1Price = Number(p.tp1_price || entry * 1.07);
+            const tp2Price = Number(p.tp2_price || entry * 1.102);
+
+            let stageBadge = '<span class="telemetry-badge" style="background:rgba(56,189,248,0.12);color:#38bdf8;border-color:rgba(56,189,248,0.3);font-size:9.5px;font-weight:700;">🟢 ACTIVE</span>';
+            if (p.stage === 'BREAKEVEN_LOCKED' || p.hit_be) {
+              stageBadge = '<span class="telemetry-badge" style="background:rgba(245,158,11,0.18);color:#f59e0b;border-color:rgba(245,158,11,0.4);font-size:9.5px;font-weight:700;">🔒 BREAKEVEN (0% RISK)</span>';
+            } else if (p.stage === 'RUNNER_ACTIVE' || p.hit_tp1) {
+              stageBadge = '<span class="telemetry-badge" style="background:rgba(74,222,128,0.18);color:#4ade80;border-color:rgba(74,222,128,0.4);font-size:9.5px;font-weight:700;">🎯 50% BOOKED (+7%)</span>';
+            } else if (p.stage === 'CLOSED_PROFIT' || p.status === 'TP_HIT' || p.hit_tp2) {
+              stageBadge = '<span class="telemetry-badge" style="background:rgba(167,139,250,0.22);color:#a78bfa;border-color:rgba(167,139,250,0.4);font-size:9.5px;font-weight:700;">🚀 +10.2% FULL WINNER</span>';
+            } else if (p.status === 'SL_HIT' || p.hit_sl) {
+              stageBadge = '<span class="telemetry-badge" style="background:rgba(251,113,133,0.18);color:#fb7185;border-color:rgba(251,113,133,0.4);font-size:9.5px;font-weight:700;">🛑 SL HIT (CAP PROTECTED)</span>';
+            }
+
+            return `
+              <tr id="live-tracker-row-${p.symbol}" style="border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='transparent'">
+                <td style="padding: 10px 10px; color: #6b7280; font-family: var(--font-mono); font-size: 11px;">#${p.rank || (idx + 1)}</td>
+                <td style="padding: 10px 10px; font-weight: 700; color: #fff; font-size: 12px;">
+                  <span>${p.symbol}</span>
+                  <div style="font-size: 9.5px; color: #8c899a; font-weight: 400;">AIR: <strong style="color:#38bdf8;">${Number(p.air_ratio || 3.4).toFixed(2)}×</strong></div>
+                </td>
+                <td style="padding: 10px 10px; text-align: right; font-family: var(--font-mono); font-weight: 600; color: #e2e0ec;">
+                  ₹${entry.toFixed(2)}
+                </td>
+                <td class="cur-price-val" style="padding: 10px 10px; text-align: right; font-family: var(--font-mono); font-weight: 700; color: #fff;">
+                  ₹${curPrice.toFixed(2)}
+                </td>
+                <td class="pnl-val" style="padding: 10px 10px; text-align: right; font-family: var(--font-mono); font-weight: 700; color: ${pnlColor}; font-size: 12px;">
+                  ${pnlSign}${pnl.toFixed(2)}%
+                </td>
+                <td class="sl-val" style="padding: 10px 10px; text-align: right; font-family: var(--font-mono); color: #fb7185;">
+                  ₹${slPrice.toFixed(2)}
+                </td>
+                <td style="padding: 10px 10px; text-align: right; font-family: var(--font-mono); color: #f59e0b; font-weight: 600;">
+                  ₹${bePrice.toFixed(2)}
+                </td>
+                <td style="padding: 10px 10px; text-align: right; font-family: var(--font-mono); color: #38bdf8; font-weight: 600;">
+                  ₹${tp1Price.toFixed(2)}
+                </td>
+                <td style="padding: 10px 10px; text-align: right; font-family: var(--font-mono); color: #4ade80; font-weight: 700;">
+                  ₹${tp2Price.toFixed(2)}
+                </td>
+                <td class="stage-cell" data-stage="${p.stage || 'STAGE_1'}" style="padding: 10px 10px; text-align: center;">
+                  ${stageBadge}
+                </td>
+              </tr>
+            `;
+          }).join('');
+        } else {
+          // Zero-jank in-place micro-DOM diffing: update text content directly
+          for (const p of pickList) {
+            const row = document.getElementById(`live-tracker-row-${p.symbol}`);
+            if (!row) continue;
+            const pnl = Number(p.pnl_pct || 0);
+            const pnlColor = pnl > 0 ? '#4ade80' : (pnl < 0 ? '#fb7185' : '#8c899a');
+            const pnlSign = pnl > 0 ? '+' : '';
+            const curPrice = Number(p.current_price || p.entry_price || 0);
+            const slPrice = Number(p.sl_price || 0);
+
+            const priceEl = row.querySelector('.cur-price-val');
+            if (priceEl && priceEl.textContent.trim() !== `₹${curPrice.toFixed(2)}`) {
+              priceEl.textContent = `₹${curPrice.toFixed(2)}`;
+            }
+
+            const pnlEl = row.querySelector('.pnl-val');
+            if (pnlEl) {
+              pnlEl.textContent = `${pnlSign}${pnl.toFixed(2)}%`;
+              pnlEl.style.color = pnlColor;
+            }
+
+            const slEl = row.querySelector('.sl-val');
+            if (slEl && slPrice > 0) {
+              slEl.textContent = `₹${slPrice.toFixed(2)}`;
+            }
+
+            const stageCell = row.querySelector('.stage-cell');
+            if (stageCell && stageCell.dataset.stage !== (p.stage || 'STAGE_1')) {
+              stageCell.dataset.stage = p.stage || 'STAGE_1';
+              let stageBadge = '<span class="telemetry-badge" style="background:rgba(56,189,248,0.12);color:#38bdf8;border-color:rgba(56,189,248,0.3);font-size:9.5px;font-weight:700;">🟢 ACTIVE</span>';
+              if (p.stage === 'BREAKEVEN_LOCKED' || p.hit_be) {
+                stageBadge = '<span class="telemetry-badge" style="background:rgba(245,158,11,0.18);color:#f59e0b;border-color:rgba(245,158,11,0.4);font-size:9.5px;font-weight:700;">🔒 BREAKEVEN (0% RISK)</span>';
+              } else if (p.stage === 'RUNNER_ACTIVE' || p.hit_tp1) {
+                stageBadge = '<span class="telemetry-badge" style="background:rgba(74,222,128,0.18);color:#4ade80;border-color:rgba(74,222,128,0.4);font-size:9.5px;font-weight:700;">🎯 50% BOOKED (+7%)</span>';
+              } else if (p.stage === 'CLOSED_PROFIT' || p.status === 'TP_HIT' || p.hit_tp2) {
+                stageBadge = '<span class="telemetry-badge" style="background:rgba(167,139,250,0.22);color:#a78bfa;border-color:rgba(167,139,250,0.4);font-size:9.5px;font-weight:700;">🚀 +10.2% FULL WINNER</span>';
+              } else if (p.status === 'SL_HIT' || p.hit_sl) {
+                stageBadge = '<span class="telemetry-badge" style="background:rgba(251,113,133,0.18);color:#fb7185;border-color:rgba(251,113,133,0.4);font-size:9.5px;font-weight:700;">🛑 SL HIT (CAP PROTECTED)</span>';
+              }
+              stageCell.innerHTML = stageBadge;
+            }
+          }
+        }
+      });
     } catch (err) {
       console.error('Live tracker error:', err);
     }
@@ -2839,10 +2894,26 @@
     renderPremarketCockpit();
     renderLiveTracker();
 
-    // Auto-refresh Live Tracker every 15 seconds
-    setInterval(() => {
-      renderLiveTracker();
+    // Auto-refresh Live Tracker with visibility change throttling
+    let trackerTimer = setInterval(() => {
+      if (!document.hidden) renderLiveTracker();
     }, 15000);
+
+    // Real-Time Server-Sent Events (SSE) Live Stream Hook (<100ms push)
+    if (window.EventSource) {
+      try {
+        const tickSource = new EventSource('/api/stream/ticks');
+        tickSource.onmessage = (event) => {
+          if (!event.data) return;
+          try {
+            const data = JSON.parse(event.data);
+            if (data && data.picks && !document.hidden) {
+              renderLiveTracker();
+            }
+          } catch (e) {}
+        };
+      } catch (sseErr) {}
+    }
 
     // Step 2: Start background data fetch (async, non-blocking)
 
