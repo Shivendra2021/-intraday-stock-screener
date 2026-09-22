@@ -131,6 +131,26 @@ def test_modules() -> dict[str, dict]:
         results["volume_profile"] = {"ok": False, "error": str(exc)}
     print(f"  - volume_profile: {'PASS' if results['volume_profile']['ok'] else 'FAIL'}")
 
+    # 11. Sync Gateway (Zero-Delay Event Hub)
+    try:
+        from modules.sync_gateway import sync_gateway
+        sync_gateway.publish("TEST_EVENT", {"status": "testing"})
+        st = sync_gateway.get_state()
+        results["sync_gateway"] = {"ok": True, "detail": f"Cache keys: {list(st.keys())[:4]}"}
+    except Exception as exc:
+        results["sync_gateway"] = {"ok": False, "error": str(exc)}
+    print(f"  - sync_gateway: {'PASS' if results['sync_gateway']['ok'] else 'FAIL'}")
+
+    # 12. Systematic Record Archiver
+    try:
+        from modules.record_archiver import save_session_archive, list_archived_sessions
+        arc = save_session_archive(force=True)
+        sessions = list_archived_sessions()
+        results["record_archiver"] = {"ok": True, "detail": f"Archived to {arc.get('folder_path')}, found {len(sessions)} sessions"}
+    except Exception as exc:
+        results["record_archiver"] = {"ok": False, "error": str(exc)}
+    print(f"  - record_archiver: {'PASS' if results['record_archiver']['ok'] else 'FAIL'}")
+
     return results
 
 
@@ -196,6 +216,11 @@ def test_apis() -> dict[str, dict]:
         ("GET", "/api/history"),
         ("GET", "/api/accuracy"),
         ("GET", "/api/quant"),
+        ("GET", "/api/sync/state"),
+        ("POST", "/api/archive/snapshot"),
+        ("GET", "/api/archive/list"),
+        ("GET", "/api/archive/report/2026-09-23"),
+        ("GET", "/api/archive/download/2026-09-23/trades.csv"),
     ]
 
     results = {}

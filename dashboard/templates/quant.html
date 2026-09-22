@@ -135,6 +135,22 @@
               </button>
             </div>
 
+            <!-- Systematic Trade & Dashboard Archive Snapshot Trigger -->
+            <div class="sync-widget-group" style="background: rgba(30, 41, 59, 0.6); border: 1px solid rgba(56, 189, 248, 0.3);">
+              <div class="sync-countdown-badge" style="background: transparent;" title="Clean Historical Record Location">
+                <span style="font-size: 11px;">📁</span>
+                <span id="archive-folder-text" style="color: #38bdf8; font-family: var(--font-mono); font-size: 10.5px;">trade_records/</span>
+              </div>
+              <button class="btn-sync-action" id="btn-archive-snapshot" onclick="triggerManualArchive()" title="Save Clean Systematic Session Snapshot (CSV, JSON, HTML Audit)" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.4);">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path>
+                  <polyline points="17 21 17 13 7 13 7 21"></polyline>
+                  <polyline points="7 3 7 8 15 8"></polyline>
+                </svg>
+                <span>Archive Snapshot</span>
+              </button>
+            </div>
+
             <!-- Interactive System Power ON/OFF Toggle Switch -->
             <div id="system-power-btn" class="system-power-toggle is-active" title="Toggle System Trading Engine">
               <span class="power-label" id="system-power-label">SYSTEM ONLINE</span>
@@ -223,6 +239,17 @@
           <div class="index-right">
             <span class="index-badge" id="idx-giftnifty-badge">+0.33%</span>
             <span class="index-pts" id="idx-giftnifty-pts">+75.80 pts</span>
+          </div>
+        </div>
+        <!-- Broad Market VWAP Regime Badge -->
+        <div class="index-mini-card" style="border-left: 2px solid #4ade80;">
+          <div class="index-left">
+            <span class="index-title" style="color: #4ade80;">BROAD REGIME (VWAP)</span>
+            <span class="index-value" id="idx-vwap-regime-val" style="font-size: 11.5px; font-weight: 700; color: #4ade80;">EXPANSION FAVORABLE</span>
+          </div>
+          <div class="index-right">
+            <span class="index-badge" id="idx-vwap-badge" style="background: rgba(74,222,128,0.15); color: #4ade80; font-size: 10px;">24,850 > 24,812</span>
+            <span class="index-pts" id="idx-vwap-pts" style="color: #8c899a; font-size: 9.5px;">Full Sizing Active</span>
           </div>
         </div>
       </section>
@@ -580,7 +607,14 @@
               <h3 class="card-title h3">Simulated Trade Ledger</h3>
               <small style="color: #8c899a;">Positions resolved chronologically using next-bar execution rules</small>
             </div>
-            <button class="ai-action-btn" onclick="alert('Exporting simulated trade ledger to CSV…')">Export CSV ↓</button>
+            <div style="display: flex; gap: 8px;">
+              <button class="ai-action-btn" id="btn-export-csv" onclick="downloadTodayCsv()" style="cursor: pointer; display: inline-flex; align-items: center; gap: 6px;">
+                <span>📥</span> Export CSV ↓
+              </button>
+              <button class="ai-action-btn" id="btn-view-audit-report" onclick="viewTodayAuditReport()" style="cursor: pointer; background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.4); display: inline-flex; align-items: center; gap: 6px;">
+                <span>📑</span> View HTML Audit Report ↗
+              </button>
+            </div>
           </div>
           <div class="table-wrapper">
             <table class="cockpit-table">
@@ -596,6 +630,38 @@
               </thead>
               <tbody id="full-portfolio-tbody">
                 <!-- Injected dynamically -->
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- Systematic Historical Session Archives (trade_records/YYYY-MM-DD/) -->
+        <section class="institutional-table-card" style="margin-top: 20px; border-color: rgba(56,189,248,0.25);">
+          <div class="card-header-row">
+            <div>
+              <h3 class="card-title h3" style="display: flex; align-items: center; gap: 8px;">
+                <span style="color: #38bdf8;">📁</span> Systematic Session Archives
+              </h3>
+              <small style="color: #8c899a;">Automated daily trade records & state snapshots stored under <code>trade_records/YYYY-MM-DD/</code></small>
+            </div>
+            <button class="ai-action-btn" onclick="triggerManualArchive()" style="cursor: pointer; background: rgba(74,222,128,0.15); color: #4ade80; border: 1px solid rgba(74,222,128,0.4);">
+              <span>💾</span> Snapshot Today's Session
+            </button>
+          </div>
+
+          <div class="table-wrapper">
+            <table class="cockpit-table">
+              <thead>
+                <tr>
+                  <th style="width: 140px;">Session Date</th>
+                  <th style="width: 110px;">Trades Count</th>
+                  <th style="width: 150px;">Net Realized P&L</th>
+                  <th style="width: 180px;">Archived At</th>
+                  <th style="text-align: right;">Clean Formats & Actions</th>
+                </tr>
+              </thead>
+              <tbody id="session-archives-tbody">
+                <tr><td colspan="5" style="text-align: center; color: #8c899a; padding: 24px;">Scanning trade_records/...</td></tr>
               </tbody>
             </table>
           </div>

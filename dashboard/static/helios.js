@@ -157,6 +157,28 @@
   }
 
   // Render Telemetry Cards (Angel One + Circuit Breaker + 1.50L Active Pool)
+  let riskRadarState = null;
+  let broadMarketRegimeState = null;
+
+  function showToast(msg, type = 'info') {
+    let container = document.getElementById('helios-toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'helios-toast-container';
+      container.style.cssText = 'position:fixed;top:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none;';
+      document.body.appendChild(container);
+    }
+    const toast = document.createElement('div');
+    toast.style.cssText = 'background:#131a29;color:#e2e8f0;border:1px solid rgba(56,189,248,0.3);padding:10px 16px;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,0.5);font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;animation:fadeIn 0.2s ease-out;pointer-events:auto;';
+    toast.innerHTML = msg;
+    container.appendChild(toast);
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      toast.style.transition = 'opacity 0.3s ease-out';
+      setTimeout(() => toast.remove(), 300);
+    }, 4500);
+  }
+
   function renderTelemetry() {
     const angelClient = document.getElementById('tel-angel-client');
     const angelFunds = document.getElementById('tel-angel-funds');
@@ -177,7 +199,15 @@
       angelStatus.textContent = isConnected ? 'Connected 🟢' : 'Standby';
     }
 
-    if (circuitBreakerState) {
+    if (riskRadarState) {
+      if (riskDrawdown) {
+        riskDrawdown.textContent = `Drawdown: ₹${Math.abs(riskRadarState.realized_today_pnl || 0).toFixed(2)} / ₹4,000 max`;
+      }
+      if (riskStatus) {
+        riskStatus.textContent = riskRadarState.badge_text || 'Safe Zone 🟢';
+        riskStatus.style.color = riskRadarState.risk_color || '#22c55e';
+      }
+    } else if (circuitBreakerState) {
       if (riskDrawdown) riskDrawdown.textContent = circuitBreakerState.active ? 'Circuit Active 🔴' : 'Drawdown: ₹0.00';
       if (riskStatus) riskStatus.textContent = circuitBreakerState.active ? 'TRADING HALTED' : 'Safe Zone 🟢';
     }
@@ -209,6 +239,22 @@
         ptsEl.className = `index-pts ${isPos ? '' : 'negative'}`;
       }
     });
+
+    if (broadMarketRegimeState) {
+      const vwapVal = document.getElementById('idx-vwap-regime-val');
+      const vwapBadge = document.getElementById('idx-vwap-badge');
+      const vwapPts = document.getElementById('idx-vwap-pts');
+      if (vwapVal) {
+        vwapVal.textContent = broadMarketRegimeState.status || 'EXPANSION FAVORABLE';
+        vwapVal.style.color = broadMarketRegimeState.badge_color || '#4ade80';
+      }
+      if (vwapBadge) {
+        vwapBadge.textContent = `${Number(broadMarketRegimeState.price || 24850).toFixed(0)} > ${Number(broadMarketRegimeState.vwap || 24812).toFixed(0)}`;
+      }
+      if (vwapPts) {
+        vwapPts.textContent = broadMarketRegimeState.recommendation || 'Full Sizing Active';
+      }
+    }
   }
 
   // 30-Minute News Freeze Shield
@@ -1869,11 +1915,13 @@
   async function loadAllData() {
     try {
       // Single bundle fetch replaces 7 parallel requests
-      const [bundle, angel, pulse, macro] = await Promise.all([
+      const [bundle, angel, pulse, macro, radar, syncState] = await Promise.all([
         fetchJSON('/api/dashboard-bundle'),
         fetchJSON('/api/angel/telemetry'),
         fetchJSON('/api/market-pulse'),
         fetchJSON('/api/macro-pulse'),
+        fetchJSON('/api/risk-radar'),
+        fetchJSON('/api/sync/state'),
       ]);
 
       if (bundle) {
@@ -1884,6 +1932,16 @@
       if (angel)  angelTelemetry  = angel;
       if (pulse)  marketPulseState = pulse;
       if (macro)  macroPulseState  = macro;
+      if (radar && radar.status === 'ok') riskRadarState = radar;
+      if (syncState) {
+        if (syncState.market_regime && Object.keys(syncState.market_regime).length) {
+          broadMarketRegimeState = syncState.market_regime;
+        }
+        if (syncState.archive && syncState.archive.last_archive_dir) {
+          const folderEl = document.getElementById('archive-folder-text');
+          if (folderEl) folderEl.textContent = syncState.archive.last_archive_dir;
+        }
+      }
 
       // Render visible-first (critical path only)
       updateMarketAura();
@@ -1892,6 +1950,7 @@
       renderIndices();
       updateNewsFreezeShield();
       renderCircuitBreakerWidget();
+      renderSessionArchives();
 
       if (marketPulseState?.system_power) {
         updateSystemPowerUI(marketPulseState.system_power.running);
@@ -2169,17 +2228,20 @@
   }
 
   // ── Live Intraday Super-Runner Tracker Renderer ───────────
-  async function renderLiveTracker(forceUpdate = false) {
+  async function renderLiveTracker(forceUpdate = false, directData = null) {
     const tbody = document.getElementById('live-tracker-tbody');
     const tsEl = document.getElementById('tracker-updated-ts');
     const badgeEl = document.getElementById('live-tracker-badge');
     if (!tbody) return;
 
     try {
-      const url = forceUpdate ? '/api/tracking/update' : '/api/tracking';
-      const method = forceUpdate ? 'POST' : 'GET';
-      const res = await fetch(url, { method });
-      const json = await res.json();
+      let json = directData;
+      if (!json) {
+        const url = forceUpdate ? '/api/tracking/update' : '/api/tracking';
+        const method = forceUpdate ? 'POST' : 'GET';
+        const res = await fetch(url, { method });
+        json = await res.json();
+      }
       if (!json || !json.picks) return;
 
       if (tsEl && json.as_of) {
@@ -2224,6 +2286,9 @@
             const tp1Price = Number(p.tp1_price || entry * 1.07);
             const tp2Price = Number(p.tp2_price || entry * 1.102);
 
+            const vpPoc = p.poc || p.volume_profile?.poc;
+            const vpBadge = vpPoc ? `<div style="font-size: 9.5px; color: #a78bfa; font-weight: 500;">POC: ₹${Number(vpPoc).toFixed(1)}</div>` : '';
+
             let stageBadge = '<span class="telemetry-badge" style="background:rgba(56,189,248,0.12);color:#38bdf8;border-color:rgba(56,189,248,0.3);font-size:9.5px;font-weight:700;">🟢 ACTIVE</span>';
             if (p.stage === 'BREAKEVEN_LOCKED' || p.hit_be) {
               stageBadge = '<span class="telemetry-badge" style="background:rgba(245,158,11,0.18);color:#f59e0b;border-color:rgba(245,158,11,0.4);font-size:9.5px;font-weight:700;">🔒 BREAKEVEN (0% RISK)</span>';
@@ -2241,6 +2306,7 @@
                 <td style="padding: 10px 10px; font-weight: 700; color: #fff; font-size: 12px;">
                   <span>${p.symbol}</span>
                   <div style="font-size: 9.5px; color: #8c899a; font-weight: 400;">AIR: <strong style="color:#38bdf8;">${Number(p.air_ratio || 3.4).toFixed(2)}×</strong></div>
+                  ${vpBadge}
                 </td>
                 <td style="padding: 10px 10px; text-align: right; font-family: var(--font-mono); font-weight: 600; color: #e2e0ec;">
                   ₹${entry.toFixed(2)}
@@ -2885,6 +2951,89 @@
     renderBacktestTradeLedger();
   }
 
+  // ── Systematic Trade & Dashboard Session Archives ─────────
+  async function renderSessionArchives() {
+    const tbody = document.getElementById('session-archives-tbody');
+    if (!tbody) return;
+
+    try {
+      const res = await fetch('/api/archive/list');
+      const json = await res.json();
+      if (!json || !json.sessions || !json.sessions.length) {
+        tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;padding:20px;color:#8c899a;">No archived trading sessions found yet. Click "Snapshot Today\'s Session" to create one.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = json.sessions.map(s => {
+        const pnl = Number(s.net_realized_inr || 0);
+        const pnlColor = pnl >= 0 ? '#4ade80' : '#fb7185';
+        const pnlSign = pnl > 0 ? '+' : '';
+
+        return `
+          <tr style="border-bottom: 1px solid rgba(255,255,255,0.04); transition: background 0.15s;" onmouseover="this.style.background='rgba(255,255,255,0.02)'" onmouseout="this.style.background='transparent'">
+            <td style="padding: 10px; font-weight: 700; color: #fff; font-family: var(--font-mono);">
+              <span>${s.date}</span>
+            </td>
+            <td style="padding: 10px; color: #8c899a; font-family: var(--font-mono);">
+              ${s.total_trades} Trades
+            </td>
+            <td style="padding: 10px; font-family: var(--font-mono); font-weight: 700; color: ${pnlColor};">
+              ${pnlSign}₹${pnl.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </td>
+            <td style="padding: 10px; font-size: 11px; color: #8c899a; font-family: var(--font-mono);">
+              ${s.timestamp || s.date}
+            </td>
+            <td style="padding: 10px; text-align: right;">
+              <div style="display: inline-flex; gap: 6px;">
+                <a href="/api/archive/report/${s.date}" target="_blank" class="ai-action-btn" style="padding: 4px 8px; font-size: 10.5px; text-decoration: none; background: rgba(56,189,248,0.12); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3);">
+                  <span>📑</span> Report
+                </a>
+                <a href="/api/archive/download/${s.date}/trades.csv" download class="ai-action-btn" style="padding: 4px 8px; font-size: 10.5px; text-decoration: none;">
+                  <span>📥</span> CSV
+                </a>
+                <a href="/api/archive/download/${s.date}/trades.json" download class="ai-action-btn" style="padding: 4px 8px; font-size: 10.5px; text-decoration: none; background: rgba(255,255,255,0.04); color: #94a3b8;">
+                  <span>📦</span> JSON
+                </a>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    } catch (err) {
+      console.debug('Failed loading archives:', err);
+    }
+  }
+
+  // Window Action Handlers for 1-Click Operations
+  window.downloadTodayCsv = function() {
+    const today = new Date().toISOString().split('T')[0];
+    window.location.href = `/api/archive/download/${today}/trades.csv`;
+  };
+
+  window.viewTodayAuditReport = function() {
+    const today = new Date().toISOString().split('T')[0];
+    window.open(`/api/archive/report/${today}`, '_blank');
+  };
+
+  window.triggerManualArchive = async function() {
+    const btn = document.getElementById('btn-archive-snapshot');
+    if (btn) btn.innerHTML = '<span>⏳</span> Saving...';
+    try {
+      const res = await fetch('/api/archive/snapshot', { method: 'POST' });
+      const json = await res.json();
+      if (json.status === 'success') {
+        const folderEl = document.getElementById('archive-folder-text');
+        if (folderEl) folderEl.textContent = `${json.folder_path}`;
+        renderSessionArchives();
+        showToast(`✅ Session cleanly saved to ${json.folder_path}!`);
+      }
+    } catch (e) {
+      showToast('⚠️ Archival failed: ' + e);
+    } finally {
+      if (btn) btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"></path><polyline points="17 21 17 13 7 13 7 21"></polyline><polyline points="7 3 7 8 15 8"></polyline></svg> <span>Archive Snapshot</span>';
+    }
+  };
+
   // Initialization — fast-path: show static content instantly, fetch data async
   window.addEventListener('DOMContentLoaded', () => {
     // Step 1: Instant render with static/cached data (0ms)
@@ -2897,30 +3046,89 @@
     renderSectorFlow();
     renderPremarketCockpit();
     renderLiveTracker();
+    renderSessionArchives();
 
     // Auto-refresh Live Tracker with visibility change throttling
     let trackerTimer = setInterval(() => {
       if (!document.hidden) renderLiveTracker();
     }, 15000);
 
-    // Real-Time Server-Sent Events (SSE) Live Stream Hook (<100ms push)
+    // Real-Time Server-Sent Events (SSE) Live Stream Hook (Zero-delay push)
     if (window.EventSource) {
       try {
-        const tickSource = new EventSource('/api/stream/ticks');
-        tickSource.onmessage = (event) => {
-          if (!event.data) return;
+        const syncSource = new EventSource('/api/sync/live');
+
+        syncSource.addEventListener('INIT', (event) => {
+          try {
+            const state = JSON.parse(event.data);
+            if (state.tracking && state.tracking.picks) {
+              renderLiveTracker(false, state.tracking);
+            }
+            if (state.risk_radar && Object.keys(state.risk_radar).length) {
+              riskRadarState = state.risk_radar;
+              renderTelemetry();
+            }
+            if (state.market_regime && Object.keys(state.market_regime).length) {
+              broadMarketRegimeState = state.market_regime;
+              renderIndices();
+            }
+            if (state.archive && state.archive.last_archive_dir) {
+              const folderEl = document.getElementById('archive-folder-text');
+              if (folderEl) folderEl.textContent = state.archive.last_archive_dir;
+            }
+          } catch (e) {}
+        });
+
+        syncSource.addEventListener('TICK', (event) => {
           try {
             const data = JSON.parse(event.data);
             if (data && data.picks && !document.hidden) {
-              renderLiveTracker();
+              renderLiveTracker(false, data);
             }
           } catch (e) {}
-        };
-      } catch (sseErr) {}
+        });
+
+        syncSource.addEventListener('RUNNER_UPDATE', (event) => {
+          try {
+            const m = JSON.parse(event.data);
+            if (m && m.symbol) {
+              renderLiveTracker();
+              showToast(`⚡ Runner: ${m.symbol} → ${m.stage} (${m.pnl_pct}%)`);
+            }
+          } catch (e) {}
+        });
+
+        syncSource.addEventListener('ARCHIVE_SAVED', (event) => {
+          try {
+            const arc = JSON.parse(event.data);
+            const folderEl = document.getElementById('archive-folder-text');
+            if (folderEl && arc.folder_path) folderEl.textContent = arc.folder_path;
+            renderSessionArchives();
+            showToast(`📁 Auto-Archived: ${arc.folder_path}`);
+          } catch (e) {}
+        });
+
+        syncSource.addEventListener('CIRCUIT_BREAKER', (event) => {
+          try {
+            const cb = JSON.parse(event.data);
+            showToast(`🛑 Circuit Breaker: ${cb.status}`);
+            loadAllData();
+          } catch (e) {}
+        });
+
+        syncSource.addEventListener('PREMARKET_SCAN', () => {
+          try {
+            renderPremarketCockpit();
+            showToast('⚡ Pre-market scan completed');
+          } catch (e) {}
+        });
+
+      } catch (sseErr) {
+        console.debug('SSE connection init error:', sseErr);
+      }
     }
 
     // Step 2: Start background data fetch (async, non-blocking)
-
     loadAllData();
     startSyncCountdown();
 

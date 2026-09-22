@@ -1547,6 +1547,119 @@ def api_risk_radar():
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
+# ──────────────────────────────────────────────────────────────
+# REAL-TIME SYSTEM & DASHBOARD SYNC GATEWAY (SSE & Consolidated State)
+# ──────────────────────────────────────────────────────────────
+@app.route("/api/sync/live")
+def api_sync_live():
+    """Server-Sent Events (SSE) live gateway pushing real-time events without delay."""
+    from flask import Response
+    from modules.sync_gateway import sync_gateway
+
+    return Response(
+        sync_gateway.sse_stream(timeout_sec=600),
+        mimetype="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+            "Connection": "keep-alive",
+        }
+    )
+
+
+@app.route("/api/sync/state")
+def api_sync_state():
+    """Consolidated in-memory system state snapshot for sub-5ms UI synchronization."""
+    try:
+        from modules.sync_gateway import sync_gateway
+        state = sync_gateway.get_state()
+        return jsonify(state)
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+# ──────────────────────────────────────────────────────────────
+# SYSTEMATIC TRADE & DASHBOARD ARCHIVING GATEWAYS
+# ──────────────────────────────────────────────────────────────
+@app.route("/api/archive/snapshot", methods=["POST", "GET"])
+def api_archive_snapshot():
+    """Trigger systematic archival of today's trades & dashboard state into trade_records/YYYY-MM-DD/."""
+    try:
+        from modules.record_archiver import save_session_archive
+        date_s = request.args.get("date") or (request.get_json(silent=True) or {}).get("date")
+        archive_res = save_session_archive(date_str=date_s, force=True)
+        return jsonify(archive_res)
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/api/archive/list", methods=["GET"])
+def api_archive_list():
+    """List all archived trading sessions with trade counts, P&L, and verified files."""
+    try:
+        from modules.record_archiver import list_archived_sessions
+        archives = list_archived_sessions()
+        return jsonify({"status": "ok", "total": len(archives), "sessions": archives})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/api/archive/view/<date_str>", methods=["GET"])
+def api_archive_view(date_str):
+    """Retrieve full dashboard snapshot JSON for a specific historical session."""
+    import os
+    state_file = os.path.join("trade_records", date_str, "dashboard_state.json")
+    if not os.path.exists(state_file):
+        return jsonify({"status": "not_found", "error": f"No archive found for date {date_str}"}), 404
+    try:
+        with open(state_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return jsonify({"status": "ok", "date": date_str, "data": data})
+    except Exception as e:
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+@app.route("/api/archive/report/<date_str>", methods=["GET"])
+def api_archive_report(date_str):
+    """Serve the self-contained offline HTML audit report for a given date."""
+    import os
+    report_file = os.path.join("trade_records", date_str, "audit_report.html")
+    if not os.path.exists(report_file):
+        try:
+            from modules.record_archiver import save_session_archive
+            save_session_archive(date_str=date_str)
+        except Exception:
+            pass
+
+    if os.path.exists(report_file):
+        from flask import send_file
+        return send_file(os.path.abspath(report_file), mimetype="text/html")
+    return "<h3>No audit report found for session " + date_str + "</h3>", 404
+
+
+@app.route("/api/archive/download/<date_str>/<filename>", methods=["GET"])
+def api_archive_download(date_str, filename):
+    """Download clean trade CSV, JSON, or log files from trade_records/YYYY-MM-DD/."""
+    import os
+    from flask import send_file
+    allowed = ("trades.csv", "trades.json", "dashboard_state.json", "audit_report.html", "system_telemetry.log")
+    if filename not in allowed:
+        return jsonify({"error": "Invalid file request"}), 400
+
+    target_path = os.path.join("trade_records", date_str, filename)
+    if not os.path.exists(target_path):
+        try:
+            from modules.record_archiver import save_session_archive
+            save_session_archive(date_str=date_str)
+        except Exception:
+            pass
+
+    if os.path.exists(target_path):
+        as_attachment = filename.endswith(".csv") or filename.endswith(".json")
+        return send_file(os.path.abspath(target_path), as_attachment=as_attachment)
+    return jsonify({"error": "File not found"}), 404
+
+
 @app.route("/api/learning/patterns", methods=["GET"])
 def api_learning_patterns():
     try:

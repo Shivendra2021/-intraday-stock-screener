@@ -380,6 +380,13 @@ def update_tracking() -> dict:
                 send_breakeven_hit(sym, pnl, be_sl)
             except Exception as exc:
                 logger.debug("Breakeven alert error: %s", exc)
+            try:
+                from modules.sync_gateway import sync_gateway
+                sync_gateway.broadcast_runner_milestone(sym, "BREAKEVEN_LOCKED", price, pnl, "Risk Eliminated (+3.5%)")
+                from modules.record_archiver import auto_archive_trade_event
+                auto_archive_trade_event(sym, data)
+            except Exception:
+                pass
 
         # ── Stage 2: Target 1 Hit (+7.0%): Book 50%, lock trailing SL to +3.5% ─
         tp1 = float(data.get("tp1_price") or entry * (1 + RUNNER_TP1_PCT / 100))
@@ -396,6 +403,13 @@ def update_tracking() -> dict:
                 send_tp1_hit(sym, pnl, data["sl_price"])
             except Exception as exc:
                 logger.debug("TP1 alert error: %s", exc)
+            try:
+                from modules.sync_gateway import sync_gateway
+                sync_gateway.broadcast_runner_milestone(sym, "RUNNER_ACTIVE", price, pnl, "TP1 Hit (+7%), 50% Booked")
+                from modules.record_archiver import auto_archive_trade_event
+                auto_archive_trade_event(sym, data)
+            except Exception:
+                pass
 
         # ── Stop Loss Hit Check ──────────────────────────────────────────────
         if price <= sl and not data.get("hit_sl"):
@@ -414,6 +428,14 @@ def update_tracking() -> dict:
             except Exception as cb_exc:
                 logger.error("Failed to record SL in circuit breaker: %s", cb_exc)
 
+            try:
+                from modules.sync_gateway import sync_gateway
+                sync_gateway.broadcast_runner_milestone(sym, "SL_HIT", price, pnl, "Stop Loss Protected")
+                from modules.record_archiver import auto_archive_trade_event
+                auto_archive_trade_event(sym, data)
+            except Exception:
+                pass
+
         # ── Stage 3: Target 2 Super-Runner Hit (+10.2%) ──────────────────────
         tp2 = float(data.get("tp2_price") or data.get("tp_price") or entry * (1 + RUNNER_TP2_PCT / 100))
         if price >= tp2 and not data.get("hit_tp"):
@@ -431,7 +453,20 @@ def update_tracking() -> dict:
                 _alert_tp_hit(data)
             _persist_pick_outcome(data, "tp_hit")
 
+            try:
+                from modules.sync_gateway import sync_gateway
+                sync_gateway.broadcast_runner_milestone(sym, "CLOSED_PROFIT", price, pnl, "TP2 Super-Runner (+10.2%)")
+                from modules.record_archiver import auto_archive_trade_event
+                auto_archive_trade_event(sym, data)
+            except Exception:
+                pass
+
     _save(tracking)
+    try:
+        from modules.sync_gateway import sync_gateway
+        sync_gateway.broadcast_tick(get_tracking_status())
+    except Exception:
+        pass
     return tracking
 
 

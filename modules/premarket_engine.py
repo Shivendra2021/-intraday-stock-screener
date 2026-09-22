@@ -484,6 +484,12 @@ def run_premarket_screener(top_n: int = 5) -> dict[str, Any]:
     except Exception as exc:
         logger.debug("Failed saving premarket cache: %s", exc)
 
+    try:
+        from modules.sync_gateway import sync_gateway
+        sync_gateway.publish("PREMARKET_SCAN", result)
+    except Exception:
+        pass
+
     return result
 
 
