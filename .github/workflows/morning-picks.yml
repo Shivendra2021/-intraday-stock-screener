@@ -16,10 +16,10 @@ jobs:
     env:
       TZ: Asia/Kolkata
       PYTHONIOENCODING: utf-8
-      TELEGRAM_BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
-      TELEGRAM_CHAT_ID: ${{ secrets.CHAT_ID }}
-      OPENROUTER_GROK_KEY: ${{ secrets.GROK_KEY }}
-      OPENROUTER_GPT_KEY: ${{ secrets.GPT_KEY }}
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || secrets.CHAT_ID }}
+      OPENROUTER_GROK_KEY: ${{ secrets.OPENROUTER_GROK_KEY || secrets.GROK_KEY }}
+      OPENROUTER_GPT_KEY: ${{ secrets.OPENROUTER_GPT_KEY || secrets.GPT_KEY }}
       GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
       GROQ_DEEPSEEK_MODEL: groq/compound-mini
       GROQ_DEEPSEEK_ENABLED: "True"
