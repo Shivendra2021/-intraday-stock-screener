@@ -27,9 +27,9 @@ def main():
         remote_url = f"https://Shivendra2021:{token}@github.com/Shivendra2021/-intraday-stock-screener.git"
         print("Pushing commit 34a6a6c to https://github.com/Shivendra2021/-intraday-stock-screener.git (branch main)...")
         porcelain.push(".", remote_url, "refs/heads/main")
-        print("✅ PUSH SUCCESSFUL! GitHub Actions workflow is now live in the cloud.")
+        print("PUSH SUCCESSFUL! GitHub Actions workflow is now live in the cloud.")
     except Exception as exc:
-        print("❌ Push failed:", exc)
+        print("Push failed:", str(exc).encode('ascii', 'replace').decode('ascii'))
         sys.exit(1)
 
 if __name__ == "__main__":
