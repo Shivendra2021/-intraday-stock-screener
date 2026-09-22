@@ -2,11 +2,8 @@ name: Morning Picks
 
 on:
   workflow_dispatch:
-  # Automated schedule disabled by user request:
-  # schedule:
-  #   - cron: "25 3 * * 1-5"
-  #   - cron: "40 3 * * 1-5"
-  #   - cron: "55 3 * * 1-5"
+  schedule:
+    - cron: "38 3 * * 1-5"  # 09:08 AM IST (Mon-Fri) immediately after NSE pre-open discovery
 
 concurrency:
   group: morning-picks

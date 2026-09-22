@@ -248,12 +248,16 @@ def init_tracking(picks: list[dict]) -> None:
     tracking: dict[str, dict] = {}
 
     for pick in picks:
-        from config import RUNNER_TP1_PCT, RUNNER_TP2_PCT
+        from config import RUNNER_BREAKEVEN_PCT, RUNNER_TP1_PCT, RUNNER_TP2_PCT
         sym    = pick.get("symbol", "")
-        entry  = float(pick.get("entry_price") or pick.get("price") or 0)
-        sl     = float(pick.get("sl_price") or entry * 0.98)
-        tp1    = float(pick.get("tp1_price") or entry * (1 + RUNNER_TP1_PCT / 100))
-        tp2    = float(pick.get("tp2_price") or pick.get("target_price") or entry * (1 + RUNNER_TP2_PCT / 100))
+        entry  = float(pick.get("entry_trigger") or pick.get("entry_price") or pick.get("price") or 0)
+        sl_pct = float(pick.get("ai_sl_pct") or 1.8)
+        sl     = float(pick.get("sl_price") or entry * (1 - sl_pct / 100))
+        tp1_pct = float(pick.get("ai_tp1_pct") or RUNNER_TP1_PCT)
+        tp2_pct = float(pick.get("ai_tp2_pct") or RUNNER_TP2_PCT)
+        tp1    = float(pick.get("tp1_price") or entry * (1 + tp1_pct / 100))
+        tp2    = float(pick.get("tp2_price") or pick.get("target_price") or entry * (1 + tp2_pct / 100))
+        be_p   = round(entry * (1 + RUNNER_BREAKEVEN_PCT / 100), 2)
 
         tracking[sym] = {
             "symbol":       sym,
@@ -265,13 +269,17 @@ def init_tracking(picks: list[dict]) -> None:
             "tp_price":     tp2,
             "tp1_price":    tp1,
             "tp2_price":    tp2,
-            "tp1_pct":      RUNNER_TP1_PCT,
-            "tp2_pct":      RUNNER_TP2_PCT,
-            "upside_pct":   pick.get("upside_pct", RUNNER_TP2_PCT),
+            "be_price":     be_p,
+            "sl_pct":       sl_pct,
+            "tp1_pct":      tp1_pct,
+            "tp2_pct":      tp2_pct,
+            "upside_pct":   pick.get("upside_pct", tp2_pct),
             "risk_reward":  pick.get("risk_reward", "N/A"),
-            "score":        pick.get("score", 0),
-            "rsi":          pick.get("rsi"),
-            "adx":          pick.get("adx"),
+            "score":        pick.get("composite_score") or pick.get("score", 0),
+            "air_ratio":    pick.get("air_ratio"),
+            "vcp_score":    pick.get("vcp_score"),
+            "delivery_score": pick.get("delivery_score") or pick.get("delivery_pct"),
+            "catalyst":     pick.get("catalyst"),
             "patterns":     pick.get("patterns", []),
             "signal_reasons": pick.get("signal_reasons", ""),
             # Live tracking state
@@ -280,6 +288,7 @@ def init_tracking(picks: list[dict]) -> None:
             "current_price": entry,
             "pnl_pct":      0.0,
             "hit_sl":       None,
+            "hit_be":       None,
             "hit_tp":       None,
             "hit_tp1":      None,
             "hit_tp2":      None,
@@ -353,10 +362,28 @@ def update_tracking() -> dict:
         except Exception as exc:
             logger.debug("RL intraday evaluation skipped for %s: %s", sym, exc)
 
-        tp1 = float(data.get("tp1_price") or entry * 1.038)
-        # Check Target 1 hit (+3.8%): Book 50%, lock trailing SL on remaining 50%
+        from config import RUNNER_BREAKEVEN_PCT, RUNNER_TP1_PCT, RUNNER_TP2_PCT, RUNNER_TRAIL_LOCKED_PCT
+
+        # ── Stage 1: Breakeven Lock (+3.5% Gain Achieved) ────────────────────
+        be_trigger = float(data.get("be_price") or entry * (1 + RUNNER_BREAKEVEN_PCT / 100))
+        if price >= be_trigger and not data.get("hit_be") and not data.get("hit_tp1"):
+            data["hit_be"] = now_str
+            data["stage"] = "BREAKEVEN_LOCKED"
+            # Shift stop loss to cover entry + buffer
+            be_sl = round(entry * 1.002, 2)
+            if be_sl > data.get("sl_price", 0):
+                old_sl = data.get("sl_price")
+                data["sl_price"] = be_sl
+                logger.info("Breakeven triggered for %s: Trailed SL %.2f -> %.2f (Risk eliminated)", sym, old_sl, be_sl)
+            try:
+                from modules.alerts import send_breakeven_hit
+                send_breakeven_hit(sym, pnl, be_sl)
+            except Exception as exc:
+                logger.debug("Breakeven alert error: %s", exc)
+
+        # ── Stage 2: Target 1 Hit (+7.0%): Book 50%, lock trailing SL to +3.5% ─
+        tp1 = float(data.get("tp1_price") or entry * (1 + RUNNER_TP1_PCT / 100))
         if price >= tp1 and not data.get("hit_tp1"):
-            from config import RUNNER_TRAIL_LOCKED_PCT
             data["hit_tp1"] = now_str
             data["stage"] = "RUNNER_ACTIVE"
             locked_sl = round(entry * (1 + RUNNER_TRAIL_LOCKED_PCT / 100), 2)
@@ -370,6 +397,7 @@ def update_tracking() -> dict:
             except Exception as exc:
                 logger.debug("TP1 alert error: %s", exc)
 
+        # ── Stop Loss Hit Check ──────────────────────────────────────────────
         if price <= sl and not data.get("hit_sl"):
             data["hit_sl"]     = now_str
             data["status"]     = "SL_HIT"
@@ -386,7 +414,9 @@ def update_tracking() -> dict:
             except Exception as cb_exc:
                 logger.error("Failed to record SL in circuit breaker: %s", cb_exc)
 
-        elif price >= tp and not data.get("hit_tp"):
+        # ── Stage 3: Target 2 Super-Runner Hit (+10.2%) ──────────────────────
+        tp2 = float(data.get("tp2_price") or data.get("tp_price") or entry * (1 + RUNNER_TP2_PCT / 100))
+        if price >= tp2 and not data.get("hit_tp"):
             data["hit_tp"]     = now_str
             data["hit_tp2"]    = now_str
             data["status"]     = "TP_HIT"
@@ -394,7 +424,11 @@ def update_tracking() -> dict:
             data["exit_time"]  = now_str
             data["stage"]      = "CLOSED_PROFIT"
             logger.info("TP2 RUNNER HIT: %s at %.2f (entry %.2f, gain %.2f%%)", sym, price, entry, pnl)
-            _alert_tp_hit(data)
+            try:
+                from modules.alerts import send_tp2_hit
+                send_tp2_hit(sym, pnl)
+            except Exception:
+                _alert_tp_hit(data)
             _persist_pick_outcome(data, "tp_hit")
 
     _save(tracking)

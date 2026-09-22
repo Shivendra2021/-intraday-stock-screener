@@ -143,7 +143,7 @@ def send_raw_alert(text: str, review_with_grok: bool = True, event_type: str = "
 # ─────────────────────────────────────────────────────────────────────────────
 
 def send_picks(picks: list, sentiment: float = 0.0) -> bool:
-    """Send morning top-5 picks message."""
+    """Send morning institutional runner picks message."""
     date_str = now_ist().strftime("%d %b %Y")
 
     if sentiment >= 0.3:
@@ -153,24 +153,55 @@ def send_picks(picks: list, sentiment: float = 0.0) -> bool:
     else:
         sentiment_label = "🔴 Bearish"
 
-    lines = [f"📊 <b>MarketMind Pro — Top {len(picks)} Picks for {date_str}</b>\n"]
+    lines = [
+        f"🏛️ <b>HELIOS INSTITUTIONAL PICKS — {date_str}</b>",
+        f"<i>5-Pillar Microstructure Validation • Super-Runner Portfolio</i>\n",
+        "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    ]
+
     for p in picks:
-        upside = p.get("upside_pct", 0)
-        conf   = p.get("score", p.get("confidence", 0))
-        lines.append(
-            f"{p['rank']}. <b>{p['symbol']}</b> — "
-            f"Entry: ₹{p['entry_price']:.2f} | "
-            f"SL: ₹{p['sl_price']:.2f} | "
-            f"Target: ₹{p['target_price']:.2f} | "
-            f"Upside: {upside:.1f}%"
+        rank = p.get("rank", 1)
+        sym = p.get("symbol", "UNKNOWN")
+        score = p.get("composite_score", p.get("score", p.get("confidence", 0)))
+        entry = p.get("entry_trigger") or p.get("entry_price") or p.get("price", 0)
+        sl_pct = p.get("ai_sl_pct", 1.8)
+        sl_price = p.get("sl_price") or round(entry * (1 - sl_pct / 100), 2)
+        tp1_pct = p.get("ai_tp1_pct", 7.0)
+        tp1_price = round(entry * (1 + tp1_pct / 100), 2)
+        tp2_pct = p.get("ai_tp2_pct", 10.2)
+        tp2_price = round(entry * (1 + tp2_pct / 100), 2)
+        be_price = round(entry * 1.035, 2)
+
+        air = p.get("air_ratio")
+        vcp = p.get("vcp_score")
+        deliv = p.get("delivery_score") or p.get("delivery_pct")
+        cat = p.get("catalyst")
+
+        card = [
+            f"<b>{rank}. {sym}</b> (Score: <b>{score:.1f}/100</b>)",
+        ]
+        if air is not None or vcp is not None:
+            air_str = f"{air:.2f}x" if air else "N/A"
+            vcp_str = f"{vcp:.0f}/100" if vcp else "N/A"
+            card.append(f"   • AIR Imbalance: <b>{air_str}</b> | VCP: <b>{vcp_str}</b>")
+        if deliv is not None:
+            card.append(f"   • Delivery Absorption: <b>{deliv:.1f}%</b>")
+        if cat:
+            card.append(f"   • Catalyst: <i>{cat[:90]}</i>")
+
+        card.append(
+            f"   📈 Entry: <b>₹{entry:.2f}</b> | 🛑 SL: <b>₹{sl_price:.2f} (-{sl_pct:.1f}%)</b>\n"
+            f"   🔒 BE Trail: <b>₹{be_price:.2f} (+3.5%)</b>\n"
+            f"   🎯 TP1 (50% Out): <b>₹{tp1_price:.2f} (+{tp1_pct:.1f}%)</b>\n"
+            f"   🚀 TP2 Runner:    <b>₹{tp2_price:.2f} (+{tp2_pct:.1f}%)</b>\n"
         )
+        lines.append("\n".join(card))
 
-    avg_conf = sum(p.get("score", p.get("confidence", 0)) for p in picks) / max(len(picks), 1)
-    lines.append(f"\nAvg Confidence: {avg_conf:.1f}%")
+    lines.append("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     lines.append(f"Market Sentiment: {sentiment_label}")
-    lines.append("\n⚠️ <i>Research only. Not a trade recommendation.</i>")
+    lines.append("⚠️ <i>Institutional Research Only. Not a trade recommendation.</i>")
 
-    return _send("\n".join(lines))
+    return _send("\n".join(lines), review_with_grok=False, event_type="morning_picks")
 
 
 def send_tp_hit(symbol: str, ret: float) -> bool:
@@ -183,21 +214,55 @@ def send_tp_hit(symbol: str, ret: float) -> bool:
     return _send(text)
 
 
+def send_breakeven_hit(symbol: str, ret: float, entry_price: float = 0.0) -> bool:
+    """Send Breakeven Hit notification (+3.5% achieved: SL moved to entry)."""
+    entry_line = f"• New SL: <b>₹{entry_price:.2f} (Entry Price)</b>\n" if entry_price > 0 else ""
+    text = (
+        f"🔒 <b>BREAKEVEN SECURED: RISK-FREE TRADE</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚡ Stock: <b>{symbol}</b>\n"
+        f"📈 Progress: <b>+{ret:.2f}% achieved (+3.5% Trigger)</b>\n"
+        f"🛡️ Action Taken:\n"
+        f"  • Stop Loss trailed to Entry\n"
+        f"  {entry_line}"
+        f"  • Downside risk is now eliminated (0% loss possible)\n"
+        f"  • Riding momentum toward TP1 (+7.0%)\n\n"
+        f"🎯 <i>House Money Mode: Position is 100% protected.</i>"
+    )
+    return _send(text, review_with_grok=False, event_type="breakeven_hit")
+
+
 def send_tp1_hit(symbol: str, ret: float, new_sl: float = 0.0) -> bool:
-    """Send Target 1 hit notification (50% profit booked, trailing remaining 50%)."""
-    sl_line = f"• Trailing SL on Runner: <b>₹{new_sl:.2f} (+1.80%)</b>\n" if new_sl > 0 else ""
+    """Send Target 1 hit notification (50% profit booked, trailing remaining 50% to +3.5%)."""
+    sl_line = f"• Trailing SL on Runner: <b>₹{new_sl:.2f} (+3.50% profit locked)</b>\n" if new_sl > 0 else ""
     text = (
         f"🎯 <b>TARGET 1 HIT: 50% PROFIT SECURED</b>\n"
         f"━━━━━━━━━━━━━━━━━━━━━\n"
         f"✅ Stock: <b>{symbol}</b>\n"
-        f"📈 Price: <b>+{ret:.2f}% achieved</b>\n"
-        f"💼 Execution:\n"
-        f"  • 50% Quantity: <b>Closed & Locked</b>\n"
-        f"  • Remaining 50%: <b>Riding to TP2 Runner (+7.50%)</b>\n"
-        f"{sl_line}"
-        f"🔒 <i>Trade is permanently green. Letting the winner run!</i>"
+        f"📈 Gain: <b>+{ret:.2f}% achieved (TP1 +7.0% Target)</b>\n"
+        f"💼 Institutional Execution:\n"
+        f"  • 50% Quantity: <b>Closed & Cash Booked</b>\n"
+        f"  • Remaining 50%: <b>Riding to TP2 Super-Runner (+10.2%)</b>\n"
+        f"  {sl_line}\n"
+        f"🚀 <i>Trade is permanently green. Letting the winner run!</i>"
     )
     return _send(text, review_with_grok=False, event_type="tp1_hit")
+
+
+def send_tp2_hit(symbol: str, ret: float) -> bool:
+    """Send Target 2 Super-Runner hit notification (100% target reached)."""
+    text = (
+        f"🚀🔥 <b>SUPER-RUNNER TARGET 2 ACHIEVED (+10.2%)</b>\n"
+        f"━━━━━━━━━━━━━━━━━━━━━\n"
+        f"🏆 Stock: <b>{symbol}</b>\n"
+        f"💰 Final Gain: <b>+{ret:.2f}% achieved</b>\n"
+        f"📊 Execution:\n"
+        f"  • Full Runner Target Reached\n"
+        f"  • Remaining Position Liquidated\n"
+        f"  • Maximum Institutional Alpha Captured\n\n"
+        f"👑 <i>Pillar-Validated Super-Runner Complete!</i>"
+    )
+    return _send(text, review_with_grok=False, event_type="tp2_hit")
 
 
 def send_circuit_breaker_alert(sl_count: int, max_sl: int = 2, loss_pct: float = 0.0) -> bool:

@@ -165,6 +165,16 @@ def extract_winner_features(symbol: str, min_return_pct: float = 7.0) -> dict[st
                 sector = sec
                 break
 
+        # Extract Institutional Pillars: VCP Compression (prior to today) & Delivery Absorption
+        vcp_info = {}
+        deliv_info = {}
+        try:
+            from modules.premarket_engine import detect_vcp_compression, get_delivery_absorption
+            vcp_info = detect_vcp_compression(df.iloc[:-1]) if len(df) > 22 else {}
+            deliv_info = get_delivery_absorption(symbol)
+        except Exception as pillar_exc:
+            logger.debug("Pillar extraction error for %s: %s", symbol, pillar_exc)
+
         feature = {
             "symbol": symbol,
             "date": _today(),
@@ -176,6 +186,13 @@ def extract_winner_features(symbol: str, min_return_pct: float = 7.0) -> dict[st
             "close_price": round(close_price, 4),
             "volume_ratio": round(volume_ratio, 4),
             "gap_pct": round(gap_pct, 4),
+            # Institutional Footprints:
+            "vcp_ratio": round(float(vcp_info.get("vcp_ratio", 1.0)), 2),
+            "vcp_score": round(float(vcp_info.get("vcp_score", 50.0)), 1),
+            "is_vcp": bool(vcp_info.get("is_vcp", False)),
+            "delivery_pct": round(float(deliv_info.get("delivery_pct", 35.0)), 1),
+            "delivery_spike": round(float(deliv_info.get("spike_ratio", 1.0)), 2),
+            "is_float_locked": bool(deliv_info.get("is_float_locked", False)),
             "rsi": round(_rsi(close), 4),
             "adx": round(_adx(high, low, close), 4),
             "ema_alignment": _ema_alignment(close),
@@ -187,6 +204,7 @@ def extract_winner_features(symbol: str, min_return_pct: float = 7.0) -> dict[st
     except Exception as exc:
         logger.debug("Feature extraction failed for %s: %s", symbol, exc)
         return None
+
 
 
 def learn_similarities(features: list[dict[str, Any]], min_support: int = 2) -> list[dict[str, Any]]:
@@ -216,10 +234,13 @@ def learn_similarities(features: list[dict[str, Any]], min_support: int = 2) -> 
             add_rule(key, value, [x for x in features if x.get(key) == value])
 
     numeric_rules = [
+        ("vcp_ratio", "<=", 0.68),
+        ("delivery_pct", ">=", 48.0),
+        ("delivery_spike", ">=", 1.5),
+        ("gap_pct", "between", (0.8, 2.5)),
         ("volume_ratio", ">=", 1.5),
         ("volume_ratio", ">=", 2.0),
         ("gap_pct", ">=", 1.0),
-        ("gap_pct", ">=", 2.0),
         ("rsi", "between", (50, 65)),
         ("rsi", "between", (55, 75)),
         ("adx", ">=", 25),
@@ -228,6 +249,9 @@ def learn_similarities(features: list[dict[str, Any]], min_support: int = 2) -> 
         if op == ">=":
             matched = [x for x in features if float(x.get(key, 0)) >= float(threshold)]
             value = f">={threshold}"
+        elif op == "<=":
+            matched = [x for x in features if float(x.get(key, 999)) <= float(threshold)]
+            value = f"<={threshold}"
         else:
             lo, hi = threshold
             matched = [x for x in features if lo <= float(x.get(key, 0)) <= hi]

@@ -23,6 +23,8 @@ QUANT_MIN_STOP_PCT = 0.5
 QUANT_MAX_SPREAD_PCT = 0.30
 QUANT_QUOTE_MAX_AGE_SECONDS = 90
 QUANT_BAR_MAX_AGE_SECONDS = 120
+QUANT_MIN_CIRCUIT_HEADROOM_PCT = float(os.getenv("QUANT_MIN_CIRCUIT_HEADROOM_PCT", "2.0"))
+AI_DYNAMIC_SL_ENABLED = True
 QUANT_COST_BPS = float(os.getenv("QUANT_COST_BPS", "20"))  # modeled round trip
 QUANT_SLIPPAGE_BPS = float(os.getenv("QUANT_SLIPPAGE_BPS", "5"))  # each fill
 QUANT_MIN_P7 = float(os.getenv("QUANT_MIN_P7", "0.30"))
@@ -84,6 +86,7 @@ UNIVERSE_SCAN_BATCH_SIZE = 125
 # ── Dual Brain Config ─────────────────────────────────────────────────
 DEBATE_REQUIRE_BOTH_AGREE = True
 DEBATE_MAX_ROUNDS = 3
+
 DEBATE_LOG_PATH = "data/dual_brain_debates.json"
 
 # ── Winner Finder Config ────────────────────────────────────────────────
@@ -97,18 +100,19 @@ PATTERNS_FILE = "data/discovered_patterns.json"
 PATTERN_LEARNER_RUN_TIME = "16:00"
 AFTER_MARKET_LEARNING_TIME = os.getenv("AFTER_MARKET_LEARNING_TIME", "15:50")
 
-# ── Pick Selection ─────────────────────────────────────────────────────────────
+# ── Pick Selection & AI Dynamic Risk ──────────────────────────────────────────
 TOP_N_PICKS              = 3
 MIN_SCORE_THRESHOLD      = 55
-MIN_TARGET_MOVE_PCT      = 5.0
-MAX_TARGET_MOVE_PCT      = 8.0
+MIN_TARGET_MOVE_PCT      = 4.0
+MAX_TARGET_MOVE_PCT      = 10.0
 SL_ATR_MULTIPLIER        = 1.5
-MAX_SL_PCT               = 2.0
+MAX_SL_PCT               = 3.0
 MIN_RISK_REWARD          = 2.0
+AI_DYNAMIC_SL_ENABLED    = True
 
-# ── Filters ────────────────────────────────────────────────────────────────────
+# ── Filters (Aligned across engines) ──────────────────────────────────────────
 MIN_VOLUME_FILTER        = 50_000
-MIN_PRICE_FILTER         = 50
+MIN_PRICE_FILTER         = 20.0
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
 DB_PATH                  = "data/history.db"
@@ -116,28 +120,57 @@ DAILY_PICKS_JSON_PATH    = "data/daily_picks_history.json"
 LOG_PATH                 = "logs/bot.log"
 OUTPUT_DIR               = "output/"
 
-# ── Telegram ───────────────────────────────────────────────────────────────────
-TELEGRAM_BOT_TOKEN       = os.getenv("TELEGRAM_BOT_TOKEN", "")
+# # ── Telegram ───────────────────────────────────────────────────────────────────
+TELEGRAM_BOT_TOKEN       = os.getenv("TELEGRAM_BOT_TOKEN", os.getenv("TELEGRAM_TOKEN", ""))
+TELEGRAM_TOKEN           = os.getenv("TELEGRAM_TOKEN", TELEGRAM_BOT_TOKEN)
 TELEGRAM_CHAT_ID         = os.getenv("TELEGRAM_CHAT_ID", "")
 
 # ── Optional Broker ────────────────────────────────────────────────────────────
 DHAN_CLIENT_ID           = os.getenv("DHAN_CLIENT_ID", "")
 DHAN_ACCESS_TOKEN        = os.getenv("DHAN_ACCESS_TOKEN", "")
-DHAN_ENABLED             = os.getenv("DHAN_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 JUGAAD_DATA_ENABLED      = os.getenv("JUGAAD_DATA_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 ZERODHA_API_KEY          = os.getenv("ZERODHA_API_KEY", "")
 ZERODHA_ACCESS_TOKEN     = os.getenv("ZERODHA_ACCESS_TOKEN", "")
+
+# ── Google Gemini AI Engine (Trading Quant V4) ──────────────────────────────────
+GEMINI_API_KEY           = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL             = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+GEMINI_PROJECT_NAME      = os.getenv("GEMINI_PROJECT_NAME", "projects/460086929922")
+GEMINI_PROJECT_NUMBER    = os.getenv("GEMINI_PROJECT_NUMBER", "460086929922")
+GEMINI_AGENT_ENABLED     = os.getenv("GEMINI_AGENT_ENABLED", "True").strip().lower() in ("true", "1", "yes")
+
+# ── Mistral AI Intelligence ────────────────────────────────────────────────────
+MISTRAL_API_KEY          = os.getenv("MISTRAL_API_KEY", "")
+MISTRAL_MODEL            = os.getenv("MISTRAL_MODEL", "open-mistral-7b")
+MISTRAL_BASE_URL         = os.getenv("MISTRAL_BASE_URL", "https://api.mistral.ai/v1/chat/completions")
+
+# ── OpenRouter Multi-Model Gateway ─────────────────────────────────────────────
+OPENROUTER_API_KEY       = os.getenv("OPENROUTER_API_KEY", os.getenv("OPENROUTER_GEMMA_KEY", "")).strip()
+OPENROUTER_BASE_URL      = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1/chat/completions")
+OPENROUTER_MODEL         = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
+OPENROUTER_ENABLED       = os.getenv("OPENROUTER_ENABLED", "True").strip().lower() in ("true", "1", "yes")
+
+# Legacy Grok/xAI compatibility (decommissioned per user instruction)
+GROK_API_KEY             = ""
+XAI_API_KEY              = ""
+XAI_MODEL                = ""
+XAI_BASE_URL             = ""
+XAI_BRAIN_ENABLED        = False
+XAI_BRAIN_REVIEW_ALERTS  = False
+XAI_BRAIN_TIMEOUT_SECONDS = 60
+XAI_BRAIN_MIN_INTERVAL_SECONDS = 0
+XAI_BRAIN_MAX_DAILY_CALLS = 200
 
 # ── AI reviewers — Qwen Max primary, OpenRouter Gemma challenger ──────────────
 DASHSCOPE_API_KEY        = os.getenv("DASHSCOPE_API_KEY", "")
 DASHSCOPE_BASE_URL       = os.getenv("DASHSCOPE_BASE_URL", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions")
 QWEN_MAX_MODEL           = os.getenv("QWEN_MAX_MODEL", "qwen3.7-max")
-OPENROUTER_GEMMA_KEY     = os.getenv("OPENROUTER_GEMMA_KEY", "")
+OPENROUTER_GEMMA_KEY     = os.getenv("OPENROUTER_GEMMA_KEY", OPENROUTER_API_KEY)
 OPENROUTER_GEMMA_MODEL   = os.getenv("OPENROUTER_GEMMA_MODEL", "google/gemma-4-26b-a4b-it:free")
 OPENROUTER_FREE_FALLBACK_MODELS = tuple(
     model.strip() for model in os.getenv(
         "OPENROUTER_FREE_FALLBACK_MODELS",
-        "google/gemma-4-31b-it:free",
+        "google/gemma-4-31b-it:free,qwen/qwen3.8-27b:free,nvidia/nemotron-3.5-lightning:free",
     ).split(",") if model.strip()
 )
 HF_TOKEN                 = os.getenv("HF_TOKEN", "")
@@ -145,10 +178,9 @@ HF_ROUTER_URL            = os.getenv("HF_ROUTER_URL", "https://router.huggingfac
 HF_DAILY_LEARNING_ENABLED = False  # retained only for reading historical status
 
 # Legacy provider settings are retained only to read previous reports.
-OPENROUTER_GROK_KEY      = os.getenv("OPENROUTER_GROK_KEY", "")
-OPENROUTER_GPT_KEY       = os.getenv("OPENROUTER_GPT_KEY", "")
-OPENROUTER_BASE_URL      = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1/chat/completions")
-GROK_MODEL               = os.getenv("GROK_MODEL", "x-ai/grok-3-mini")
+OPENROUTER_GROK_KEY      = ""
+OPENROUTER_GPT_KEY       = ""
+GROK_MODEL               = ""
 GPT_MODEL                = os.getenv("GPT_MODEL", "openai/gpt-4o")
 
 # Groq API (not Grok/xAI). Used as a controlled DeepSeek-R1 reasoning fallback
@@ -158,16 +190,6 @@ GROQ_BASE_URL            = os.getenv("GROQ_BASE_URL", "https://api.groq.com/open
 GROQ_DEEPSEEK_MODEL      = os.getenv("GROQ_DEEPSEEK_MODEL", "qwen/qwen3.6-27b")
 GROQ_DEEPSEEK_ENABLED    = os.getenv("GROQ_DEEPSEEK_ENABLED", "False").strip().lower() in ("true", "1", "yes")
 GROQ_DEEPSEEK_TIMEOUT_SECONDS = int(os.getenv("GROQ_DEEPSEEK_TIMEOUT_SECONDS", "60"))
-
-# Legacy XAI fields (kept for backward compatibility — now point to OpenRouter)
-XAI_API_KEY              = os.getenv("XAI_API_KEY", OPENROUTER_GROK_KEY)
-XAI_MODEL                = os.getenv("XAI_MODEL", GROK_MODEL)
-XAI_BASE_URL             = os.getenv("XAI_BASE_URL", OPENROUTER_BASE_URL)
-XAI_BRAIN_ENABLED        = os.getenv("XAI_BRAIN_ENABLED", "False").strip().lower() in ("true", "1", "yes")
-XAI_BRAIN_REVIEW_ALERTS  = os.getenv("XAI_BRAIN_REVIEW_ALERTS", "False").strip().lower() in ("true", "1", "yes")
-XAI_BRAIN_TIMEOUT_SECONDS = int(os.getenv("XAI_BRAIN_TIMEOUT_SECONDS", "60"))
-XAI_BRAIN_MIN_INTERVAL_SECONDS = int(os.getenv("XAI_BRAIN_MIN_INTERVAL_SECONDS", "0"))
-XAI_BRAIN_MAX_DAILY_CALLS = int(os.getenv("XAI_BRAIN_MAX_DAILY_CALLS", "200"))
 
 # ── News APIs & Real-Time Catalyst Search ────────────────────────────────────
 NEWSAPI_KEY              = os.getenv("NEWSAPI_KEY", "")
@@ -270,10 +292,42 @@ POSTMARKET_DEEP_TIMEOUT_MINUTES = int(os.getenv("POSTMARKET_DEEP_TIMEOUT_MINUTES
 POSTMARKET_DEEP_LEARNING_ENABLED = os.getenv("POSTMARKET_DEEP_LEARNING_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 
 # Heavy-job traffic control. Keeps every core agent enabled, but prevents the
+GROK_DASHBOARD_AGENT_INTERVAL_MINUTES = int(os.getenv("GROK_DASHBOARD_AGENT_INTERVAL_MINUTES", "15"))
+GROK_DASHBOARD_AGENT_AI_INTERVAL_MINUTES = int(os.getenv("GROK_DASHBOARD_AGENT_AI_INTERVAL_MINUTES", "45"))
+
+# Live DB-backed terminal view
+TERMINAL_UPDATER_ENABLED = os.getenv("TERMINAL_UPDATER_ENABLED", "True").strip().lower() in ("true", "1", "yes")
+TERMINAL_UPDATER_INTERVAL_SECONDS = int(os.getenv("TERMINAL_UPDATER_INTERVAL_SECONDS", "60"))
+
+# One-command automation supervisor. This catches up missed work after Windows
+# sleep/restart so scheduled jobs are not silently skipped.
+AUTOMATION_SUPERVISOR_ENABLED = os.getenv("AUTOMATION_SUPERVISOR_ENABLED", "True").strip().lower() in ("true", "1", "yes")
+AUTOMATION_SUPERVISOR_INTERVAL_SECONDS = int(os.getenv("AUTOMATION_SUPERVISOR_INTERVAL_SECONDS", "60"))
+AUTO_LATE_RECOVERY_ENABLED = os.getenv("AUTO_LATE_RECOVERY_ENABLED", "True").strip().lower() in ("true", "1", "yes")
+AUTO_LATE_RECOVERY_END = os.getenv("AUTO_LATE_RECOVERY_END", "14:30")
+POSTMARKET_CATCHUP_END = os.getenv("POSTMARKET_CATCHUP_END", "23:59")
+POSTMARKET_LIGHT_MAX_SYMBOLS = int(os.getenv("POSTMARKET_LIGHT_MAX_SYMBOLS", "450"))
+POSTMARKET_DEEP_TIMEOUT_MINUTES = int(os.getenv("POSTMARKET_DEEP_TIMEOUT_MINUTES", "45"))
+POSTMARKET_DEEP_LEARNING_ENABLED = os.getenv("POSTMARKET_DEEP_LEARNING_ENABLED", "True").strip().lower() in ("true", "1", "yes")
+
+# Heavy-job traffic control. Keeps every core agent enabled, but prevents the
 # expensive background agents from running over each other.
 HEAVY_JOB_LOCK_ENABLED = os.getenv("HEAVY_JOB_LOCK_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 MAX_HEAVY_JOBS_AT_ONCE = int(os.getenv("MAX_HEAVY_JOBS_AT_ONCE", "1"))
 DASHBOARD_AI_BACKGROUND_ONLY = os.getenv("DASHBOARD_AI_BACKGROUND_ONLY", "True").strip().lower() in ("true", "1", "yes")
+
+# ── Ollama Intraday Agent ─────────────────────────────────────────────────────
+OLLAMA_AGENT_ENABLED = os.getenv("OLLAMA_AGENT_ENABLED", "False").strip().lower() in ("true", "1", "yes")
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
+OLLAMA_AGENT_INTERVAL_MINUTES = int(os.getenv("OLLAMA_AGENT_INTERVAL_MINUTES", "20"))
+OLLAMA_AGENT_CHUNK_SIZE = int(os.getenv("OLLAMA_AGENT_CHUNK_SIZE", "80"))
+OLLAMA_AGENT_MAX_SYMBOLS = int(os.getenv("OLLAMA_AGENT_MAX_SYMBOLS", "0"))
+OLLAMA_ROTATING_BATCH_SIZE = int(os.getenv("OLLAMA_ROTATING_BATCH_SIZE", "320"))
+OLLAMA_AGENT_MIN_RETURN_PCT = float(os.getenv("OLLAMA_AGENT_MIN_RETURN_PCT", "7.0"))
+OLLAMA_AGENT_TOP_CANDIDATES = int(os.getenv("OLLAMA_AGENT_TOP_CANDIDATES", "30"))
+OLLAMA_AGENT_NOTIFY_TELEGRAM = os.getenv("OLLAMA_AGENT_NOTIFY_TELEGRAM", "True").strip().lower() in ("true", "1", "yes")
+OLLAMA_AGENT_TIMEOUT_SECONDS = int(os.getenv("OLLAMA_AGENT_TIMEOUT_SECONDS", "300"))
 
 # ── Reinforcement Learning Architecture ───────────────────────────────────────
 # Tier 1: Contextual Multi-Armed Bandit (LinUCB) for morning 20 -> 5 stock selection
@@ -287,7 +341,7 @@ RL_POLICY_FILE = os.getenv("RL_POLICY_FILE", "data/rl_intraday_policy.json")
 RL_BREAKEVEN_TRIGGER_PCT = float(os.getenv("RL_BREAKEVEN_TRIGGER_PCT", "1.5"))
 RL_TIGHTEN_TRIGGER_PCT = float(os.getenv("RL_TIGHTEN_TRIGGER_PCT", "2.8"))
 RL_TAKE_PROFIT_TRIGGER_PCT = float(os.getenv("RL_TAKE_PROFIT_TRIGGER_PCT", "4.2"))
-RL_MAX_SL_PCT = float(os.getenv("RL_MAX_SL_PCT", "2.0"))
+RL_MAX_SL_PCT = float(os.getenv("RL_MAX_SL_PCT", "3.0"))
 
 # ── Institutional Quant & Risk Engine (MT5 Hedge Terminal Port) ───────────────
 RVOL_THRESHOLD_BREAKOUT = float(os.getenv("RVOL_THRESHOLD_BREAKOUT", "1.8"))
@@ -303,10 +357,8 @@ MACRO_EVENTS_TODAY = []  # Can be configured with high-impact events: [{"name": 
 MAX_DAILY_SL_HITS = int(os.getenv("MAX_DAILY_SL_HITS", "2"))
 MAX_DAILY_PORTFOLIO_LOSS_PCT = float(os.getenv("MAX_DAILY_PORTFOLIO_LOSS_PCT", "2.0"))
 
-# ── 2-Stage Runner Target Engine (+7% to +8% Targets) ─────────────────────────
-RUNNER_TP1_PCT = float(os.getenv("RUNNER_TP1_PCT", "3.8"))
-RUNNER_TP2_PCT = float(os.getenv("RUNNER_TP2_PCT", "7.5"))
-RUNNER_TRAIL_LOCKED_PCT = float(os.getenv("RUNNER_TRAIL_LOCKED_PCT", "1.8"))
-
-
-
+# ── 2-Stage Runner Target Engine (+7% to +10% Criteria) ────────────────────────
+RUNNER_BREAKEVEN_PCT = float(os.getenv("RUNNER_BREAKEVEN_PCT", "3.5"))
+RUNNER_TP1_PCT = float(os.getenv("RUNNER_TP1_PCT", "7.0"))
+RUNNER_TP2_PCT = float(os.getenv("RUNNER_TP2_PCT", "10.2"))
+RUNNER_TRAIL_LOCKED_PCT = float(os.getenv("RUNNER_TRAIL_LOCKED_PCT", "3.5"))

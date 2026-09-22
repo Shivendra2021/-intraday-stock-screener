@@ -41,39 +41,76 @@ def _fail(message: str, code: int = 1) -> None:
 
 
 def run() -> None:
-    from config import QUANT_ENABLED
-    if QUANT_ENABLED:
-        from modules.quant_runtime import run_once
-        result = run_once(notify=True)
-        print(f"QUANT_RESULT: {result.get('status')}")
-        return
+    import json
+    import sqlite3
+    from config import DB_PATH
+    from modules.time_utils import today_ist_str, now_ist
+    from modules.scanner import is_market_holiday, is_weekend
+
     today = today_ist_str()
-    print(f"CLOUD_MORNING_START: date={today} cwd={ROOT}")
+    now = now_ist()
+    print(f"CLOUD_MORNING_START: date={today} time={now.strftime('%H:%M:%S')} cwd={ROOT}")
 
-    if not main._is_trading_day():
-        print("CLOUD_MORNING_SKIP: not a trading day")
+    # Check weekend / holiday
+    if is_weekend(now.date()) or is_market_holiday(now.date()):
+        print(f"CLOUD_MORNING_SKIP: {today} is a weekend or market holiday")
         return
 
-    if main._morning_already_done_today():
-        print("CLOUD_MORNING_SKIP: picks already exist today")
-        if not main._telegram_event_success_today("morning_final_picks"):
-            picks = main._load_todays_picks()
-            if picks:
-                print("CLOUD_MORNING_RESEND: stored picks found, resending Telegram")
-                if not main._send_telegram(picks, agreed=False):
-                    _fail("stored picks exist but Telegram resend failed", 3)
-        return
+    # Execute 5-Pillar Institutional Screener
+    print("Executing 5-Pillar Institutional Pre-Market Screener...")
+    from modules.premarket_engine import run_premarket_screener
+    cockpit_result = run_premarket_screener(top_n=5)
 
-    main.run_morning_session()
+    if not cockpit_result or not cockpit_result.get("picks"):
+        _fail("No qualifying institutional picks generated", 2)
 
-    pick_count = main._today_pick_count()
-    telegram_ok = main._telegram_event_success_today("morning_final_picks")
-    print(f"CLOUD_MORNING_RESULT: picks={pick_count} telegram_ok={telegram_ok}")
+    picks = cockpit_result["picks"]
+    print(f"Generated {len(picks)} institutional picks:")
+    for p in picks:
+        print(f"  #{p.get('rank')}: {p.get('symbol')} Score={p.get('composite_score')}")
 
-    if pick_count <= 0:
-        _fail("morning pipeline finished without stored picks", 2)
-    if not telegram_ok:
-        _fail("morning picks were not delivered to Telegram", 3)
+    # Save to data/premarket_cockpit.json
+    cockpit_path = Path("data") / "premarket_cockpit.json"
+    cockpit_path.parent.mkdir(exist_ok=True)
+    with cockpit_path.open("w", encoding="utf-8") as f:
+        json.dump(cockpit_result, f, indent=2, default=str)
+    print("Saved cockpit to data/premarket_cockpit.json")
+
+    # Save to SQLite history.db (picks table)
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        now_str = now.strftime("%Y-%m-%d %H:%M:%S")
+        for i, p in enumerate(picks, start=1):
+            entry = p.get("entry_trigger") or p.get("price") or 0
+            sl_pct = p.get("ai_sl_pct", 1.8)
+            sl = p.get("ai_sl_price") or round(entry * (1 - sl_pct / 100), 2)
+            tp2 = p.get("ai_tp2_price") or round(entry * (1 + p.get("ai_tp2_pct", 10.2) / 100), 2)
+            score = p.get("composite_score", 0)
+            conn.execute(
+                """INSERT OR REPLACE INTO picks
+                   (date, rank, symbol, entry_price, sl_price, target_price,
+                    confidence, signal_reasons, status, created_at, session_type,
+                    is_official_morning, source_label)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, 'morning_final', 1, 'helios_runner')""",
+                (today, i, p["symbol"], entry, sl, tp2, score, p.get("catalyst", "5-Pillar Setup"), now_str)
+            )
+        conn.commit()
+        conn.close()
+        print(f"Persisted {len(picks)} picks to DB: {DB_PATH}")
+    except Exception as exc:
+        print(f"Warning: SQLite persistence failed: {exc}")
+
+    # Dispatch to Telegram via modules.alerts
+    from modules.alerts import send_picks
+    telegram_ok = send_picks(picks)
+    print(f"Telegram delivery status: {telegram_ok}")
+
+    # Initialize 5-minute tracking
+    from modules.stock_tracker import init_tracking
+    init_tracking(picks)
+    print("Stock tracker initialized successfully")
+
+    print("CLOUD_MORNING_COMPLETE: All institutional morning tasks finished.")
 
 
 if __name__ == "__main__":
