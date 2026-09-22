@@ -12,7 +12,7 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-STARTING_CASH = 50000.0
+STARTING_CASH = 150000.0
 
 
 def _now() -> str:
@@ -42,6 +42,15 @@ def ensure_account() -> None:
                VALUES (1, ?, ?, 0, ?)""",
             (STARTING_CASH, STARTING_CASH, _now()),
         )
+        row = conn.execute("SELECT initial_cash, cash_balance, realized_pnl FROM paper_account WHERE id=1").fetchone()
+        if row and float(row["initial_cash"]) == 50000.0:
+            pnl = float(row["realized_pnl"] or 0.0)
+            conn.execute(
+                """UPDATE paper_account
+                   SET initial_cash = ?, cash_balance = ?
+                   WHERE id = 1""",
+                (STARTING_CASH, STARTING_CASH + pnl),
+            )
         conn.commit()
 
 
@@ -100,10 +109,14 @@ def allocate_for_date(date_s: str, max_picks: int = 5) -> dict[str, Any]:
         risk_per_trade = cash * 0.02  # 2% max risk per position
         max_stock_cash = cash * 0.35  # cap individual stock allocation to 35% of total portfolio cash
 
+        from config import SLIPPAGE_DEFAULT_PCT, NSE_STT_INTRADAY_PCT, NSE_EXCHANGE_TURNOVER_PCT, BROKERAGE_PER_ORDER_INR
+
         for pick in picks:
-            entry = float(pick["entry_price"] or 0)
-            if entry <= 0:
+            raw_entry = float(pick["entry_price"] or 0)
+            if raw_entry <= 0:
                 continue
+            # Incorporate execution entry slippage (0.05% market impact)
+            entry = round(raw_entry * (1.0 + SLIPPAGE_DEFAULT_PCT / 100.0), 2)
             remaining_cash = cash - allocated
             if remaining_cash <= 0:
                 break
@@ -224,12 +237,26 @@ def settle_closed_positions(date_s: str | None = None) -> dict[str, Any]:
                 "sl_price": row["pick_sl"],
                 "target_price": row["pick_target"],
             }
+            from config import NSE_STT_INTRADAY_PCT, NSE_EXCHANGE_TURNOVER_PCT, BROKERAGE_PER_ORDER_INR
             exit_price = _exit_price(row, pick)
             qty = float(row["quantity"] or 0)
             invested = float(row["invested_amount"] or 0)
-            proceeds = round(qty * exit_price, 2)
-            pnl = round(proceeds - invested, 2)
-            ret = round((pnl / invested) * 100, 2) if invested else 0.0
+            gross_proceeds = round(qty * exit_price, 2)
+            gross_pnl = round(gross_proceeds - invested, 2)
+
+            # Deduct standard NSE intraday statutory charges + brokerage
+            buy_turnover = invested
+            sell_turnover = gross_proceeds
+            tot_turnover = buy_turnover + sell_turnover
+            stt = round(sell_turnover * (NSE_STT_INTRADAY_PCT / 100.0), 2)
+            exch_turnover = round(tot_turnover * (NSE_EXCHANGE_TURNOVER_PCT / 100.0), 2)
+            brokerage = round(BROKERAGE_PER_ORDER_INR * 2.0, 2)  # Buy + Sell
+            gst = round((brokerage + exch_turnover) * 0.18, 2)
+            total_friction = round(stt + exch_turnover + brokerage + gst, 2)
+
+            net_pnl = round(gross_pnl - total_friction, 2)
+            proceeds = round(invested + net_pnl, 2)
+            ret = round((net_pnl / invested) * 100, 2) if invested else 0.0
             status = str(row["pick_status"] or "eod_closed").lower()
 
             conn.execute(
@@ -238,7 +265,7 @@ def settle_closed_positions(date_s: str | None = None) -> dict[str, Any]:
                 SET status=?, exit_price=?, exit_date=?, realized_pnl=?, return_pct=?, closed_at=?
                 WHERE id=?
                 """,
-                (status, exit_price, row["date"], pnl, ret, _now(), row["id"]),
+                (status, exit_price, row["date"], net_pnl, ret, _now(), row["id"]),
             )
             conn.execute(
                 """
@@ -248,9 +275,9 @@ def settle_closed_positions(date_s: str | None = None) -> dict[str, Any]:
                     updated_at=?
                 WHERE id=1
                 """,
-                (proceeds, pnl, _now()),
+                (proceeds, net_pnl, _now()),
             )
-            settled.append({"symbol": row["symbol"], "status": status, "pnl": pnl, "return_pct": ret})
+            settled.append({"symbol": row["symbol"], "status": status, "gross_pnl": gross_pnl, "friction": total_friction, "net_pnl": net_pnl, "return_pct": ret})
 
         conn.commit()
         if settled:

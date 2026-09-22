@@ -1,0 +1,80 @@
+name: Intraday Tracker
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "*/20 4-9 * * 1-5"  # Every 20 minutes between 09:30 AM and 03:10 PM IST (Mon-Fri)
+
+concurrency:
+  group: intraday-tracker
+  cancel-in-progress: false
+
+jobs:
+  intraday-tracker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TZ: Asia/Kolkata
+      PYTHONIOENCODING: utf-8
+      TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN || secrets.BOT_TOKEN }}
+      TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID || secrets.CHAT_ID }}
+      ANGEL_ENABLED: "True"
+      ANGEL_API_KEY: ${{ secrets.ANGEL_API_KEY }}
+      ANGEL_CLIENT_CODE: ${{ secrets.ANGEL_CLIENT_CODE }}
+      ANGEL_PIN: ${{ secrets.ANGEL_PIN }}
+      ANGEL_TOTP_SECRET: ${{ secrets.ANGEL_TOTP_SECRET }}
+      OPENROUTER_GROK_KEY: ${{ secrets.OPENROUTER_GROK_KEY || secrets.GROK_KEY }}
+      OPENROUTER_GPT_KEY: ${{ secrets.OPENROUTER_GPT_KEY || secrets.GPT_KEY }}
+      GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+      BSE_UNIVERSE_ENABLED: "False"
+      GROK_DASHBOARD_AGENT_ENABLED: "False"
+      INTRADAY_PATTERN_AGENT_ENABLED: "False"
+      OLLAMA_AGENT_ENABLED: "False"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore cloud data cache
+        id: restore-data
+        uses: actions/cache/restore@v4
+        with:
+          path: data
+          key: stock-analyser-data-${{ github.ref_name }}-${{ github.run_id }}
+          restore-keys: |
+            stock-analyser-data-${{ github.ref_name }}-
+            stock-analyser-data-
+
+      - name: Ensure runtime folders
+        run: |
+          mkdir -p data logs output
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run cloud tracker
+        run: python tools/run_cloud_tracker.py
+
+      - name: Save cloud data cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data
+          key: stock-analyser-data-${{ github.ref_name }}-${{ github.run_id }}
+
+      - name: Upload runtime data artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tracker-runtime-data-${{ github.run_id }}
+          path: |
+            data
+            logs
+          retention-days: 7

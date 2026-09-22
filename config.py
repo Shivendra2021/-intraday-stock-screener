@@ -362,3 +362,10 @@ RUNNER_BREAKEVEN_PCT = float(os.getenv("RUNNER_BREAKEVEN_PCT", "3.5"))
 RUNNER_TP1_PCT = float(os.getenv("RUNNER_TP1_PCT", "7.0"))
 RUNNER_TP2_PCT = float(os.getenv("RUNNER_TP2_PCT", "10.2"))
 RUNNER_TRAIL_LOCKED_PCT = float(os.getenv("RUNNER_TRAIL_LOCKED_PCT", "3.5"))
+
+# ── Execution Slippage & Regulatory Friction Modeling ────────────────────────
+SLIPPAGE_DEFAULT_PCT = float(os.getenv("SLIPPAGE_DEFAULT_PCT", "0.05"))      # 0.05% market impact on breakout entry
+NSE_STT_INTRADAY_PCT = float(os.getenv("NSE_STT_INTRADAY_PCT", "0.025"))    # 0.025% Securities Transaction Tax on sell
+NSE_EXCHANGE_TURNOVER_PCT = float(os.getenv("NSE_EXCHANGE_TURNOVER_PCT", "0.00325")) # NSE turnover charges
+BROKERAGE_PER_ORDER_INR = float(os.getenv("BROKERAGE_PER_ORDER_INR", "20.0"))         # Standard flat brokerage
+

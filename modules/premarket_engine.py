@@ -128,7 +128,20 @@ def compute_auction_imbalance(
     Computes Auction Imbalance Ratio (AIR) from the 09:00-09:08 pre-open order book.
     AIR = Total Unmatched Buy Orders / Total Unmatched Sell Orders
     """
-    # Deterministic simulation if live NSE pre-open feed is closed (off-market/weekend)
+    # 1. Attempt live Level-2 depth from Angel One SmartAPI pre-open feed
+    if unmatched_buy_qty is None or unmatched_sell_qty is None:
+        try:
+            from modules.angel_data import get_live_angel_depth
+            depth_map = get_live_angel_depth([symbol])
+            if symbol in depth_map and depth_map[symbol].get("tot_buy_qty", 0) > 0:
+                unmatched_buy_qty = float(depth_map[symbol]["tot_buy_qty"])
+                unmatched_sell_qty = float(depth_map[symbol]["tot_sell_qty"])
+                logger.info("Live Angel One pre-open depth for %s: buy=%.0f, sell=%.0f (AIR=%.2f)",
+                            symbol, unmatched_buy_qty, unmatched_sell_qty, depth_map[symbol].get("air_ratio", 1.0))
+        except Exception as exc:
+            logger.debug("Angel live depth fetch skipped for %s: %s", symbol, exc)
+
+    # 2. Deterministic simulation fallback if live feed is closed/offline (e.g. night/weekend testing)
     if unmatched_buy_qty is None or unmatched_sell_qty is None:
         seed = sum(ord(c) for c in symbol) % 50
         base_buy = 45000 + (seed * 1200)

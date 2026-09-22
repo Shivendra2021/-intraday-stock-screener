@@ -150,8 +150,14 @@ class AngelDataProvider:
                 continue
             depth = item.get("depth") or {}
             buy, sell = depth.get("buy") or [], depth.get("sell") or []
+            tot_buy = _number(item.get("totBuyQnt")) or sum((_number(b.get("quantity")) or 0) for b in buy)
+            tot_sell = _number(item.get("totSellQnt")) or sum((_number(s.get("quantity")) or 0) for s in sell)
             quote = {"price": _number(item.get("ltp")), "bid": _number(buy[0].get("price")) if buy else None,
                      "ask": _number(sell[0].get("price")) if sell else None,
+                     "tot_buy_qty": tot_buy,
+                     "tot_sell_qty": tot_sell,
+                     "depth_buy": buy[:5],
+                     "depth_sell": sell[:5],
                      "upper": _number(item.get("upperCircuit")), "lower": _number(item.get("lowerCircuit")),
                      "ts": _timestamp(item.get("exchTradeTime") or item.get("exchFeedTime")),
                      "source": "angel_one", "series": "EQ", "token": meta["token"]}
@@ -161,6 +167,30 @@ class AngelDataProvider:
                      quote_requested=len(tokens), quote_verified=len(output),
                      missing_symbols=[symbol for symbol in symbols if symbol not in output])
         return output
+
+    def get_preopen_auction_depth(self, symbols: list[str]) -> dict[str, dict]:
+        """Fetch Level-2 pre-open order book depth for calculating Auction Imbalance Ratio (AIR)."""
+        quotes = self.full_quotes(symbols)
+        result = {}
+        for sym, q in quotes.items():
+            tot_buy = float(q.get("tot_buy_qty") or 0.0)
+            tot_sell = max(1.0, float(q.get("tot_sell_qty") or 1.0))
+            air = round(tot_buy / tot_sell, 2)
+            bid = q.get("bid")
+            ask = q.get("ask")
+            spread_pct = 0.0
+            if bid and ask and bid > 0:
+                spread_pct = round(((ask - bid) / bid) * 100, 3)
+            result[sym] = {
+                "tot_buy_qty": tot_buy,
+                "tot_sell_qty": tot_sell,
+                "air_ratio": air,
+                "bid": bid,
+                "ask": ask,
+                "spread_pct": spread_pct,
+                "source": "angel_one_live"
+            }
+        return result
 
     def quote(self, symbol):
         return self.full_quotes([symbol]).get(symbol)
@@ -201,3 +231,16 @@ def _format_date(value, interval, end):
     value = pd.Timestamp(value).date()
     clock = "15:30" if end else "09:15"
     return f"{value} {clock}" if interval == "5m" else f"{value} 00:00"
+
+
+def get_live_angel_depth(symbols: list[str]) -> dict[str, dict]:
+    """Module-level convenience helper to get live pre-open Level-2 depth if configured."""
+    try:
+        from modules.quant_store import QuantStore
+        provider = AngelDataProvider(QuantStore())
+        if provider.configured() and provider.authenticate():
+            return provider.get_preopen_auction_depth(symbols)
+    except Exception as exc:
+        LOG.debug("Angel live depth fetch error: %s", exc)
+    return {}
+
