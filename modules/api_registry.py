@@ -19,6 +19,16 @@ from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
+# Ensure project root .env is loaded
+try:
+    from dotenv import load_dotenv
+    _project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    _env_file = os.path.join(_project_root, ".env")
+    if os.path.exists(_env_file):
+        load_dotenv(_env_file, override=False)
+except Exception:
+    pass
+
 DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
 USAGE_FILE = os.path.join(DATA_DIR, "api_usage_stats.json")
 
@@ -141,9 +151,64 @@ def discover_all_apis() -> List[Dict[str, Any]]:
         except Exception:
             pass
 
+    # 1. Google Gemini (Trading Quant V4) — Primary Brain
+    gemini_key = os.getenv("GEMINI_API_KEY", "").strip()
+    gemini_model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
+    gemini_used = get_api_usage("google_gemini") + (reviewer_used if gemini_key else 0)
+    add_api(
+        api_id="google_gemini",
+        name="Google Gemini (Trading Quant V4)",
+        short_name="Gemini 3.6 Flash",
+        category="AI Reasoning & Supervision",
+        model=f"{gemini_model} (Project: 460086929922)",
+        limit=1500,
+        used=gemini_used,
+        unit="calls/day",
+        status="Active" if gemini_key else "Missing",
+        status_color="#10b981" if gemini_key else "#ef4444",
+        icon="fa-wand-magic-sparkles",
+    )
+
+    # 2. Mistral AI Engine — High Precision Market Intelligence
+    mistral_key = os.getenv("MISTRAL_API_KEY", "").strip()
+    mistral_model = os.getenv("MISTRAL_MODEL", "open-mistral-7b")
+    mistral_used = get_api_usage("mistral_ai")
+    add_api(
+        api_id="mistral_ai",
+        name="Mistral AI Intelligence",
+        short_name="Mistral AI",
+        category="AI Market Intelligence",
+        model=mistral_model,
+        limit=500,
+        used=mistral_used,
+        unit="calls/day",
+        status="Active" if mistral_key else "Missing",
+        status_color="#f59e0b" if mistral_key else "#ef4444",
+        icon="fa-wind",
+    )
+
+    # 3. OpenRouter Multi-Model Gateway
+    openrouter_key = os.getenv("OPENROUTER_API_KEY", os.getenv("OPENROUTER_GEMMA_KEY", "")).strip()
+    openrouter_model = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
+    openrouter_used = get_api_usage("openrouter_engine")
+    add_api(
+        api_id="openrouter_engine",
+        name="OpenRouter Router Gateway",
+        short_name="OpenRouter",
+        category="AI Router & Reasoning",
+        model=openrouter_model,
+        limit=200,
+        used=openrouter_used,
+        unit="calls/day",
+        status="Active" if openrouter_key else "Missing",
+        status_color="#38bdf8" if openrouter_key else "#ef4444",
+        icon="fa-network-wired",
+    )
+
+    # 4. V3 AI reviewers: DashScope Qwen and OpenRouter Gemma fallback
     add_api(
         api_id="dashscope_qwen",
-        name="DashScope Qwen Max (Primary Reviewer)",
+        name="DashScope Qwen Max (Reviewer)",
         short_name="Qwen Max",
         category="AI Reasoning & Brain Review",
         model=os.getenv("QWEN_MAX_MODEL", "qwen3.7-max"),
@@ -152,16 +217,15 @@ def discover_all_apis() -> List[Dict[str, Any]]:
         unit="calls/day",
         status="Configured" if os.getenv("DASHSCOPE_API_KEY", "").strip() else "Key unavailable",
         status_color="#f59e0b" if os.getenv("DASHSCOPE_API_KEY", "").strip() else "#ef4444",
-        icon="fa-brain",
+        icon="fa-microchip",
     )
 
-    # 2. Independent challenger, only used after the Qwen primary review.
     add_api(
         api_id="openrouter_gemma",
-        name="OpenRouter Gemma (Independent Challenger)",
-        short_name="Gemma 4B",
+        name="OpenRouter Gemma (Challenger)",
+        short_name="Gemma Pool",
         category="AI Review Fallback",
-        model=os.getenv("OPENROUTER_GEMMA_MODEL", "google/gemma-3-4b-it"),
+        model=os.getenv("OPENROUTER_GEMMA_MODEL", "google/gemma-4-26b-a4b-it:free"),
         limit=200,
         used=reviewer_used,
         unit="calls/day",
@@ -301,24 +365,7 @@ def discover_all_apis() -> List[Dict[str, Any]]:
         icon="fa-bolt",
     )
 
-    # 10. Ollama Local LLM (if enabled)
-    ollama_enabled = os.getenv("OLLAMA_AGENT_ENABLED", "False").lower() in ("true", "1", "yes")
-    if ollama_enabled:
-        add_api(
-            api_id="ollama_local",
-            name="Ollama Local LLM Agent",
-            short_name="Ollama Local",
-            category="Local AI Scanner",
-            model="qwen2.5:7b-instruct",
-            limit=500,
-            used=get_api_usage("ollama_local"),
-            unit="calls/day",
-            status="Active",
-            status_color="#60a5fa",
-            icon="fa-robot",
-        )
-
-    # 11. SerpApi Google News Catalyst Engine (NEW)
+    # 10. SerpApi Google News Catalyst Engine (NEW)
     try:
         from config import SERPAPI_KEY
         serpapi_key = (SERPAPI_KEY or "").strip()
@@ -340,7 +387,7 @@ def discover_all_apis() -> List[Dict[str, Any]]:
             icon="fa-bolt",
         )
 
-    # 12. Tavily Search API (if configured)
+    # 11. Tavily Search API (if configured)
     try:
         from config import TAVILY_API_KEY
         tavily_key = (TAVILY_API_KEY or "").strip()
@@ -361,6 +408,7 @@ def discover_all_apis() -> List[Dict[str, Any]]:
             status_color="#38bdf8",
             icon="fa-magnifying-glass",
         )
+
 
     # 13. Finnhub Global Macro & Economic Intelligence (NEW)
     try:
@@ -430,7 +478,7 @@ def discover_all_apis() -> List[Dict[str, Any]]:
 
     # 16. GENERIC DYNAMIC AUTO-DISCOVERY:
     # Automatically scan for ANY new API keys or tokens added to environment or .env
-    known_prefixes = ("TELEGRAM_", "GROQ_", "OPENROUTER_", "XAI_", "THENEWSAPI_", "NEWSAPI_", "ZERODHA_", "DHAN_", "SERPAPI_", "TAVILY_", "FINNHUB_", "FRED_", "TWELVE_DATA_")
+    known_prefixes = ("TELEGRAM_", "GROQ_", "OPENROUTER_", "XAI_", "GROK_", "GEMINI_", "MISTRAL_", "THENEWSAPI_", "NEWSAPI_", "ZERODHA_", "DHAN_", "SERPAPI_", "TAVILY_", "FINNHUB_", "FRED_", "TWELVE_DATA_")
     for env_var, env_val in os.environ.items():
         if not env_val or len(env_val.strip()) < 3:
             continue

@@ -277,6 +277,9 @@ def cycle(store=None, service=None, now=None, notify=False, refresh=True):
         with store.connect() as c:
             losses = c.execute("SELECT t.value FROM signals s JOIN outcomes t ON s.id=t.observation_id WHERE s.date=? AND t.resolved=1", (today,)).fetchall()
         loss_count = sum((json.loads(r[0]).get("return_pct") or 0) < 0 for r in losses)
+        from modules.circuit_breaker import is_circuit_breaker_active
+        cb_active = is_circuit_breaker_active()
+        halt_trading = cb_active or (loss_count >= 2)
         from modules.quant_review import review as review_candidate
         watch_candidates, quote_failures = [], 0
         market_context = store.get("dashboard_market", {})
@@ -293,8 +296,8 @@ def cycle(store=None, service=None, now=None, notify=False, refresh=True):
                 reason = "insufficient_model_edge"
             elif len(used) >= QUANT_MAX_PICKS:
                 reason = "qualified_slots_full"
-            elif loss_count >= 2:
-                reason = "daily_loss_guard"
+            elif halt_trading:
+                reason = "circuit_breaker_halt" if cb_active else "daily_loss_guard"
             else:
                 quote = service.quote(row["symbol"])
                 checked_now = now_ist() if refresh else now
@@ -323,8 +326,8 @@ def cycle(store=None, service=None, now=None, notify=False, refresh=True):
         status = "monitoring" if model else ("shadow_evaluation" if shadow else "backfilling")
         if not in_window:
             status = "watchlist_only" if now.time() < start else "entry_window_closed"
-        if loss_count >= 2:
-            status = "daily_loss_guard"
+        if halt_trading:
+            status = "circuit_breaker_halt" if cb_active else "daily_loss_guard"
         if in_window and model and ranked and not used and quote_failures:
             status = "live_quote_unavailable"
         result = {"status": status, "date": today, "updated_at": now.isoformat(), "model_id": model["id"] if model else None,

@@ -2299,9 +2299,10 @@
           }).join('');
 
           // 4th Card: Overall System Accuracy + API Usage & Limits
-          const grokUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'openrouter_grok') || {used: 0, limit: 0, pct: 0.0}) : {used: 0, limit: 0, pct: 0.0};
-          const groqUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'groq_deepseek') || {used: 0, limit: 0, pct: 0.0}) : {used: 0, limit: 0, pct: 0.0};
-          const newsUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'thenewsapi') || {used: 0, limit: 0, pct: 0.0}) : {used: 0, limit: 0, pct: 0.0};
+          const geminiUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'google_gemini') || {used: 0, limit: 1500, pct: 0.0}) : {used: 0, limit: 1500, pct: 0.0};
+          const mistralUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'mistral_ai') || {used: 0, limit: 500, pct: 0.0}) : {used: 0, limit: 500, pct: 0.0};
+          const openrouterUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'openrouter_engine' || a.id === 'openrouter_gemma') || {used: 0, limit: 200, pct: 0.0}) : {used: 0, limit: 200, pct: 0.0};
+          const newsUsage = apiLimitsData ? (apiLimitsData.apis.find(a => a.id === 'thenewsapi') || {used: 0, limit: 50, pct: 0.0}) : {used: 0, limit: 50, pct: 0.0};
 
           const accuracyCardHtml = `
             <div class="index-card" style="border-color: rgba(16, 185, 129, 0.35); background: linear-gradient(135deg, rgba(16, 185, 129, 0.06), rgba(12, 14, 24, 0.8));">
@@ -2329,29 +2330,38 @@
               <!-- Real-time API Quota & Usage Meter Embedded in Accuracy Card -->
               <div class="accuracy-api-bars">
                 <div class="accuracy-api-row">
-                  <span class="accuracy-api-info"><i class="fa-solid fa-brain" style="color: #a855f7;"></i> xAI Grok-3 Mini:</span>
+                  <span class="accuracy-api-info"><i class="fa-solid fa-wand-magic-sparkles" style="color: #10b981;"></i> Gemini 3.6 Flash:</span>
                   <div class="accuracy-api-usage">
-                    <span style="color: #ffffff;">${grokUsage.used} / ${grokUsage.limit}</span>
+                    <span style="color: #ffffff;">${geminiUsage.used} / ${geminiUsage.limit}</span>
                     <div class="accuracy-api-bar-track">
-                      <div class="accuracy-api-bar-fill" style="width: ${Math.min(100, Math.max(8, grokUsage.pct))}%; background: #a855f7;"></div>
+                      <div class="accuracy-api-bar-fill" style="width: ${Math.min(100, Math.max(6, geminiUsage.pct))}%; background: #10b981;"></div>
                     </div>
                   </div>
                 </div>
                 <div class="accuracy-api-row">
-                  <span class="accuracy-api-info"><i class="fa-solid fa-microchip" style="color: #10b981;"></i> Groq DeepSeek:</span>
+                  <span class="accuracy-api-info"><i class="fa-solid fa-wind" style="color: #f59e0b;"></i> Mistral AI:</span>
                   <div class="accuracy-api-usage">
-                    <span style="color: #ffffff;">${groqUsage.used} / ${groqUsage.limit}</span>
+                    <span style="color: #ffffff;">${mistralUsage.used} / ${mistralUsage.limit}</span>
                     <div class="accuracy-api-bar-track">
-                      <div class="accuracy-api-bar-fill" style="width: ${Math.min(100, Math.max(6, groqUsage.pct))}%; background: #10b981;"></div>
+                      <div class="accuracy-api-bar-fill" style="width: ${Math.min(100, Math.max(6, mistralUsage.pct))}%; background: #f59e0b;"></div>
                     </div>
                   </div>
                 </div>
                 <div class="accuracy-api-row">
-                  <span class="accuracy-api-info"><i class="fa-solid fa-newspaper" style="color: #38bdf8;"></i> TheNewsAPI:</span>
+                  <span class="accuracy-api-info"><i class="fa-solid fa-network-wired" style="color: #38bdf8;"></i> OpenRouter Router:</span>
+                  <div class="accuracy-api-usage">
+                    <span style="color: #ffffff;">${openrouterUsage.used} / ${openrouterUsage.limit}</span>
+                    <div class="accuracy-api-bar-track">
+                      <div class="accuracy-api-bar-fill" style="width: ${Math.min(100, Math.max(6, openrouterUsage.pct))}%; background: #38bdf8;"></div>
+                    </div>
+                  </div>
+                </div>
+                <div class="accuracy-api-row">
+                  <span class="accuracy-api-info"><i class="fa-solid fa-newspaper" style="color: #a855f7;"></i> TheNewsAPI:</span>
                   <div class="accuracy-api-usage">
                     <span style="color: #ffffff;">${newsUsage.used} / ${newsUsage.limit}</span>
                     <div class="accuracy-api-bar-track">
-                      <div class="accuracy-api-bar-fill" style="width: ${Math.min(100, Math.max(8, newsUsage.pct))}%; background: #38bdf8;"></div>
+                      <div class="accuracy-api-bar-fill" style="width: ${Math.min(100, Math.max(8, newsUsage.pct))}%; background: #a855f7;"></div>
                     </div>
                   </div>
                 </div>

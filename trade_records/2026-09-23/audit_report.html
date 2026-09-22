@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Daily Trade & System Audit — 2026-09-23</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: #0b0f19;
+      color: #e2e8f0;
+      padding: 32px 24px;
+      line-height: 1.5;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 24px;
+      border-bottom: 1px solid #1e293b;
+      margin-bottom: 24px;
+    }
+    .header h1 {
+      font-size: 24px;
+      font-weight: 800;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .header-sub {
+      color: #94a3b8;
+      font-size: 13px;
+      margin-top: 4px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .kpi-card {
+      background: #131a29;
+      border: 1px solid #1e293b;
+      border-radius: 10px;
+      padding: 16px 20px;
+    }
+    .kpi-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .kpi-value {
+      font-size: 24px;
+      font-weight: 800;
+      color: #fff;
+      margin-top: 6px;
+      font-family: monospace;
+    }
+    .kpi-sub {
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 4px;
+    }
+    .section-card {
+      background: #131a29;
+      border: 1px solid #1e293b;
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .section-title {
+      font-size: 16px;
+      font-weight: 700;
+      color: #fff;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    th {
+      font-size: 11px;
+      font-weight: 700;
+      color: #94a3b8;
+      text-transform: uppercase;
+      padding: 12px;
+      border-bottom: 1px solid #1e293b;
+      background: #0f172a;
+    }
+    td {
+      padding: 12px;
+      font-size: 12.5px;
+      border-bottom: 1px solid #1e293b;
+    }
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .footer {
+      margin-top: 32px;
+      text-align: center;
+      font-size: 11px;
+      color: #64748b;
+      border-top: 1px solid #1e293b;
+      padding-top: 16px;
+    }
+    @media print {
+      body { background: #fff; color: #000; padding: 0; }
+      .kpi-card, .section-card { border: 1px solid #ccc; background: #fff; }
+      .header h1, .kpi-value, .section-title { color: #000; }
+      th { background: #eee; color: #000; }
+      td { color: #000; border-bottom: 1px solid #ddd; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div>
+        <h1><span>⚡</span> Arin Cockpit — Institutional Trade Audit</h1>
+        <div class="header-sub">Daily Execution Ledger, Risk Telemetry & Runner Trajectory Report • Session: <strong>2026-09-23</strong></div>
+      </div>
+      <div>
+        <span class="badge" style="background: rgba(56,189,248,0.15); color: #38bdf8; border: 1px solid rgba(56,189,248,0.3);">
+          AUDIT VERIFIED 🛡️
+        </span>
+      </div>
+    </div>
+
+    <!-- KPI Grid -->
+    <div class="kpi-grid">
+      <div class="kpi-card">
+        <div class="kpi-label">Net Realized P&L</div>
+        <div class="kpi-value" style="color: #ef4444;">₹-120,489.25</div>
+        <div class="kpi-sub">5 Positions Resolved</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Win Rate Accuracy</div>
+        <div class="kpi-value" style="color: #38bdf8;">20.0%</div>
+        <div class="kpi-sub">1 Wins / 4 Losses</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Hard Stop Buffer</div>
+        <div class="kpi-value" style="color: #22c55e;">₹-116,489.25</div>
+        <div class="kpi-sub">Daily Circuit Limit: -₹4,000.00</div>
+      </div>
+      <div class="kpi-card">
+        <div class="kpi-label">Market Regime (VWAP)</div>
+        <div class="kpi-value" style="color: #4ade80; font-size: 18px;">EXPANSION_FAVORABLE</div>
+        <div class="kpi-sub">NIFTY 24850.0 vs VWAP 24812.7</div>
+      </div>
+    </div>
+
+    <!-- Trade Ledger Section -->
+    <div class="section-card">
+      <div class="section-title">
+        <span>📊</span> Verified Super-Runner Executions
+      </div>
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Symbol & AIR</th>
+              <th>Entry</th>
+              <th>SL</th>
+              <th>Breakeven</th>
+              <th>TP1 (+7%)</th>
+              <th>TP2 (+10.2%)</th>
+              <th>P&L %</th>
+              <th>Realized P&L</th>
+              <th>Runner Milestone</th>
+            </tr>
+          </thead>
+          <tbody>
+            
+        <tr>
+          <td><strong>#1</strong></td>
+          <td><strong style="color: #fff; font-size: 13px;">JYOTHYLAB</strong><br><small style="color: #94a3b8;">AIR: 3.47×</small></td>
+          <td style="font-family: monospace;">₹2463.25</td>
+          <td style="font-family: monospace; color: #ef4444;">₹2415.22</td>
+          <td style="font-family: monospace; color: #f59e0b;">₹2549.46</td>
+          <td style="font-family: monospace; color: #38bdf8;">₹2645.53</td>
+          <td style="font-family: monospace; color: #22c55e;">₹2714.50</td>
+          <td style="font-family: monospace; font-weight: bold; color: #ef4444; font-size: 13px;">-92.13%</td>
+          <td style="font-family: monospace; font-weight: bold; color: #ef4444;">₹-34040.88</td>
+          <td><span style="display:inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; background: #ef444422; color: #ef4444; border: 1px solid #ef444444;">🛑 SL HIT (CAP PROTECTED)</span></td>
+        </tr>
+        
+        <tr>
+          <td><strong>#2</strong></td>
+          <td><strong style="color: #fff; font-size: 13px;">HUDCO</strong><br><small style="color: #94a3b8;">AIR: 3.3×</small></td>
+          <td style="font-family: monospace;">₹3604.93</td>
+          <td style="font-family: monospace; color: #ef4444;">₹3534.63</td>
+          <td style="font-family: monospace; color: #f59e0b;">₹3731.10</td>
+          <td style="font-family: monospace; color: #38bdf8;">₹3871.69</td>
+          <td style="font-family: monospace; color: #22c55e;">₹3972.63</td>
+          <td style="font-family: monospace; font-weight: bold; color: #ef4444; font-size: 13px;">-95.22%</td>
+          <td style="font-family: monospace; font-weight: bold; color: #ef4444;">₹-51489.22</td>
+          <td><span style="display:inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; background: #ef444422; color: #ef4444; border: 1px solid #ef444444;">🛑 SL HIT (CAP PROTECTED)</span></td>
+        </tr>
+        
+        <tr>
+          <td><strong>#3</strong></td>
+          <td><strong style="color: #fff; font-size: 13px;">GLENMARK</strong><br><small style="color: #94a3b8;">AIR: 3.46×</small></td>
+          <td style="font-family: monospace;">₹893.44</td>
+          <td style="font-family: monospace; color: #ef4444;">₹924.71</td>
+          <td style="font-family: monospace; color: #f59e0b;">₹924.71</td>
+          <td style="font-family: monospace; color: #38bdf8;">₹959.55</td>
+          <td style="font-family: monospace; color: #22c55e;">₹984.57</td>
+          <td style="font-family: monospace; font-weight: bold; color: #22c55e; font-size: 13px;">+175.50%</td>
+          <td style="font-family: monospace; font-weight: bold; color: #22c55e;">₹23519.81</td>
+          <td><span style="display:inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; background: #a78bfa22; color: #a78bfa; border: 1px solid #a78bfa44;">🚀 +10.2% FULL WINNER</span></td>
+        </tr>
+        
+        <tr>
+          <td><strong>#4</strong></td>
+          <td><strong style="color: #fff; font-size: 13px;">ANGELONE</strong><br><small style="color: #94a3b8;">AIR: 3.41×</small></td>
+          <td style="font-family: monospace;">₹3640.61</td>
+          <td style="font-family: monospace; color: #ef4444;">₹3569.62</td>
+          <td style="font-family: monospace; color: #f59e0b;">₹3768.03</td>
+          <td style="font-family: monospace; color: #38bdf8;">₹3910.02</td>
+          <td style="font-family: monospace; color: #22c55e;">₹4011.95</td>
+          <td style="font-family: monospace; font-weight: bold; color: #ef4444; font-size: 13px;">-91.89%</td>
+          <td style="font-family: monospace; font-weight: bold; color: #ef4444;">₹-50180.35</td>
+          <td><span style="display:inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; background: #ef444422; color: #ef4444; border: 1px solid #ef444444;">🛑 SL HIT (CAP PROTECTED)</span></td>
+        </tr>
+        
+        <tr>
+          <td><strong>#5</strong></td>
+          <td><strong style="color: #fff; font-size: 13px;">COFORGE</strong><br><small style="color: #94a3b8;">AIR: 3.25×</small></td>
+          <td style="font-family: monospace;">₹2356.22</td>
+          <td style="font-family: monospace; color: #ef4444;">₹2310.27</td>
+          <td style="font-family: monospace; color: #f59e0b;">₹2438.69</td>
+          <td style="font-family: monospace; color: #38bdf8;">₹2521.16</td>
+          <td style="font-family: monospace; color: #22c55e;">₹2587.13</td>
+          <td style="font-family: monospace; font-weight: bold; color: #ef4444; font-size: 13px;">-23.48%</td>
+          <td style="font-family: monospace; font-weight: bold; color: #ef4444;">₹-8298.61</td>
+          <td><span style="display:inline-block; padding: 3px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; background: #ef444422; color: #ef4444; border: 1px solid #ef444444;">🛑 SL HIT (CAP PROTECTED)</span></td>
+        </tr>
+        
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- Institutional Telemetry & Risk Radar -->
+    <div class="section-card">
+      <div class="section-title">
+        <span>🛡️</span> Risk Radar & Execution Parameters
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; font-size: 13px;">
+        <div>
+          <strong style="color: #94a3b8;">Desk Stop Loss:</strong> ₹4,000.00 (Hard Breaker Locked)
+        </div>
+        <div>
+          <strong style="color: #94a3b8;">Max Simultaneous Runners:</strong> 2 Positions
+        </div>
+        <div>
+          <strong style="color: #94a3b8;">Slippage Model:</strong> Zero-Drawdown Buffer at 09:15
+        </div>
+      </div>
+    </div>
+
+    <div class="footer">
+      Generated automatically by Stock Analyser V2 Systematic Archiving Gateway • Path: <code>trade_records/2026-09-23/</code>
+    </div>
+  </div>
+</body>
+</html>

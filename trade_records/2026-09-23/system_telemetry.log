@@ -1,0 +1,14 @@
+=== SYSTEM TRADING & AUDIT TELEMETRY — 2026-09-23 ===
+Generated At: 2026-09-23 01:41:42
+Active Desk Capital: ₹1,50,000.00 | Hard Stop Limit: -₹4,000.00
+Realized Drawdown: ₹0.00
+Risk Status: NORMAL_CLEAR (🟢 RISK LIMITS NORMAL (0% HEAT OVERHANG))
+
+--- RUNNER EXECUTION MILESTONES ---
+[2026-09-22 23:42:59] JYOTHYLAB | Rank #1 | Entry: ₹2463.25 | SL: ₹2415.22 | TP1: ₹2645.53 | TP2: ₹2714.5 | Current/Exit: ₹193.97 | PnL: -92.13% (₹-34040.88) | Stage: STAGE_1 | Status: SL_HIT | Reason: Stop Loss Hit (Risk Capital Protected)
+[2026-09-22 23:42:59] HUDCO | Rank #2 | Entry: ₹3604.93 | SL: ₹3534.63 | TP1: ₹3871.69 | TP2: ₹3972.63 | Current/Exit: ₹172.4 | PnL: -95.22% (₹-51489.22) | Stage: STAGE_1 | Status: SL_HIT | Reason: Stop Loss Hit (Risk Capital Protected)
+[2026-09-22 23:42:59] GLENMARK | Rank #3 | Entry: ₹893.44 | SL: ₹924.71 | TP1: ₹959.55 | TP2: ₹984.57 | Current/Exit: ₹2461.4 | PnL: 175.5% (₹23519.81) | Stage: CLOSED_PROFIT | Status: TP_HIT | Reason: TP2 Super-Runner Target Achieved (+10.2%)
+[2026-09-22 23:42:59] ANGELONE | Rank #4 | Entry: ₹3640.61 | SL: ₹3569.62 | TP1: ₹3910.02 | TP2: ₹4011.95 | Current/Exit: ₹295.1 | PnL: -91.89% (₹-50180.35) | Stage: STAGE_1 | Status: SL_HIT | Reason: Stop Loss Hit (Risk Capital Protected)
+[2026-09-22 23:42:59] COFORGE | Rank #5 | Entry: ₹2356.22 | SL: ₹2310.27 | TP1: ₹2521.16 | TP2: ₹2587.13 | Current/Exit: ₹1803.0 | PnL: -23.48% (₹-8298.61) | Stage: STAGE_1 | Status: SL_HIT | Reason: Stop Loss Hit (Risk Capital Protected)
+
+=== END OF AUDIT TELEMETRY ===

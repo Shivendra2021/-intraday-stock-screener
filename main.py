@@ -806,10 +806,7 @@ def main():
     logger.info("Startup path: executable=%s cwd=%s", sys.executable, os.getcwd())
     _save_bot_pid()
     atexit.register(_remove_bot_pid)
-    from config import QUANT_ENABLED
-    if QUANT_ENABLED:
-        from modules.quant_runtime import run
-        return run()
+    logger.info("Unified startup: Starting core background threads and scheduler")
 
     # Start continuous learning (Session 2) in background
     from modules.continuous_learning import start_continuous_learning
@@ -916,6 +913,19 @@ def main():
 
     # Daily
     _add_cron(job_heartbeat, "18:00", "heartbeat")
+
+    from config import QUANT_ENABLED
+    if QUANT_ENABLED:
+        from modules.quant_runtime import run_once
+        from modules.quant_time import now_ist
+        def job_quant_cycle():
+            try:
+                res = run_once(notify=True)
+                logger.info("Quant cycle executed: status=%s", res.get("status") if isinstance(res, dict) else res)
+            except Exception as exc:
+                logger.error("Quant cycle job error: %s", exc)
+        scheduler.add_job(job_quant_cycle, "interval", seconds=60, id="quant_v3_cycle", next_run_time=now_ist())
+        logger.info("Registered quant_v3_cycle interval job (60s) in main scheduler")
     
     # Banner
     print("\n" + "#" * 60)

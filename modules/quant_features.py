@@ -80,7 +80,19 @@ def build_features(symbol, daily, intraday, asof, sector="Unknown", prepared=Non
     compressed = width < 0.45 * base["atr"] and px > float(prior.high.max())
     continuation = (len(day) >= 6 and px > vwap and float(day.low.iloc[-3:-1].min()) <= vwap * 1.003
                     and px > float(day.high.iloc[-2]))
-    setup = "opening_expansion" if breakout else ("compression_breakout" if compressed else ("vwap_continuation" if continuation else "none"))
+    # Dedicated 7% to 10% Super-Runner Setup:
+    # High-Beta stock (Daily ATR >= 2.8%), breaking out above 15m high with volume expansion
+    super_runner = (base["atr_pct"] >= 2.8 and px > opening_high and rvol >= 1.8 and (px / op - 1) * 100 >= 0.5)
+    if super_runner:
+        setup = "super_runner"
+    elif breakout:
+        setup = "opening_expansion"
+    elif compressed:
+        setup = "compression_breakout"
+    elif continuation:
+        setup = "vwap_continuation"
+    else:
+        setup = "none"
     high, low = float(day.high.max()), float(day.low.min())
     # A structural stop; setups requiring excessive risk are rejected, not tightened artificially.
     stop = min(px - base["atr"] * 0.25, float(prior.low.min()))
@@ -106,20 +118,23 @@ def build_features(symbol, daily, intraday, asof, sector="Unknown", prepared=Non
 
 def gate(row):
     from config import QUANT_MIN_DAILY_VALUE, QUANT_MIN_PRICE, QUANT_MIN_STOP_PCT, QUANT_MAX_STOP_PCT
-    if row["price"] < QUANT_MIN_PRICE or row["turnover"] < QUANT_MIN_DAILY_VALUE:
+    # Relax liquidity threshold slightly for high-beta runner candidates to allow small/midcap runners
+    min_val = QUANT_MIN_DAILY_VALUE * 0.5 if row.get("setup") == "super_runner" else QUANT_MIN_DAILY_VALUE
+    if row["price"] < QUANT_MIN_PRICE or row["turnover"] < min_val:
         return "insufficient_liquidity"
     risk = (row["price"] - row["stop"]) / row["price"] * 100
     if not QUANT_MIN_STOP_PCT <= risk <= QUANT_MAX_STOP_PCT:
         return "invalid_structural_stop"
     if row["setup"] == "none":
         return "no_entry_trigger"
-    if row["rvol"] < 1.5 or row["vwap_distance"] <= 0:
+    if row["rvol"] < 1.4 or row["vwap_distance"] <= 0:
         return "weak_participation"
     return "eligible"
 
 
+
 def quote_gate(row, quote, now):
-    from config import QUANT_QUOTE_MAX_AGE_SECONDS, QUANT_MAX_SPREAD_PCT
+    from config import QUANT_QUOTE_MAX_AGE_SECONDS, QUANT_MAX_SPREAD_PCT, QUANT_MIN_CIRCUIT_HEADROOM_PCT
     if not quote or not quote.get("ts"):
         return "quote_unavailable"
     age = now.timestamp() - quote["ts"]
@@ -134,6 +149,8 @@ def quote_gate(row, quote, now):
         return "spread_too_wide"
     if abs(ask / row["price"] - 1) > 0.01:
         return "entry_already_moved"
-    if ask * 1.10 > upper:
-        return "insufficient_price_band_headroom"
+    if upper and upper > 0:
+        headroom_pct = (upper - ask) / ask * 100
+        if headroom_pct < QUANT_MIN_CIRCUIT_HEADROOM_PCT:
+            return "insufficient_price_band_headroom"
     return "eligible"

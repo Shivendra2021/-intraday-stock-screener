@@ -10,7 +10,8 @@ import pandas as pd
 
 
 def evaluate(row, bars, cost_bps=None, slippage_bps=None, cutoff="15:20"):
-    from config import QUANT_COST_BPS, QUANT_SLIPPAGE_BPS, QUANT_MIN_STOP_PCT, QUANT_MAX_STOP_PCT
+    from config import (QUANT_COST_BPS, QUANT_SLIPPAGE_BPS, QUANT_MIN_STOP_PCT, QUANT_MAX_STOP_PCT,
+                        RUNNER_TP1_PCT, RUNNER_TP2_PCT)
     cost = (row.get("cost_bps", QUANT_COST_BPS) if cost_bps is None else cost_bps) / 100
     slip = (row.get("slippage_bps", QUANT_SLIPPAGE_BPS) if slippage_bps is None else slippage_bps) / 10000
     date = dt.date.fromisoformat(row["date"])
@@ -33,9 +34,12 @@ def evaluate(row, bars, cost_bps=None, slippage_bps=None, cutoff="15:20"):
     risk = (entry - stop) / entry * 100
     if abs(entry / row["price"] - 1) > 0.01 or not QUANT_MIN_STOP_PCT <= risk <= QUANT_MAX_STOP_PCT:
         return {**unknown, "resolved": True, "status": "unfilled", "reason": "entry_gap_or_invalid_risk"}
-    if row.get("upper") and entry * 1.10 > row["upper"]:
+    tp1 = entry * (1 + RUNNER_TP1_PCT / 100)
+    tp2 = entry * (1 + RUNNER_TP2_PCT / 100)
+    if row.get("upper") and tp1 > row["upper"]:
         return {**unknown, "resolved": True, "status": "unfilled", "reason": "target_outside_price_band"}
-    tp1, tp2 = entry * 1.07, entry * 1.10
+    if row.get("upper") and tp2 > row["upper"]:
+        tp2 = row["upper"] * 0.998
     remaining, gross, hit7, hit10 = 1.0, 0.0, False, False
     fills = []
     last_ts = entry_ts - 300

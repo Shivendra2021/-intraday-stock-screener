@@ -377,7 +377,8 @@ def _score_stock(sym: str) -> Optional[dict]:
         open_s = df["open"].astype(float) if "open" in df.columns else close
 
         price = float(close.iloc[-1])
-        if price < 50:
+        from config import MIN_PRICE_FILTER
+        if price < MIN_PRICE_FILTER:
             return None
 
         # Volume filter

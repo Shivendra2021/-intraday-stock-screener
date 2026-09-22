@@ -34,14 +34,23 @@ def _calculate_levels(stock: dict) -> dict | None:
     timing = evaluate_stock_intraday_period(stock)
     move_pct = timing.get("target_return_pct") or ((MIN_TARGET_MOVE_PCT + MAX_TARGET_MOVE_PCT) / 2)
 
-    # Stop Loss: ATR-based, capped at MAX_SL_PCT
-    sl_atr  = price - (atr * SL_ATR_MULTIPLIER)
-    sl_pct  = price * (1 - MAX_SL_PCT / 100)
-    sl_price = max(sl_atr, sl_pct)  # tighter of two
+    # Dynamic AI Structural Stop Loss (0.5% - 3.0%)
+    ai_sl = timing.get("ai_sl_pct")
+    if ai_sl is not None and ai_sl > 0:
+        sl_pct_val = min(float(MAX_SL_PCT), max(0.5, float(ai_sl)))
+        sl_price = price * (1 - sl_pct_val / 100)
+    else:
+        # Fallback to ATR-based dynamic stop bounded by [0.5, MAX_SL_PCT]
+        sl_atr  = price - (atr * SL_ATR_MULTIPLIER)
+        sl_pct  = price * (1 - MAX_SL_PCT / 100)
+        sl_price = max(sl_atr, sl_pct)
+        sl_pct_val = ((price - sl_price) / price * 100) if price > 0 else 1.5
 
     from config import RUNNER_TP1_PCT, RUNNER_TP2_PCT
-    tp1_price = price * (1 + RUNNER_TP1_PCT / 100)
-    tp2_price = price * (1 + RUNNER_TP2_PCT / 100)
+    ai_tp1_pct = float(timing.get("tp1_pct") or RUNNER_TP1_PCT)
+    ai_tp2_pct = float(timing.get("tp2_pct") or RUNNER_TP2_PCT)
+    tp1_price = price * (1 + ai_tp1_pct / 100)
+    tp2_price = price * (1 + ai_tp2_pct / 100)
     target_price = tp2_price
 
     risk   = price - sl_price
@@ -60,11 +69,13 @@ def _calculate_levels(stock: dict) -> dict | None:
         **stock,
         "entry_price":       round(price, 2),
         "sl_price":          round(sl_price, 2),
+        "sl_pct":            round(sl_pct_val, 2),
+        "sl_type":           "ai_dynamic_structural",
         "target_price":      round(target_price, 2),
         "tp1_price":         round(tp1_price, 2),
         "tp2_price":         round(tp2_price, 2),
-        "tp1_pct":           round(RUNNER_TP1_PCT, 2),
-        "tp2_pct":           round(RUNNER_TP2_PCT, 2),
+        "tp1_pct":           round(ai_tp1_pct, 2),
+        "tp2_pct":           round(ai_tp2_pct, 2),
         "upside_pct":        round(upside_pct, 2),
         "risk_reward":       round(rr, 2),
         "prime_window":      timing.get("prime_window"),
@@ -622,22 +633,21 @@ def run_picker(analyzed: list = None) -> list:
         is_correlated = False
         reason = ""
 
-        for picked in top_picks:
-            p_sym = str(picked.get("symbol", "")).upper().strip()
-            p_sec = picked.get("sector")
+        sec_count = sum(1 for p in top_picks if p.get("sector") == sec and sec not in ("Unknown", "", None))
+        if sec_count >= 2:
+            is_correlated = True
+            reason = f"sector_gate: {sym} sector cap reached ({sec}: max 2 picks)"
+        else:
+            for picked in top_picks:
+                p_sym = str(picked.get("symbol", "")).upper().strip()
 
-            # 1. Pearson correlation check if available
-            if (sym, p_sym) in corr_matrix:
-                pair_corr = corr_matrix[(sym, p_sym)]
-                if pair_corr > CORR_THRESHOLD:
-                    is_correlated = True
-                    reason = f"corr_gate: {sym} correlated with {p_sym} (r={pair_corr:.2f} > {CORR_THRESHOLD})"
-                    break
-            # 2. Fallback: same sector check when correlation is unavailable
-            elif sec and p_sec and sec == p_sec and sec not in ("Unknown", ""):
-                is_correlated = True
-                reason = f"sector_gate: {sym} same sector as {p_sym} ({sec})"
-                break
+                # 1. Pearson correlation check if available
+                if (sym, p_sym) in corr_matrix:
+                    pair_corr = corr_matrix[(sym, p_sym)]
+                    if pair_corr > CORR_THRESHOLD:
+                        is_correlated = True
+                        reason = f"corr_gate: {sym} correlated with {p_sym} (r={pair_corr:.2f} > {CORR_THRESHOLD})"
+                        break
 
         if is_correlated:
             logger.info("Anti-concentration gate skipped %s: %s", sym, reason)
