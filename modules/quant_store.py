@@ -54,6 +54,26 @@ class Store:
                 CREATE INDEX IF NOT EXISTS review_date ON review_ledger(date, decision);
                 CREATE TABLE IF NOT EXISTS leases (name TEXT PRIMARY KEY, expires REAL NOT NULL);
             """)
+        self.init_quant_v4_tables()
+
+    def init_quant_v4_tables(self) -> None:
+        """Ensure all Quant V4 research and operational tables exist."""
+        try:
+            from modules.rejection_audit import ensure_funnel_tables
+            from modules.provider_health import ensure_provider_tables
+            from modules.market_regime import ensure_regime_tables
+            from modules.winner_discovery import ensure_winner_tables
+            from modules.experiment_registry import ensure_experiment_tables
+            from modules.catalyst_engine import ensure_catalyst_tables
+
+            ensure_funnel_tables(self)
+            ensure_provider_tables(self)
+            ensure_regime_tables(self)
+            ensure_winner_tables(self)
+            ensure_experiment_tables(self)
+            ensure_catalyst_tables(self)
+        except Exception:
+            pass
 
     @contextlib.contextmanager
     def connect(self):
