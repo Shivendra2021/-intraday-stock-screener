@@ -219,29 +219,102 @@ class DataService:
         self.store.put("backfill", result)
         return result
 
-    def quote(self, symbol):
-        key = "quote:" + symbol
-        old = self.store.get(key)
-        if old and time.time() - old.get("checked_at", 0) < 15:
-            return old
+    def get_quote_candidates(self, symbol):
+        """
+        Obtain independent primary and secondary verified quotes for consensus validation.
+        Returns: (primary_quote, secondary_quote)
+        """
         def complete(value):
             return bool(value and value.get("series") == "EQ"
                         and all(value.get(k) is not None for k in ("ts", "bid", "ask", "upper", "lower")))
-        quote = self.angel.quote(symbol)
-        if not complete(quote):
-            quote = _dhan_quote(symbol)
-        if not complete(quote):
-            quote = _nse_quote(symbol)
-        if complete(quote):
-            quote["checked_at"] = time.time()
-            self.store.put(key, quote)
-            self.store.put("quote_health", {"status": "verified", "source": quote.get("source"),
-                                            "symbol": symbol, "checked_at": quote["checked_at"]})
+
+        primary, secondary = None, None
+
+        # 1. Primary quote from Angel One
+        q_angel = self.angel.quote(symbol)
+        if complete(q_angel):
+            q_angel["source"] = "angel_one"
+            primary = q_angel
+
+        # 2. Secondary candidate from Dhan
+        q_dhan = _dhan_quote(symbol)
+        if q_dhan and q_dhan.get("series") == "EQ" and q_dhan.get("ask") and q_dhan.get("ts"):
+            if primary is None:
+                primary = q_dhan
+            else:
+                secondary = q_dhan
+
+        # 3. Secondary candidate from NSE if secondary still missing
+        if secondary is None:
+            q_nse = _nse_quote(symbol)
+            if q_nse and q_nse.get("series") == "EQ" and q_nse.get("ask") and q_nse.get("ts"):
+                if primary is None:
+                    primary = q_nse
+                elif primary.get("source") != "nse":
+                    secondary = q_nse
+
+        now_time = time.time()
+        if primary:
+            primary["checked_at"] = now_time
+            self.store.put(f"quote:{symbol}", primary)
+            self.store.put("quote_health", {
+                "status": "verified",
+                "source": primary.get("source"),
+                "secondary_source": secondary.get("source") if secondary else None,
+                "symbol": symbol,
+                "checked_at": now_time
+            })
         else:
-            self.store.put("quote_health", {"status": "live_quote_unavailable", "symbol": symbol,
-                                            "checked_at": time.time()})
-            quote = None
-        return quote
+            self.store.put("quote_health", {
+                "status": "live_quote_unavailable",
+                "symbol": symbol,
+                "checked_at": now_time
+            })
+
+        return primary, secondary
+
+    def quote(self, symbol):
+        primary, _ = self.get_quote_candidates(symbol)
+        return primary
+
+    def refresh_1m(self, symbols, budget=30):
+        """
+        Bounded 1-minute candle ingestion specifically for active signals and open paper trades.
+        Never downloads full universe 1m data unnecessarily.
+        """
+        started = time.monotonic()
+        symbols = list(dict.fromkeys(symbols))
+        if not symbols or budget <= 2:
+            return []
+        updated = []
+        end_date = now_ist().date()
+        start_date = end_date - dt.timedelta(days=2)
+        for symbol in symbols:
+            if time.monotonic() - started >= budget:
+                break
+            frame = pd.DataFrame()
+            if self.angel.configured():
+                try:
+                    frame = normalize(self.angel.candles(symbol, "1m", start_date, end_date), "1m")
+                except Exception:
+                    frame = pd.DataFrame()
+            if not frame.empty:
+                self.store.save_bars(symbol, "1m", frame, "angel_one")
+                updated.append(symbol)
+            else:
+                try:
+                    import yfinance as yf
+                    ticker = symbol + ".NS" if not symbol.endswith((".NS", ".BO")) else symbol
+                    df = yf.download(ticker, interval="1m", period="2d", progress=False)
+                    if not df.empty:
+                        norm_df = normalize(df, "1m")
+                        if not norm_df.empty:
+                            self.store.save_bars(symbol, "1m", norm_df, "yahoo")
+                            updated.append(symbol)
+                except Exception:
+                    pass
+        return updated
+
 
 
 def _float(value):

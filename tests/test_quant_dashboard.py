@@ -65,3 +65,46 @@ def test_workspace_routes_and_template(monkeypatch):
     assert 'helios-theme.css' in page
     assert 'helios.js' in page
     assert client.get('/api/health').status_code == 200
+
+
+def test_quant_v4_canonical_endpoints():
+    from dashboard.app import app
+    client = app.test_client()
+
+    r = client.get('/api/quant/today')
+    assert r.status_code == 200
+    assert "signals" in r.json
+    assert len(r.json["signals"]) <= 3
+
+    r = client.get('/api/quant/health')
+    assert r.status_code == 200
+    assert r.json["status"] == "ok"
+    assert "models" in r.json
+
+    r = client.get('/api/quant/funnel')
+    assert r.status_code == 200
+    assert "rejection_histogram" in r.json
+
+    r = client.get('/api/quant/providers')
+    assert r.status_code == 200
+    assert "providers" in r.json
+
+    r = client.get('/api/quant/discovery')
+    assert r.status_code == 200
+    assert "discovery" in r.json
+
+    r = client.get('/api/quant/experiments')
+    assert r.status_code == 200
+    assert "experiments" in r.json
+
+    r = client.get('/api/quant/regime')
+    assert r.status_code == 200
+    assert "regime" in r.json
+    assert "sectors" in r.json
+
+    r = client.get('/api/quant/catalysts?symbol=TCS')
+    assert r.status_code == 200
+    assert r.json["status"] == "ok"
+    assert "catalysts" in r.json
+    assert "news_exists_before_signal" in r.json["catalysts"]
+

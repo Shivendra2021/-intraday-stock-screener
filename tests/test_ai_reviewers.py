@@ -11,6 +11,10 @@ def test_qwen_is_primary_and_gemma_is_fallback(monkeypatch, tmp_path):
     import config
     import modules.grok_brain as brain
     monkeypatch.setattr(brain, "STATE_FILE", str(tmp_path / "state.json"))
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "")
+    monkeypatch.setattr(config, "MISTRAL_API_KEY", "")
+    monkeypatch.setattr(config, "GROQ_API_KEY", "")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "")
     monkeypatch.setattr(config, "DASHSCOPE_API_KEY", "qwen-test")
     monkeypatch.setattr(config, "OPENROUTER_GEMMA_KEY", "gemma-test")
     with patch("modules.grok_brain.requests.post", return_value=_response("Qwen result")) as post:
@@ -24,6 +28,10 @@ def test_gemma_runs_only_after_qwen_failure(monkeypatch, tmp_path):
     import config
     import modules.grok_brain as brain
     monkeypatch.setattr(brain, "STATE_FILE", str(tmp_path / "state.json"))
+    monkeypatch.setattr(config, "GEMINI_API_KEY", "")
+    monkeypatch.setattr(config, "MISTRAL_API_KEY", "")
+    monkeypatch.setattr(config, "GROQ_API_KEY", "")
+    monkeypatch.setattr(config, "OPENROUTER_API_KEY", "")
     monkeypatch.setattr(config, "DASHSCOPE_API_KEY", "qwen-test")
     monkeypatch.setattr(config, "OPENROUTER_GEMMA_KEY", "gemma-test")
     failed = Mock(status_code=503, text="temporarily unavailable")

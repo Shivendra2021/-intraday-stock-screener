@@ -51,6 +51,24 @@ def _save_cache(cache: dict) -> None:
         logger.debug("Error saving catalyst cache: %s", e)
 
 
+def _parse_relative_pub_epoch(date_str: str) -> int:
+    import re, time
+    now_ts = int(time.time())
+    text = (date_str or "").lower().strip()
+    m_hour = re.search(r"(\d+)\s*hour", text)
+    if m_hour:
+        return now_ts - int(m_hour.group(1)) * 3600
+    m_min = re.search(r"(\d+)\s*min", text)
+    if m_min:
+        return now_ts - int(m_min.group(1)) * 60
+    m_day = re.search(r"(\d+)\s*day", text)
+    if m_day:
+        return now_ts - int(m_day.group(1)) * 86400
+    if "yesterday" in text:
+        return now_ts - 86400
+    return now_ts - 1800
+
+
 def _classify_catalyst(title: str, snippet: str) -> str:
     """Categorize the type of catalyst based on headline content."""
     text = (title + " " + snippet).lower()
@@ -165,6 +183,21 @@ def get_stock_catalyst(symbol: str) -> Optional[Dict[str, Any]]:
                     except Exception:
                         pass
 
+                    # Ingest to canonical quant.db catalyst_events
+                    try:
+                        from modules.catalyst_engine import record_catalyst_event
+                        pub_epoch = _parse_relative_pub_epoch(date_str)
+                        record_catalyst_event(
+                            symbol=sym,
+                            headline=title,
+                            published_at=pub_epoch,
+                            source=source,
+                            category=cat_type,
+                            raw_payload={"snippet": snippet, "date_str": date_str}
+                        )
+                    except Exception as cat_err:
+                        logger.debug("Catalyst event ingestion error for %s: %s", sym, cat_err)
+
                     # Cache result
                     cache[sym] = {
                         "date": today,
@@ -206,6 +239,19 @@ def get_stock_catalyst(symbol: str) -> Optional[Dict[str, Any]]:
                         "catalyst_type": cat_type,
                         "summary": f"[Web News] {title}",
                     }
+                    try:
+                        from modules.catalyst_engine import record_catalyst_event
+                        pub_epoch = int(datetime.datetime.now().timestamp()) - 1800
+                        record_catalyst_event(
+                            symbol=sym,
+                            headline=title,
+                            published_at=pub_epoch,
+                            source="Tavily Web Search",
+                            category=cat_type,
+                            raw_payload={"content": content}
+                        )
+                    except Exception as cat_err:
+                        logger.debug("Tavily catalyst event ingestion error for %s: %s", sym, cat_err)
                     cache[sym] = {
                         "date": today,
                         "cached_at": datetime.datetime.now().isoformat(),
@@ -216,5 +262,6 @@ def get_stock_catalyst(symbol: str) -> Optional[Dict[str, Any]]:
                     return res
         except Exception as exc:
             logger.debug("Tavily catalyst lookup error for %s: %s", sym, exc)
+
 
     return None

@@ -39,7 +39,7 @@ def handle_preflight_and_protect():
                 or "127.0.0.1" in netloc
                 or "trycloudflare.com" in netloc
             )
-            if not allowed and request.headers.get("Sec-Fetch-Site") == "cross-site":
+            if not allowed:
                 return jsonify({"error": "Cross-origin control request rejected"}), 403
 
 
@@ -1877,36 +1877,53 @@ def api_ai_consensus_picks():
             "FROM picks ORDER BY date DESC, confidence DESC LIMIT 3"
         )
     
-    if not picks:
-        picks = [
-            {"symbol": "RELIANCE", "entry_price": 2840.5, "target_price": 3039.3, "sl_price": 2795.0, "confidence": 92.0, "status": "open"},
-            {"symbol": "TCS", "entry_price": 3950.0, "target_price": 4226.5, "sl_price": 3890.0, "confidence": 88.0, "status": "open"},
-            {"symbol": "HDFCBANK", "entry_price": 1640.0, "target_price": 1754.8, "sl_price": 1615.0, "confidence": 85.0, "status": "open"}
-        ]
-    
+    # Pure read-view of canonical Quant V4 store — Zero mock data
+    from modules.quant_store import Store
+    quant_signals = Store().signals(today)
+
     output = []
-    models_votes = [
-        {"gemini": "Bullish (Breakout)", "mistral": "Strong Momentum", "openrouter": "Institutional Inflow"},
-        {"gemini": "Accumulation", "mistral": "Bullish", "openrouter": "VWAP Support"},
-        {"gemini": "Trend Continuation", "mistral": "Volume Spike", "openrouter": "Sector Lead"}
-    ]
-    for i, p in enumerate(picks[:3]):
-        ep = float(p.get("entry_price") or 1000)
-        tp = float(p.get("target_price") or ep * 1.07)
-        sl = float(p.get("sl_price") or ep * 0.985)
-        votes = models_votes[i % len(models_votes)]
-        output.append({
-            "symbol": p["symbol"],
-            "entry": round(ep, 2),
-            "target": round(tp, 2),
-            "stop_loss": round(sl, 2),
-            "upside_pct": round((tp - ep) / ep * 100, 2),
-            "confidence": float(p.get("confidence") or 85.0),
-            "reach_probability": f"{min(95, int(float(p.get('confidence') or 80) * 0.9 + 5))}%",
-            "votes": votes,
-            "status": p.get("status") or "open"
-        })
-    return jsonify({"date": today, "picks": output})
+    if quant_signals:
+        for s in quant_signals[:3]:
+            val = s.get("value", {})
+            ep = float(val.get("validated_price") or val.get("price") or 0.0)
+            tp = float(val.get("tp1") or ep * 1.07)
+            sl = float(val.get("structural_stop") or val.get("stop") or ep * 0.985)
+            output.append({
+                "symbol": s["symbol"],
+                "entry": round(ep, 2),
+                "target": round(tp, 2),
+                "stop_loss": round(sl, 2),
+                "upside_pct": round((tp - ep) / ep * 100, 2) if ep > 0 else 7.0,
+                "confidence": round(float(val.get("p7", 0.0) * 100), 1),
+                "reach_probability": f"{int(float(val.get('p7', 0.0) * 100))}%",
+                "setup": val.get("setup", "opening_expansion"),
+                "provenance": val.get("provenance", "quant_live_confirmed"),
+                "status": "active"
+            })
+    elif picks:
+        for p in picks[:3]:
+            ep = float(p.get("entry_price") or 0.0)
+            tp = float(p.get("target_price") or ep * 1.07)
+            sl = float(p.get("sl_price") or ep * 0.985)
+            output.append({
+                "symbol": p["symbol"],
+                "entry": round(ep, 2),
+                "target": round(tp, 2),
+                "stop_loss": round(sl, 2),
+                "upside_pct": round((tp - ep) / ep * 100, 2) if ep > 0 else 7.0,
+                "confidence": float(p.get("confidence") or 0.0),
+                "reach_probability": f"{int(float(p.get('confidence') or 0.0))}%",
+                "setup": "historical_record",
+                "status": p.get("status") or "open"
+            })
+
+    return jsonify({
+        "date": today,
+        "picks": output,
+        "count": len(output),
+        "status": "qualified_picks_available" if output else "zero_qualified_picks",
+        "message": "Max 3 disciplined selections" if output else "Zero qualified setups today. Preserving capital."
+    })
 
 
 @app.route("/api/stock/details/<symbol>")
@@ -1920,40 +1937,35 @@ def api_stock_details(symbol):
         detail = {}
     
     candles = detail.get("candles") or []
+    # Query real stored bars from quant.db if candles not in detail
     if not candles:
-        base_p = float(detail.get("price") or 1500.0)
-        import random
-        random.seed(sum(ord(c) for c in sym))
-        curr = base_p
-        candles = []
-        for i in range(24):
-            chg = (random.random() - 0.48) * (base_p * 0.008)
-            open_p = curr
-            curr += chg
-            high_p = max(open_p, curr) + random.random() * (base_p * 0.004)
-            low_p = min(open_p, curr) - random.random() * (base_p * 0.004)
-            candles.append({
-                "time": f"{9 + i // 4:02d}:{(i % 4) * 15:02d}",
-                "open": round(open_p, 2),
-                "high": round(high_p, 2),
-                "low": round(low_p, 2),
-                "close": round(curr, 2),
-                "volume": int(random.randint(15000, 85000))
-            })
-    
-    curr_close = candles[-1]["close"] if candles else 1500.0
+        from modules.quant_store import Store
+        df_bars = Store().bars(sym, "5m")
+        if df_bars is not None and not df_bars.empty:
+            for idx, bar in df_bars.tail(75).iterrows():
+                candles.append({
+                    "time": idx.strftime("%H:%M"),
+                    "open": round(float(bar["open"]), 2),
+                    "high": round(float(bar["high"]), 2),
+                    "low": round(float(bar["low"]), 2),
+                    "close": round(float(bar["close"]), 2),
+                    "volume": int(bar["volume"])
+                })
+
+    curr_close = candles[-1]["close"] if candles else (detail.get("price") or 0.0)
     return jsonify({
         "symbol": sym,
         "price": detail.get("price") or curr_close,
-        "change_pct": detail.get("change_pct") or 2.14,
-        "rsi": detail.get("rsi") or 58.4,
-        "atr": detail.get("atr") or 32.5,
-        "vwap": detail.get("vwap") or round(curr_close * 0.996, 2),
-        "delivery_pct": detail.get("delivery_pct") or "48.6%",
-        "support": round(curr_close * 0.98, 2),
-        "resistance": round(curr_close * 1.03, 2),
-        "ai_summary": f"Strong institutional accumulation observed on {sym}. Price holding firmly above 5m VWAP with dual-brain breakout confirmation.",
-        "candles": candles
+        "change_pct": detail.get("change_pct") or 0.0,
+        "rsi": detail.get("rsi"),
+        "atr": detail.get("atr"),
+        "vwap": detail.get("vwap"),
+        "delivery_pct": detail.get("delivery_pct"),
+        "support": round(curr_close * 0.98, 2) if curr_close else None,
+        "resistance": round(curr_close * 1.03, 2) if curr_close else None,
+        "ai_summary": f"Canonical Quant V4 telemetry for {sym}. All candle bars reflect verified database data.",
+        "candles": candles,
+        "data_status": "real_candles" if candles else "insufficient_history"
     })
 
 
@@ -2195,8 +2207,143 @@ def api_premarket_run():
         return jsonify({"status": "error", "error": str(e)}), 500
 
 
-if __name__ == "__main__":
+# ── Canonical Quant V4 Endpoints ──────────────────────────────────────────────
+@app.route("/api/quant/today")
+def api_quant_today():
+    """Return today's official immutable Quant V4 candidate selections."""
+    from modules.quant_store import Store
+    today = _today_str()
+    signals = Store().signals(today)
+    return jsonify({
+        "date": today,
+        "status": "ok",
+        "selected_count": len(signals),
+        "max_slots": 3,
+        "signals": signals
+    })
 
+
+@app.route("/api/quant/health")
+def api_quant_health():
+    """Return system, scheduler, database, and quote provider health."""
+    from modules.quant_store import Store
+    store = Store()
+    today = _today_str()
+    with store.connect() as c:
+        total_models = c.execute("SELECT COUNT(*) FROM models").fetchone()[0]
+        promoted_models = c.execute("SELECT COUNT(*) FROM models WHERE promoted=1").fetchone()[0]
+    return jsonify({
+        "date": today,
+        "status": "ok",
+        "runtime": store.get("runtime", {}),
+        "data_health": store.get("data_health", {}),
+        "quote_health": store.get("quote_health", {}),
+        "preparation": store.get("preparation", {}),
+        "models": {
+            "total": total_models,
+            "promoted": promoted_models
+        }
+    })
+
+
+@app.route("/api/quant/funnel")
+def api_quant_funnel():
+    """Return point-in-time candidate funnel progression and rejection audit."""
+    from modules.quant_store import Store
+    from modules.rejection_audit import get_funnel_summary
+    store = Store()
+    today = _today_str()
+    runtime = store.get("runtime", {})
+    prep = store.get("preparation", {})
+    summary = get_funnel_summary(store, today)
+    rejections = {**runtime.get("rejections", {}), **summary.get("rejections_by_reason", {})}
+
+    return jsonify({
+        "date": today,
+        "universe_size": runtime.get("universe_size", 0),
+        "watchlist_count": prep.get("watchlist_count", 0),
+        "evaluated_symbols": runtime.get("evaluated_symbols", 0),
+        "selected_count": runtime.get("selected", 0),
+        "rejection_histogram": rejections,
+        "audit_summary": summary
+    })
+
+@app.route("/api/quant/providers")
+def api_quant_providers():
+    """Return long-term data provider health, reliability rates, and latency."""
+    from modules.provider_health import get_providers_health
+    from modules.quant_store import Store
+    today = _today_str()
+    records = get_providers_health(Store(), today)
+    return jsonify({
+        "date": today,
+        "status": "ok",
+        "providers": records
+    })
+
+@app.route("/api/quant/discovery")
+def api_quant_discovery():
+    """Return post-market full-universe winner discovery lab results."""
+    from modules.winner_discovery import get_winner_discovery_report
+    from modules.quant_store import Store
+    today = _today_str()
+    report = get_winner_discovery_report(Store(), today)
+    return jsonify({
+        "status": "ok",
+        "date": today,
+        "discovery": report
+    })
+
+@app.route("/api/quant/experiments")
+def api_quant_experiments():
+    """Return list of research experiments, hypotheses, shadow models, and promotion status."""
+    from modules.experiment_registry import list_experiments
+    from modules.quant_store import Store
+    status = request.args.get("status")
+    exps = list_experiments(status=status, store=Store())
+    return jsonify({
+        "status": "ok",
+        "experiments": exps,
+        "count": len(exps)
+    })
+
+@app.route("/api/quant/regime")
+def api_quant_regime():
+    """Return point-in-time market regime state and sector snapshots."""
+    from modules.market_regime import get_latest_market_regime, get_latest_sector_snapshots
+    from modules.quant_store import Store
+    today = _today_str()
+    store = Store()
+    regime = get_latest_market_regime(store, today)
+    sectors = get_latest_sector_snapshots(store, today)
+    return jsonify({
+        "status": "ok",
+        "date": today,
+        "regime": regime,
+        "sectors": sectors
+    })
+
+@app.route("/api/quant/catalysts")
+def api_quant_catalysts():
+    """Return point-in-time catalyst records or features for a symbol."""
+    from modules.catalyst_engine import get_point_in_time_catalysts
+    from modules.quant_store import Store
+    import time
+    symbol = request.args.get("symbol", "").strip()
+    if not symbol:
+        return jsonify({"status": "error", "error": "symbol parameter required"}), 400
+    now_epoch = int(time.time())
+    ts = int(request.args.get("ts", now_epoch))
+    features = get_point_in_time_catalysts(symbol, decision_ts=ts, store=Store())
+    return jsonify({
+        "status": "ok",
+        "symbol": symbol,
+        "decision_ts": ts,
+        "catalysts": features
+    })
+
+
+if __name__ == "__main__":
     import io, sys
     from waitress import serve
     from modules.runtime_guard import acquire_single_instance
@@ -2211,3 +2358,5 @@ if __name__ == "__main__":
     print("  Server is running... Press CTRL+C to quit\n")
     from config import QUANT_DASHBOARD_HOST
     serve(app, host=QUANT_DASHBOARD_HOST, port=5001, threads=16, connection_limit=200, _quiet=True)
+
+

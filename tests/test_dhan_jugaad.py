@@ -9,8 +9,8 @@ from modules.price_validation import validate_price, broker_price, nse_price
 
 class TestDhanHQProvider(unittest.TestCase):
     def test_dhan_configuration(self):
-        # By default DHAN_ENABLED is True and token is set
-        self.assertTrue(is_dhan_configured())
+        with patch("config.DHAN_ENABLED", True), patch("config.DHAN_ACCESS_TOKEN", "mock_token"):
+            self.assertTrue(is_dhan_configured())
 
     def test_dhan_scrip_resolution(self):
         # Pre-seeded test symbols

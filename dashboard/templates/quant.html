@@ -36,6 +36,27 @@
             </svg>
             <span>Dashboard</span>
           </button>
+          <button class="nav-link" data-view="news">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M12 4v16"/><path d="M12 4h9"/><path d="M3 4h9"/></svg>
+            <span>News</span>
+          </button>
+          <button class="nav-link" data-view="portfolio">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-4V4c0-1.1-.9-2-2-2h-4c-1.1 0-2 .9-2 2v3H4c-1.1 0-2 .9-2 2v11c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V9c0-1.1-.9-2-2-2zM10 4h4v3h-4V4z"/></svg>
+            <span>Portfolio</span>
+          </button>
+          <button class="nav-link" data-view="single">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/></svg>
+            <span>Single</span>
+          </button>
+          
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1.5"></rect>
+              <rect x="14" y="3" width="7" height="7" rx="1.5"></rect>
+              <rect x="14" y="14" width="7" height="7" rx="1.5"></rect>
+              <rect x="3" y="14" width="7" height="7" rx="1.5"></rect>
+            </svg>
+            <span>Dashboard</span>
+          </button>
 
           <button class="nav-link" data-view="portfolio">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round">
@@ -625,6 +646,7 @@
                   <th>Target (+7%)</th>
                   <th>Stop Loss</th>
                   <th>Realized P&L</th>
+                  <th>Resolution</th>
                   <th>Status</th>
                 </tr>
               </thead>
@@ -935,6 +957,91 @@
           <div class="auditor-rules-container" id="auditor-rules-container">
             <!-- Injected by helios.js -->
             <div style="color: #8c899a; font-size: 12px; padding: 12px 0;">Loading empirical risk auditor rules...</div>
+          </div>
+        </section>
+
+        <!-- Quant V4 Hybrid Research Architecture Hub -->
+        <section class="institutional-table-card" style="margin-top: 20px; border: 1px solid rgba(139, 92, 246, 0.35); background: linear-gradient(180deg, rgba(20, 16, 35, 0.95) 0%, rgba(15, 12, 28, 0.98) 100%); box-shadow: 0 8px 32px rgba(0,0,0,0.4);">
+          <div class="card-header-row" style="border-bottom: 1px solid rgba(255,255,255,0.06); padding-bottom: 14px;">
+            <div>
+              <h3 class="card-title h3" style="color: #c084fc; display: flex; align-items: center; gap: 8px;">
+                <span>🔬</span> Quant V4 Hybrid Research Architecture Hub
+              </h3>
+              <small style="color: #8c899a;">Point-in-Time Market Regime, Dynamic Rejection Funnel, Multi-Provider Consensus, Winner Discovery & Walk-Forward Shadow Models</small>
+            </div>
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="telemetry-badge" id="q4-regime-badge" style="background: rgba(139, 92, 246, 0.15); color: #c084fc; border-color: rgba(139, 92, 246, 0.35);">
+                Regime: Normal
+              </span>
+              <span class="telemetry-badge" id="q4-consensus-badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border-color: rgba(56, 189, 248, 0.35);">
+                Consensus: Active
+              </span>
+            </div>
+          </div>
+
+          <!-- Grid Row 1: Rejection Funnel & Multi-Provider Consensus -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px;">
+            <!-- Column 1: Rejection Funnel -->
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span style="font-size: 12px; font-weight: 700; color: #f43f5e; letter-spacing: 0.5px;">REJECTION FUNNEL (TODAY)</span>
+                <span style="font-size: 11px; color: #8c899a;" id="q4-funnel-total">0 Rejections Logged</span>
+              </div>
+              <div id="q4-funnel-bars" style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="color: #8c899a; font-size: 11px;">Loading rejection stages...</div>
+              </div>
+            </div>
+
+            <!-- Column 2: Provider Consensus & Feed Health -->
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span style="font-size: 12px; font-weight: 700; color: #38bdf8; letter-spacing: 0.5px;">FEED PROVIDER HEALTH &amp; CONSENSUS</span>
+                <span style="font-size: 11px; color: #8c899a;" id="q4-providers-count">Independent Feeds</span>
+              </div>
+              <div id="q4-providers-content" style="display: flex; flex-direction: column; gap: 8px;">
+                <div style="color: #8c899a; font-size: 11px;">Loading provider telemetry...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Grid Row 2: Market Regime / Sector Ranks & Winner Discovery -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 18px;">
+            <!-- Column 1: Market Regime & Sector Snapshots -->
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span style="font-size: 12px; font-weight: 700; color: #a78bfa; letter-spacing: 0.5px;">MARKET REGIME &amp; SECTOR CONTEXT</span>
+                <span style="font-size: 11px; color: #8c899a;">Point-in-Time (Context-Only)</span>
+              </div>
+              <div id="q4-regime-content" style="margin-bottom: 12px; font-size: 11.5px; color: #d1d5db;">
+                <div style="color: #8c899a; font-size: 11px;">Loading market regime snapshot...</div>
+              </div>
+              <span style="font-size: 10.5px; font-weight: 600; color: #9ca3af; text-transform: uppercase;">Top Relative Momentum Sectors (15m)</span>
+              <div id="q4-sector-list" style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px;">
+                <!-- Injected dynamically -->
+              </div>
+            </div>
+
+            <!-- Column 2: Post-Market Winner Discovery Lab -->
+            <div style="background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 14px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <span style="font-size: 12px; font-weight: 700; color: #10b981; letter-spacing: 0.5px;">POST-MARKET WINNER DISCOVERY</span>
+                <span style="font-size: 11px; color: #8c899a;" id="q4-winners-count">Discovery Lab</span>
+              </div>
+              <div id="q4-winners-content" style="max-height: 180px; overflow-y: auto;">
+                <div style="color: #8c899a; font-size: 11px;">Loading winner discovery logs...</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Row 3: Experiment Registry & Walk-Forward Shadow Models -->
+          <div style="margin-top: 18px; background: rgba(255,255,255,0.02); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 14px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+              <span style="font-size: 12px; font-weight: 700; color: #f59e0b; letter-spacing: 0.5px;">EXPERIMENT REGISTRY &amp; WALK-FORWARD SHADOW MODELS</span>
+              <span style="font-size: 11px; color: #8c899a;" id="q4-experiments-count">0 Experiments</span>
+            </div>
+            <div id="q4-experiments-content">
+              <div style="color: #8c899a; font-size: 11px;">Loading experiment artifacts...</div>
+            </div>
           </div>
         </section>
       </div>

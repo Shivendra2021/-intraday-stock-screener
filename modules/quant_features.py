@@ -133,8 +133,28 @@ def gate(row):
 
 
 
-def quote_gate(row, quote, now):
+def quote_gate(row, quote, now, secondary_quote=None):
     from config import QUANT_QUOTE_MAX_AGE_SECONDS, QUANT_MAX_SPREAD_PCT, QUANT_MIN_CIRCUIT_HEADROOM_PCT
+    if quote and quote.get("provider_disagreement"):
+        return "provider_disagreement"
+
+    consensus_status = "single_source_only"
+    consensus_diff = 0.0
+    sec_source = "none"
+
+    if secondary_quote:
+        from modules.provider_health import validate_quote_consensus
+        ok, reason, details = validate_quote_consensus(row["symbol"], quote, secondary_quote)
+        if not ok:
+            return reason
+        consensus_status = "consensus_confirmed"
+        consensus_diff = details.get("discrepancy_pct", 0.0)
+        sec_source = secondary_quote.get("source", "secondary")
+
+    row["consensus_status"] = consensus_status
+    row["secondary_provider"] = sec_source
+    row["consensus_diff_pct"] = consensus_diff
+
     if not quote or not quote.get("ts"):
         return "quote_unavailable"
     age = now.timestamp() - quote["ts"]
@@ -151,6 +171,7 @@ def quote_gate(row, quote, now):
         return "entry_already_moved"
     if upper and upper > 0:
         headroom_pct = (upper - ask) / ask * 100
-        if headroom_pct < QUANT_MIN_CIRCUIT_HEADROOM_PCT:
+        min_headroom = 7.0 + QUANT_MIN_CIRCUIT_HEADROOM_PCT
+        if headroom_pct < min_headroom:
             return "insufficient_price_band_headroom"
     return "eligible"

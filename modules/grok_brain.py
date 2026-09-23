@@ -54,7 +54,7 @@ def _config() -> dict:
         "mistral_key":    MISTRAL_API_KEY,
         "mistral_model":  MISTRAL_MODEL,
         "mistral_base_url": MISTRAL_BASE_URL,
-        "openrouter_key": OPENROUTER_API_KEY or OPENROUTER_GEMMA_KEY,
+        "openrouter_key": OPENROUTER_API_KEY,
         "openrouter_model": OPENROUTER_MODEL,
         "openrouter_base_url": OPENROUTER_BASE_URL,
         "openrouter_enabled": OPENROUTER_ENABLED,

@@ -256,6 +256,27 @@ def train(store):
     model["evaluation"] = result
     with store.connect() as c:
         c.execute("INSERT OR IGNORE INTO models VALUES (?,?,?,?)", (model["id"], int(time.time()), dumps(model), int(promote)))
+    try:
+        from modules.experiment_registry import register_experiment, update_experiment_status
+        exp_status = "promoted" if promote else ("forward_testing" if forward_ready else "shadow")
+        register_experiment(
+            experiment_id=model["id"],
+            version_tag=VERSION,
+            base_model_id=prior.get("id", "baseline") if prior else "baseline",
+            hypothesis="Systematic Quant walk-forward calibrated linear model",
+            features_spec=FEATURES,
+            store=store
+        )
+        update_experiment_status(
+            experiment_id=model["id"],
+            status=exp_status,
+            backtest_metrics=score,
+            forward_metrics=forward,
+            reason="Promoted: satisfies statistical and forward evidence gates" if promote else ("Awaiting forward evidence in shadow mode" if not forward_ready else "Candidate evaluated; awaiting promotion review"),
+            store=store
+        )
+    except Exception as exc:
+        LOG.debug("Experiment registry registration error: %s", exc)
     if promote:
         store.put("last_promotion_evaluation", days[-1])
     store.put("learning", result)

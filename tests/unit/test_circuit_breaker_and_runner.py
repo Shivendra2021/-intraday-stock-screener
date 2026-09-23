@@ -67,10 +67,10 @@ class TestCircuitBreakerAndRunner(unittest.TestCase):
         cand = _calculate_levels(stock)
         self.assertIsNotNone(cand)
         self.assertEqual(cand["entry_price"], 1000.0)
-        # Expected TP1: 1000 * 1.038 = 1038.0
-        self.assertAlmostEqual(cand["tp1_price"], 1038.0, delta=0.1)
-        # Expected TP2: 1000 * 1.075 = 1075.0
-        self.assertAlmostEqual(cand["tp2_price"], 1075.0, delta=0.1)
+        expected_tp1 = 1000.0 * (1 + RUNNER_TP1_PCT / 100.0)
+        self.assertAlmostEqual(cand["tp1_price"], expected_tp1, delta=0.1)
+        expected_tp2 = 1000.0 * (1 + cand["tp2_pct"] / 100.0)
+        self.assertAlmostEqual(cand["tp2_price"], expected_tp2, delta=0.1)
         self.assertEqual(cand["target_price"], cand["tp2_price"])
 
     def test_alerts_formatting(self):

@@ -194,13 +194,13 @@ GROQ_DEEPSEEK_TIMEOUT_SECONDS = int(os.getenv("GROQ_DEEPSEEK_TIMEOUT_SECONDS", "
 # ── News APIs & Real-Time Catalyst Search ────────────────────────────────────
 NEWSAPI_KEY              = os.getenv("NEWSAPI_KEY", "")
 THENEWSAPI_KEY           = os.getenv("THENEWSAPI_KEY", "")
-SERPAPI_KEY              = os.getenv("SERPAPI_KEY", "199deab6a92c965bbcc4d2cf6378ac886d7502cc7154794ff182ee4712e98202")
+SERPAPI_KEY              = os.getenv("SERPAPI_KEY", "")
 TAVILY_API_KEY           = os.getenv("TAVILY_API_KEY", "")
-FINNHUB_API_KEY          = os.getenv("FINNHUB_API_KEY", "dajfrqhr01qhhp590rc0dajfrqhr01qhhp590rcg")
+FINNHUB_API_KEY          = os.getenv("FINNHUB_API_KEY", "")
 FINNHUB_ENABLED          = os.getenv("FINNHUB_ENABLED", "True").strip().lower() in ("true", "1", "yes")
-FRED_API_KEY             = os.getenv("FRED_API_KEY", "ccdfbb7fc946c952a51347bbdde32eda")
+FRED_API_KEY             = os.getenv("FRED_API_KEY", "")
 FRED_ENABLED             = os.getenv("FRED_ENABLED", "True").strip().lower() in ("true", "1", "yes")
-TWELVE_DATA_API_KEY      = os.getenv("TWELVE_DATA_API_KEY", "34a6780e5c914f14b929067ca8d4cb92")
+TWELVE_DATA_API_KEY      = os.getenv("TWELVE_DATA_API_KEY", "")
 TWELVE_DATA_ENABLED      = os.getenv("TWELVE_DATA_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 CATALYST_SEARCH_ENABLED  = os.getenv("CATALYST_SEARCH_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 CATALYST_MAX_DAILY_SEARCHES = int(os.getenv("CATALYST_MAX_DAILY_SEARCHES", "8"))
@@ -291,43 +291,10 @@ POSTMARKET_LIGHT_MAX_SYMBOLS = int(os.getenv("POSTMARKET_LIGHT_MAX_SYMBOLS", "45
 POSTMARKET_DEEP_TIMEOUT_MINUTES = int(os.getenv("POSTMARKET_DEEP_TIMEOUT_MINUTES", "45"))
 POSTMARKET_DEEP_LEARNING_ENABLED = os.getenv("POSTMARKET_DEEP_LEARNING_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 
-# Heavy-job traffic control. Keeps every core agent enabled, but prevents the
-GROK_DASHBOARD_AGENT_INTERVAL_MINUTES = int(os.getenv("GROK_DASHBOARD_AGENT_INTERVAL_MINUTES", "15"))
-GROK_DASHBOARD_AGENT_AI_INTERVAL_MINUTES = int(os.getenv("GROK_DASHBOARD_AGENT_AI_INTERVAL_MINUTES", "45"))
-
-# Live DB-backed terminal view
-TERMINAL_UPDATER_ENABLED = os.getenv("TERMINAL_UPDATER_ENABLED", "True").strip().lower() in ("true", "1", "yes")
-TERMINAL_UPDATER_INTERVAL_SECONDS = int(os.getenv("TERMINAL_UPDATER_INTERVAL_SECONDS", "60"))
-
-# One-command automation supervisor. This catches up missed work after Windows
-# sleep/restart so scheduled jobs are not silently skipped.
-AUTOMATION_SUPERVISOR_ENABLED = os.getenv("AUTOMATION_SUPERVISOR_ENABLED", "True").strip().lower() in ("true", "1", "yes")
-AUTOMATION_SUPERVISOR_INTERVAL_SECONDS = int(os.getenv("AUTOMATION_SUPERVISOR_INTERVAL_SECONDS", "60"))
-AUTO_LATE_RECOVERY_ENABLED = os.getenv("AUTO_LATE_RECOVERY_ENABLED", "True").strip().lower() in ("true", "1", "yes")
-AUTO_LATE_RECOVERY_END = os.getenv("AUTO_LATE_RECOVERY_END", "14:30")
-POSTMARKET_CATCHUP_END = os.getenv("POSTMARKET_CATCHUP_END", "23:59")
-POSTMARKET_LIGHT_MAX_SYMBOLS = int(os.getenv("POSTMARKET_LIGHT_MAX_SYMBOLS", "450"))
-POSTMARKET_DEEP_TIMEOUT_MINUTES = int(os.getenv("POSTMARKET_DEEP_TIMEOUT_MINUTES", "45"))
-POSTMARKET_DEEP_LEARNING_ENABLED = os.getenv("POSTMARKET_DEEP_LEARNING_ENABLED", "True").strip().lower() in ("true", "1", "yes")
-
-# Heavy-job traffic control. Keeps every core agent enabled, but prevents the
-# expensive background agents from running over each other.
+# Heavy-job traffic control
 HEAVY_JOB_LOCK_ENABLED = os.getenv("HEAVY_JOB_LOCK_ENABLED", "True").strip().lower() in ("true", "1", "yes")
 MAX_HEAVY_JOBS_AT_ONCE = int(os.getenv("MAX_HEAVY_JOBS_AT_ONCE", "1"))
 DASHBOARD_AI_BACKGROUND_ONLY = os.getenv("DASHBOARD_AI_BACKGROUND_ONLY", "True").strip().lower() in ("true", "1", "yes")
-
-# ── Ollama Intraday Agent ─────────────────────────────────────────────────────
-OLLAMA_AGENT_ENABLED = os.getenv("OLLAMA_AGENT_ENABLED", "False").strip().lower() in ("true", "1", "yes")
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen2.5:7b")
-OLLAMA_AGENT_INTERVAL_MINUTES = int(os.getenv("OLLAMA_AGENT_INTERVAL_MINUTES", "20"))
-OLLAMA_AGENT_CHUNK_SIZE = int(os.getenv("OLLAMA_AGENT_CHUNK_SIZE", "80"))
-OLLAMA_AGENT_MAX_SYMBOLS = int(os.getenv("OLLAMA_AGENT_MAX_SYMBOLS", "0"))
-OLLAMA_ROTATING_BATCH_SIZE = int(os.getenv("OLLAMA_ROTATING_BATCH_SIZE", "320"))
-OLLAMA_AGENT_MIN_RETURN_PCT = float(os.getenv("OLLAMA_AGENT_MIN_RETURN_PCT", "7.0"))
-OLLAMA_AGENT_TOP_CANDIDATES = int(os.getenv("OLLAMA_AGENT_TOP_CANDIDATES", "30"))
-OLLAMA_AGENT_NOTIFY_TELEGRAM = os.getenv("OLLAMA_AGENT_NOTIFY_TELEGRAM", "True").strip().lower() in ("true", "1", "yes")
-OLLAMA_AGENT_TIMEOUT_SECONDS = int(os.getenv("OLLAMA_AGENT_TIMEOUT_SECONDS", "300"))
 
 # ── Reinforcement Learning Architecture ───────────────────────────────────────
 # Tier 1: Contextual Multi-Armed Bandit (LinUCB) for morning 20 -> 5 stock selection
@@ -360,7 +327,7 @@ MAX_DAILY_PORTFOLIO_LOSS_PCT = float(os.getenv("MAX_DAILY_PORTFOLIO_LOSS_PCT", "
 # ── 2-Stage Runner Target Engine (+7% to +10% Criteria) ────────────────────────
 RUNNER_BREAKEVEN_PCT = float(os.getenv("RUNNER_BREAKEVEN_PCT", "3.5"))
 RUNNER_TP1_PCT = float(os.getenv("RUNNER_TP1_PCT", "7.0"))
-RUNNER_TP2_PCT = float(os.getenv("RUNNER_TP2_PCT", "10.2"))
+RUNNER_TP2_PCT = float(os.getenv("RUNNER_TP2_PCT", "10.0"))
 RUNNER_TRAIL_LOCKED_PCT = float(os.getenv("RUNNER_TRAIL_LOCKED_PCT", "3.5"))
 
 # ── Execution Slippage & Regulatory Friction Modeling ────────────────────────
@@ -368,4 +335,9 @@ SLIPPAGE_DEFAULT_PCT = float(os.getenv("SLIPPAGE_DEFAULT_PCT", "0.05"))      # 0
 NSE_STT_INTRADAY_PCT = float(os.getenv("NSE_STT_INTRADAY_PCT", "0.025"))    # 0.025% Securities Transaction Tax on sell
 NSE_EXCHANGE_TURNOVER_PCT = float(os.getenv("NSE_EXCHANGE_TURNOVER_PCT", "0.00325")) # NSE turnover charges
 BROKERAGE_PER_ORDER_INR = float(os.getenv("BROKERAGE_PER_ORDER_INR", "20.0"))         # Standard flat brokerage
+
+# ── DhanHQ Provider Configuration ─────────────────────────────────────────────
+DHAN_CLIENT_ID = os.getenv("DHAN_CLIENT_ID", "")
+DHAN_ACCESS_TOKEN = os.getenv("DHAN_ACCESS_TOKEN", "")
+DHAN_ENABLED = os.getenv("DHAN_ENABLED", "true").lower() == "true"
 

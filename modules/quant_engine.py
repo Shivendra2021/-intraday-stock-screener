@@ -130,6 +130,16 @@ def reconcile(store=None, now=None):
                          "LEFT JOIN signals s ON s.id=o.id WHERE (t.resolved IS NULL OR t.resolved=0) "
                          "AND (o.provenance='live' OR s.id IS NOT NULL) ORDER BY (s.id IS NOT NULL) DESC,o.ts DESC LIMIT 20000").fetchall()
     bars_cache = {}; signals = {s["id"]: s for s in store.signals()}; settled = 0
+
+    # Bounded 1m refresh for active signals
+    active_symbols = list({signals[rec["id"]]["value"]["symbol"] for rec in rows if rec["id"] in signals and "value" in signals[rec["id"]] and "symbol" in signals[rec["id"]]["value"]})
+    if active_symbols:
+        try:
+            service = DataService(store)
+            service.refresh_1m(active_symbols, budget=15)
+        except Exception as exc:
+            LOG.debug("1m refresh failed: %s", exc)
+
     for rec in rows:
         original = json.loads(rec["features"])
         row = signals.get(rec["id"], {}).get("value", original)
@@ -137,7 +147,19 @@ def reconcile(store=None, now=None):
         if symbol not in bars_cache:
             frame = store.bars(symbol, "5m")
             bars_cache[symbol] = frame[frame.index + pd.Timedelta(minutes=5) <= now]
-        outcome = evaluate(row, bars_cache[symbol], cutoff=QUANT_EXIT_TIME)
+
+        # Use 1-minute execution resolution if available and covers entry bar
+        bars_1m = store.bars(symbol, "1m")
+        if not bars_1m.empty:
+            valid_1m = bars_1m[bars_1m.index + pd.Timedelta(minutes=1) <= now]
+            entry_ts = int(row.get("entry_ts", row["ts"] + 60))
+            if any(int(idx.timestamp()) == entry_ts for idx in valid_1m.index):
+                outcome = evaluate(row, valid_1m, cutoff=QUANT_EXIT_TIME, interval="1m")
+            else:
+                outcome = evaluate(row, bars_cache[symbol], cutoff=QUANT_EXIT_TIME, interval="5m")
+        else:
+            outcome = evaluate(row, bars_cache[symbol], cutoff=QUANT_EXIT_TIME, interval="5m")
+
         if dumps(outcome) != rec["previous"]:
             store.outcome(rec["id"], outcome)
         settled += int(outcome["resolved"])
@@ -194,18 +216,31 @@ def deliver(store=None):
         if signal["notified"]:
             continue
         p = signal["value"]
-        entry_time = pd.Timestamp(p["entry_ts"], unit="s", tz="UTC").tz_convert("Asia/Kolkata").strftime("%H:%M")
-        text = (f"<b>QUANT V3 — QUALIFIED NSE CANDIDATE</b>\n{html.escape(signal['symbol'])} | {html.escape(p['setup'])}\n"
-                f"Reference: ₹{p['price']:.2f} | Structural stop: ₹{p['stop']:.2f}\n"
-                f"Simulation entry: first eligible {entry_time} bar; cancel on >1% gap.\n"
-                f"Targets from entry: +7% / +10%, half at each.\n"
-                f"Estimated P(+7% before stop): {p['p7']:.0%}\nEstimated P(+10% before stop): {p['p10']:.0%}\n"
-                f"Expected net: {p['expected_net_pct']:.2f}% | RVOL: {p['rvol']:.2f}x\n"
-                f"<i>Historical model estimates. Informational candidate only; no order is placed.</i>")
-        # An alert delivered after the simulated entry is explicitly marked late.
-        if now_ist().timestamp() >= p["entry_ts"]:
+        entry_time = pd.Timestamp(p.get("entry_target_ts") or p["entry_ts"], unit="s", tz="UTC").tz_convert("Asia/Kolkata").strftime("%H:%M")
+        tp1 = p.get("tp1") or round(p.get("validated_price", p["price"]) * 1.07, 2)
+        tp2 = p.get("tp2") or round(p.get("validated_price", p["price"]) * 1.10, 2)
+        p7_pct = p.get("p7", 0.0)
+        p10_pct = p.get("p10", 0.0)
+        net_ret = p.get("expected_net_pct", 0.0)
+        regime = p.get("market_regime", "N/A")
+        sector = p.get("sector_context") or p.get("sector", "Unknown")
+        quote_src = p.get("provider", "primary")
+
+        text = (f"<b>QUANT V4 — QUALIFIED NSE CANDIDATE</b>\n"
+                f"<b>{html.escape(signal['symbol'])}</b> | Setup: <code>{html.escape(p.get('reason') or p.get('setup', 'breakout'))}</code>\n"
+                f"Reference: ₹{p.get('reference_price', p['price']):.2f} | Validated: ₹{p.get('validated_price', p['price']):.2f}\n"
+                f"Structural Stop: ₹{p.get('structural_stop', p['stop']):.2f}\n"
+                f"Target 1 (+7%): ₹{tp1:.2f} | Target 2 (+10%): ₹{tp2:.2f}\n"
+                f"Simulated entry: first eligible {entry_time} bar; cancel on >1% gap.\n"
+                f"Estimated P(+7%): {p7_pct:.0%} | P(+10%): {p10_pct:.0%}\n"
+                f"Expected net: {net_ret:+.2f}% | RVOL: {p.get('rvol', 1.0):.2f}x\n"
+                f"Regime: {html.escape(str(regime))} | Sector: {html.escape(str(sector))}\n"
+                f"Quote Source: {html.escape(str(quote_src))}\n"
+                f"<i>Research simulation only. Max 3 disciplined picks. No orders placed.</i>")
+        if now_ist().timestamp() >= (p.get("entry_target_ts") or p["entry_ts"]):
             text = "<b>DELAYED DELIVERY — HISTORICAL SIGNAL, DO NOT CHASE</b>\n" + text
-        if send_raw_alert(text, review_with_grok=False, event_type="quant_signal"):
+        audit_details = f"signal_id={signal['id']} symbol={signal['symbol']} p7={p7_pct:.2f}"
+        if send_raw_alert(text, review_with_grok=False, event_type="quant_signal", details=audit_details):
             with store.connect() as c:
                 c.execute("UPDATE signals SET notified=1 WHERE id=?", (signal["id"],))
             sent += 1
@@ -234,27 +269,51 @@ def cycle(store=None, service=None, now=None, notify=False, refresh=True):
         symbols = list(dict.fromkeys(outstanding + [r["symbol"] for r in watch.get("candidates", [])] + broad + [r["symbol"] for r in signals]))
         health = service.refresh(symbols, budget=75) if refresh else {}
         store.put("broad_cursor", (offset + len(broad)) % max(1, len(all_symbols)))
+        
+        # Point-in-time Market Regime Context
+        from modules.market_regime import compute_market_regime, compute_sector_metrics, get_latest_market_regime, get_latest_sector_snapshots
+        from modules.rejection_audit import record_rejection, get_funnel_summary
+        from modules.cost_model import COST_MODEL_VERSION
+        from modules.slippage_model import SLIPPAGE_MODEL_VERSION
+        from modules.catalyst_engine import get_point_in_time_catalysts
+        from modules.winner_discovery import get_winner_discovery_report
+        from modules.experiment_registry import list_experiments
+
+        regime_info = compute_market_regime(store, now, provenance="live")
+        market_regime_label = regime_info.get("regime_label", "MIXED")
+        regime_snapshot_ts = regime_info.get("ts", int(now.timestamp()))
+
         model = active_model(store, today)
         shadow = None if model else shadow_model(store, today)
         scoring_model = model or shadow
         prepared_state = store.get("daily_features", {})
         prepared = prepared_state.get("symbols", {}) if prepared_state.get("date") == today else {}
         ranked, rejected = [], {}
+        stock_returns = {}
         start, end = _clock(QUANT_CONFIRM_START), _clock(QUANT_ENTRY_CUTOFF)
         in_window = now.weekday() < 5 and start <= now.time() <= end
         for symbol in symbols:
             base = prepared.get(symbol)
             if not base:
                 rejected["history_unavailable"] = rejected.get("history_unavailable", 0)+1
+                record_rejection(store, symbol, stage="history_valid", reason="history_unavailable",
+                                 details={"date": today}, date=today, ts=int(now.timestamp()),
+                                 feature_version="q4.0", provenance="live")
                 continue
             bars = store.bars(symbol, "5m")
             row = build_features(symbol, pd.DataFrame(), bars, now, base.get("sector", "Unknown"), base)
             if not row:
                 rejected["incomplete_session_or_volume_history"] = rejected.get("incomplete_session_or_volume_history", 0)+1
+                record_rejection(store, symbol, stage="intraday_context", reason="incomplete_session_or_volume_history",
+                                 details={"date": today}, date=today, ts=int(now.timestamp()),
+                                 feature_version="q4.0", provenance="live")
                 continue
             reason = gate(row)
             observed_time = dt.datetime.fromtimestamp(row["ts"], now.tzinfo).time()
             if not start <= observed_time <= end:
+                record_rejection(store, symbol, stage="intraday_context", reason="outside_entry_window",
+                                 details={"observed_time": str(observed_time)}, date=today, ts=int(row["ts"]),
+                                 feature_version=str(row.get("feature_version", "q4.0")), provenance="live")
                 continue
             if now.timestamp() - row["ts"] > QUANT_BAR_MAX_AGE_SECONDS:
                 reason = "stale_candles"
@@ -262,8 +321,29 @@ def cycle(store=None, service=None, now=None, notify=False, refresh=True):
             row["observation_id"] = ident
             if reason != "eligible":
                 rejected[reason] = rejected.get(reason, 0)+1
+                stg = "rvol_gate" if "rvol" in reason else ("structural_risk" if "stop" in reason else ("universe" if "liquidity" in reason else "setup_trigger"))
+                record_rejection(store, symbol, stage=stg, reason=reason,
+                                 details={"price": row.get("price"), "rvol": row.get("rvol")}, date=today, ts=int(row["ts"]),
+                                 feature_version=str(row.get("feature_version", "q4.0")), provenance="live")
                 continue
+            prev_close = float(row.get("prev_close") or base.get("prev_close") or row.get("price") or 1.0)
+            stock_returns[symbol] = round((row["price"] / prev_close - 1) * 100, 2)
             ranked.append(row)
+
+        # Context-only Sector rankings (does not affect ML weights)
+        try:
+            sector_rankings = compute_sector_metrics(store, now, stock_returns, universe())
+            for r in ranked:
+                sec = r.get("sector", "Unknown")
+                sec_info = sector_rankings.get(sec, {})
+                r["sector_return_15m"] = sec_info.get("return_15m", 0.0)
+                r["sector_rank"] = sec_info.get("sector_rank", 99)
+                r["stock_vs_sector"] = round(stock_returns.get(r["symbol"], 0.0) - sec_info.get("return_15m", 0.0), 2)
+                r["market_regime"] = market_regime_label
+                r["regime_snapshot_ts"] = regime_snapshot_ts
+        except Exception as exc:
+            LOG.debug("Sector metric calculation error: %s", exc)
+
         ranked = predict(scoring_model, ranked) if scoring_model else [{**r, "p7": None, "p10": None,
                                                         "expected_net_pct": None, "evidence": "unvalidated_watch_only"} for r in ranked]
         if shadow:
@@ -285,27 +365,51 @@ def cycle(store=None, service=None, now=None, notify=False, refresh=True):
         market_context = store.get("dashboard_market", {})
         for row in ranked[:10]:
             row["entry_ts"] = row["ts"] + 300
-            quote, reason = None, None
+            quote, secondary_quote, reason = None, None, None
             if not model:
                 reason = "model_collecting_evidence"
+                record_rejection(store, row["symbol"], stage="model_gate", reason=reason,
+                                 date=today, ts=int(row["ts"]), model_version=str(scoring_model.get("id") if scoring_model else "none"),
+                                 feature_version=str(row.get("feature_version", "q4.0")), provenance="live")
             elif not in_window:
                 reason = "outside_confirmation_window"
+                record_rejection(store, row["symbol"], stage="intraday_context", reason=reason,
+                                 date=today, ts=int(row["ts"]), provenance="live")
             elif row["symbol"] in used or (row["sector"] != "Unknown" and row["sector"] in used_sectors):
                 reason = "duplicate_symbol_or_sector"
+                record_rejection(store, row["symbol"], stage="selected", reason=reason,
+                                 date=today, ts=int(row["ts"]), provenance="live")
             elif row["p7"] < QUANT_MIN_P7 or row["expected_net_pct"] <= 0:
                 reason = "insufficient_model_edge"
+                record_rejection(store, row["symbol"], stage="expected_return", reason=reason,
+                                 details={"p7": row.get("p7"), "expected_net_pct": row.get("expected_net_pct")},
+                                 date=today, ts=int(row["ts"]), model_version=str(scoring_model.get("id") if scoring_model else "none"),
+                                 provenance="live")
             elif len(used) >= QUANT_MAX_PICKS:
                 reason = "qualified_slots_full"
+                record_rejection(store, row["symbol"], stage="selected", reason=reason,
+                                 date=today, ts=int(row["ts"]), provenance="live")
             elif halt_trading:
                 reason = "circuit_breaker_halt" if cb_active else "daily_loss_guard"
+                record_rejection(store, row["symbol"], stage="selected", reason=reason,
+                                 date=today, ts=int(row["ts"]), provenance="live")
             else:
-                quote = service.quote(row["symbol"])
+                if hasattr(service, "get_quote_candidates"):
+                    quote, secondary_quote = service.get_quote_candidates(row["symbol"])
+                else:
+                    quote = service.quote(row["symbol"])
+                    secondary_quote = None
                 checked_now = now_ist() if refresh else now
-                reason = quote_gate(row, quote, checked_now)
+                reason = quote_gate(row, quote, checked_now, secondary_quote=secondary_quote)
                 if checked_now.timestamp() >= row["entry_ts"]:
                     reason = "entry_window_elapsed"
                 if reason != "eligible":
                     quote_failures += 1
+                    record_rejection(store, row["symbol"], stage="quote_verified", reason=reason,
+                                     details={"primary": quote.get("source") if quote else None,
+                                              "secondary": secondary_quote.get("source") if secondary_quote else None,
+                                              "consensus_status": row.get("consensus_status")},
+                                     date=today, ts=int(row["ts"]), provenance="live")
             candidate_review = review_candidate(row, model_ready=bool(model), quote_reason=reason,
                                                 loss_count=loss_count, selected=len(used), in_window=in_window,
                                                 market_context=market_context)
@@ -316,8 +420,67 @@ def cycle(store=None, service=None, now=None, notify=False, refresh=True):
                 watch_candidates.append(row)
             if candidate_review["decision"] != "qualified":
                 continue
-            signal = {**row, "quote": quote, "upper": quote["upper"],
-                      "execution": "next_verified_5m_bar", "published_at": checked_now.isoformat()}
+            ref_px = float(row["price"])
+            val_px = float(quote.get("ask", ref_px))
+            bid_px = float(quote.get("bid", 0.0))
+            ask_px = float(quote.get("ask", val_px))
+            spread_amt = max(0.0, ask_px - bid_px) if bid_px > 0 else 0.0
+            spread_pct = round((spread_amt / ask_px) * 100, 4) if ask_px > 0 else 0.0
+            entry_target_ts = int(row.get("entry_ts", row["ts"] + 300))
+
+            # Point-in-time external catalysts strictly before decision_ts
+            catalysts = get_point_in_time_catalysts(row["symbol"], decision_ts=int(row["ts"]), store=store)
+            row["catalyst_flags"] = catalysts
+
+            signal = {
+                "signal_id": row["observation_id"],
+                "symbol": row["symbol"],
+                "date": today,
+                "decision_ts": int(row["ts"]),
+                "feature_snapshot_ts": int(row["ts"]),
+                "entry_target_ts": entry_target_ts,
+                "reference_price": round(ref_px, 2),
+                "validated_price": round(val_px, 2),
+                "bid": round(bid_px, 2),
+                "ask": round(ask_px, 2),
+                "spread": round(spread_amt, 4),
+                "spread_pct": spread_pct,
+                "provider": str(quote.get("source", "angel_one")),
+                "secondary_provider": str(secondary_quote.get("source")) if secondary_quote else None,
+                "consensus_status": str(row.get("consensus_status", "single_source_only")),
+                "consensus_diff_pct": float(row.get("consensus_diff_pct", 0.0)),
+                "structural_stop": round(float(row["stop"]), 2),
+                "tp1": round(val_px * 1.07, 2),
+                "tp2": round(val_px * 1.10, 2),
+                "p7": float(row.get("p7", 0.0) or 0.0),
+                "p10": float(row.get("p10", 0.0) or 0.0),
+                "expected_net_pct": round(float(row.get("expected_net_pct", 0.0) or 0.0), 3),
+                "feature_version": str(row.get("feature_version", "q4.0")),
+                "model_id": str(scoring_model.get("id") if scoring_model else "baseline"),
+                "cost_model_version": COST_MODEL_VERSION,
+                "slippage_model_version": SLIPPAGE_MODEL_VERSION,
+                "market_regime": str(row.get("market_regime", market_regime_label)),
+                "regime_snapshot_ts": int(row.get("regime_snapshot_ts", regime_snapshot_ts)),
+                "sector_context": str(row.get("sector", "Unknown")),
+                "sector_rank": int(row.get("sector_rank", 99)),
+                "sector_return_15m": float(row.get("sector_return_15m", 0.0)),
+                "stock_vs_sector": float(row.get("stock_vs_sector", 0.0)),
+                "catalyst_context": catalysts,
+                "quote_validation": "passed",
+                "reason": str(row.get("setup", "none")),
+                "setup": str(row.get("setup", "none")),
+                "price": round(ref_px, 2),
+                "stop": round(float(row["stop"]), 2),
+                "ts": int(row["ts"]),
+                "entry_ts": entry_target_ts,
+                "rvol": round(float(row.get("rvol", 1.0)), 2),
+                "vwap": round(float(row.get("vwap", ref_px)), 2),
+                "provenance": "quant_live_confirmed",
+                "quote": quote,
+                "upper": quote.get("upper"),
+                "execution": "next_verified_5m_bar",
+                "published_at": checked_now.isoformat()
+            }
             if store.add_signal(row["observation_id"], signal):
                 used.add(row["symbol"]); used_sectors.add(row["sector"])
         reconciliation = reconcile(store, now_ist() if refresh else now)
@@ -358,12 +521,22 @@ def snapshot(store=None):
         for s in signals:
             result = c.execute("SELECT value FROM outcomes WHERE observation_id=?", (s["id"],)).fetchone()
             s["outcome"] = json.loads(result[0]) if result else None
+    from modules.rejection_audit import get_funnel_summary
+    from modules.market_regime import get_latest_market_regime, get_latest_sector_snapshots
+    from modules.winner_discovery import get_winner_discovery_report
+    from modules.experiment_registry import list_experiments
+
     return {"date": today, "runtime": runtime, "watchlist": store.get("watchlist", {}),
             "learning": store.get("learning", {}), "preparation": store.get("preparation", {}),
             "data_health": store.get("data_health", {}), "quote_health": store.get("quote_health", {}), "signals": signals,
             "reviews": store.reviews(today), "qualitative_review": store.get("quant_ai_review", {}),
             "provider_audit": store.get("provider_audit", {}), "replay": store.get("replay", {}),
             "benchmark": store.get("benchmark", {}),
+            "funnel": get_funnel_summary(store, today),
+            "market_regime": get_latest_market_regime(store, today),
+            "sector_snapshots": get_latest_sector_snapshots(store, today),
+            "experiments": list_experiments(store=store),
+            "winners": get_winner_discovery_report(store, today),
             "observations": count, "performance": {"filled_closed": len(filled), "unfilled": len(outcomes)-len(filled),
                 "mean_net_pct": sum(r["return_pct"] for r in filled)/len(filled) if filled else None,
                 "hit7_rate": sum(r["hit7"] for r in filled)/len(filled) if filled else None,

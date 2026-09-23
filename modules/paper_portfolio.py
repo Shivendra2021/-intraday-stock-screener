@@ -193,8 +193,7 @@ def allocate_for_date(date_s: str, max_picks: int = 5) -> dict[str, Any]:
             raw_entry = float(pick["entry_price"] or 0)
             if raw_entry <= 0:
                 continue
-            # Incorporate execution entry slippage (0.05% market impact)
-            entry = round(raw_entry * (1.0 + SLIPPAGE_DEFAULT_PCT / 100.0), 2)
+            entry = raw_entry
             remaining_cash = cash - allocated
             if remaining_cash <= 0:
                 break

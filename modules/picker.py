@@ -648,6 +648,11 @@ def run_picker(analyzed: list = None) -> list:
                         is_correlated = True
                         reason = f"corr_gate: {sym} correlated with {p_sym} (r={pair_corr:.2f} > {CORR_THRESHOLD})"
                         break
+                elif sec and sec not in ("Unknown", "", None) and sec == picked.get("sector"):
+                    # 2. Sector fallback when correlation data is unavailable
+                    is_correlated = True
+                    reason = f"sector_fallback: {sym} shares sector '{sec}' with {p_sym} (correlation unavailable)"
+                    break
 
         if is_correlated:
             logger.info("Anti-concentration gate skipped %s: %s", sym, reason)

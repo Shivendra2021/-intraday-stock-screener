@@ -51,7 +51,8 @@ def _send(
     text: str,
     review_with_grok: bool = True,
     event_type: str = "telegram_message",
-    inline_keyboard: Optional[list] = None
+    inline_keyboard: Optional[list] = None,
+    details: str = ""
 ) -> bool:
     """
     Core Telegram send. Returns True on success.
@@ -64,7 +65,7 @@ def _send(
 
     if DRY_RUN:
         logger.info(f"[DRY_RUN] Would send Telegram:\n{text}")
-        _audit_send(event_type, True, "dry_run")
+        _audit_send(event_type, True, details or "dry_run")
         return True
 
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
@@ -95,7 +96,7 @@ def _send(
             r = http_post(url, json=payload, timeout=15)
             if r.status_code == 200:
                 logger.info("Telegram message sent successfully")
-                _audit_send(event_type, True, "sent")
+                _audit_send(event_type, True, details or "sent")
                 return True
             elif r.status_code == 400 and ("parse" in r.text.lower() or "entity" in r.text.lower()):
                 # HTML entity error - sanitize by stripping HTML tags and retry as clean text
@@ -139,9 +140,9 @@ def _send(
     return False
 
 
-def send_raw_alert(text: str, review_with_grok: bool = True, event_type: str = "telegram_message") -> bool:
+def send_raw_alert(text: str, review_with_grok: bool = True, event_type: str = "telegram_message", details: str = "") -> bool:
     """Public wrapper for sending a raw Telegram alert."""
-    return _send(text, review_with_grok=review_with_grok, event_type=event_type)
+    return _send(text, review_with_grok=review_with_grok, event_type=event_type, details=details)
 
 
 # ─────────────────────────────────────────────────────────────────────────────

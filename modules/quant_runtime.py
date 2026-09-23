@@ -49,6 +49,11 @@ def _run_once(store, notify=False, now=None):
         service.backfill(symbols, budget=300)
         service.refresh(symbols, budget=90, force=True)
         reconcile(store, now)
+        try:
+            from modules.winner_discovery import analyze_session_winners
+            analyze_session_winners(store, date=str(now.date()))
+        except Exception as exc:
+            LOG.warning("Post-market winner discovery error: %s", exc)
         result = learn(store)
         # Qualitative review is post-market only. It cannot influence the current
         # session, candidate selection, or parameter values.
